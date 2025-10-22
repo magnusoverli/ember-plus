@@ -80,14 +80,21 @@ typedef void *voidptr;
 /**
   * true/false
   */
-typedef int bool;
-
-#ifndef false
-#define false (0)
-#endif
-
-#ifndef true
-#define true (!false)
+#if __STDC_VERSION__ >= 202311L
+   /* C23 and later: bool, true, false are built-in keywords */
+   /* Nothing to define */
+#elif __STDC_VERSION__ >= 199901L
+   /* C99 and later: use stdbool.h */
+   #include <stdbool.h>
+#else
+   /* Pre-C99: define bool manually */
+   typedef int bool;
+   #ifndef false
+   #define false (0)
+   #endif
+   #ifndef true
+   #define true (!false)
+   #endif
 #endif
 
 #endif
