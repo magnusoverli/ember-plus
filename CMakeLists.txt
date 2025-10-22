@@ -8,3 +8,4 @@ add_subdirectory(libember)
 add_subdirectory(libember_slim)
 
 add_subdirectory(tinyember)
+add_subdirectory(EmberViewer)
