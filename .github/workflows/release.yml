@@ -31,7 +31,6 @@ jobs:
             qtbase5-dev-tools \
             qt5-qmake \
             qtwayland5 \
-            qt5-wayland \
             cmake \
             build-essential \
             ninja-build \
