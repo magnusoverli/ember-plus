@@ -21,10 +21,13 @@ jobs:
             qtbase5-dev \
             qtbase5-dev-tools \
             qt5-qmake \
+            qtwayland5 \
+            qt5-wayland \
             cmake \
             build-essential \
             ninja-build \
             libgl1-mesa-dev \
+            libxkbcommon0 \
             libxkbcommon-x11-0 \
             libxcb-icccm4 \
             libxcb-image0 \
@@ -32,6 +35,9 @@ jobs:
             libxcb-render-util0 \
             libxcb-xinerama0 \
             libxcb-xkb1 \
+            libwayland-client0 \
+            libwayland-cursor0 \
+            libwayland-egl1 \
             wget \
             file
       
