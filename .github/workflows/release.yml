@@ -112,9 +112,10 @@ jobs:
           chmod +x linuxdeploy*.AppImage
           
           ./linuxdeploy-x86_64.AppImage --appimage-extract >/dev/null
-          ./linuxdeploy-plugin-qt-x86_64.AppImage --appimage-extract >/dev/null
           mv squashfs-root linuxdeploy-dir
-          mv squashfs-root-1 qt-plugin-dir
+          
+          ./linuxdeploy-plugin-qt-x86_64.AppImage --appimage-extract >/dev/null
+          mv squashfs-root qt-plugin-dir
           
           export QMAKE=/usr/bin/qmake
           export QT_SELECT=qt5
