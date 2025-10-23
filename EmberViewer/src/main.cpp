@@ -42,12 +42,17 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
         stream.flush();
     }
     
-    if (globalMainWindow) {
+    // Only show INFO and above (ERROR, CRITICAL, WARNING, INFO) in the GUI console
+    // DEBUG and lower are only written to the log file
+    if (globalMainWindow && type != QtDebugMsg) {
         QString guiMessage = QString("[%1] %2").arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz")).arg(msg);
         QMetaObject::invokeMethod(globalMainWindow, "appendToConsole", Qt::QueuedConnection, Q_ARG(QString, guiMessage));
     }
     
-    fprintf(stderr, "%s\n", logLine.toUtf8().constData());
+    // Only write INFO and above to stderr (same filtering as console)
+    if (type != QtDebugMsg) {
+        fprintf(stderr, "%s\n", logLine.toUtf8().constData());
+    }
 }
 
 int main(int argc, char *argv[])
