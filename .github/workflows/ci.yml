@@ -40,22 +40,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -GNinja
       
-      - name: Build libember
-        run: |
-          cd build
-          ninja libember-static
-      
-      - name: Build libember_slim
-        run: |
-          cd build
-          ninja libember_slim-static
-      
-      - name: Build libs101
-        run: |
-          cd build
-          ninja
-        continue-on-error: true
-      
       - name: Build EmberViewer
         run: |
           cd build
