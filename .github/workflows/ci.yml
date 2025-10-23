@@ -59,6 +59,34 @@ jobs:
           name: EmberViewer-linux-Release
           path: build/EmberViewer/EmberViewer
           retention-days: 7
+      
+      - name: Create/Update rolling pre-release
+        if: github.ref == 'refs/heads/feature/ember-viewer' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest-dev
+          name: "Latest Development Build"
+          prerelease: true
+          draft: false
+          files: build/EmberViewer/EmberViewer
+          body: |
+            ## 🚧 Development Build - Latest
+            
+            **Automatically built from:** `${{ github.ref_name }}`
+            **Commit:** ${{ github.sha }}
+            **Built:** ${{ github.event.head_commit.timestamp }}
+            
+            This is an **unstable development build**. Use at your own risk!
+            
+            ### Installation (Linux)
+            ```bash
+            chmod +x EmberViewer
+            ./EmberViewer
+            ```
+            
+            For stable releases, see: [Releases](https://github.com/${{ github.repository }}/releases)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
   # Placeholder for future macOS builds
   # build-macos:
