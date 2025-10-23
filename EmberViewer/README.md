@@ -16,22 +16,29 @@ make EmberViewer
 
 - Connect to Ember+ providers (TCP)
 - Browse tree structure
-- View parameter properties
+- View/edit parameter properties
+- Matrix crosspoint visualization
 - Console logging
 
 ## Status
 
-**v1.0 - Foundation Complete**
+**v1.2 - Matrix Support Complete**
 
 Working:
 - TCP connection
-- S101 frame decoding (basic)
+- S101 frame encoding/decoding
+- Glow protocol message parsing
+- Tree view population (nodes & parameters)
+- Parameter value display (Integer, Real, String, Boolean, Enum, Trigger)
+- Parameter editing (inline editing with delegates, dropdowns, buttons)
+- Matrix support (read-only display with connection states)
+- Keep-alive message handling
 - GUI with tree/properties/console
 
 Todo:
-- Full Glow message parsing
-- Parameter editing
-- Matrix support
+- Matrix connection editing (Phase 2)
+- Function invocation
+- Stream support
 
 ## Development
 
