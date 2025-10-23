@@ -14,6 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Delete previous dev release
+        continue-on-error: true
+        run: |
+          # Delete the latest-dev pre-release and its tag
+          gh release delete latest-dev --yes || true
+          git push origin --delete latest-dev || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Install Qt and dependencies
         run: |
           sudo apt-get update
