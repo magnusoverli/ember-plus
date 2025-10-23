@@ -125,7 +125,7 @@ jobs:
           
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          mv EmberViewer*.AppImage EmberViewer-${VERSION}-x86_64.AppImage
+          mv *.AppImage EmberViewer-${VERSION}-x86_64.AppImage
       
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
