@@ -97,7 +97,10 @@ jobs:
       
       - name: Create AppDir
         run: |
-          DESTDIR=build/AppDir cmake --install build
+          mkdir -p build/AppDir/usr/bin
+          mkdir -p build/AppDir/usr/share/applications
+          mkdir -p build/AppDir/usr/share/icons/hicolor/scalable/apps
+          cp build/EmberViewer/EmberViewer build/AppDir/usr/bin/
           cp EmberViewer/resources/EmberViewer.desktop build/AppDir/usr/share/applications/
           cp EmberViewer/resources/icon.svg build/AppDir/usr/share/icons/hicolor/scalable/apps/EmberViewer.svg
       
