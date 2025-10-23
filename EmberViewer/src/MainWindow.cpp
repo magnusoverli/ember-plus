@@ -20,6 +20,7 @@
 #include <QScrollArea>
 #include <QApplication>
 #include <QEvent>
+#include <QKeyEvent>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QStandardPaths>
@@ -88,7 +89,14 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
-    resize(1200, 800);
+    
+    // Set default window size (1200x700) - will be overridden by saved settings if they exist
+    resize(1200, 700);
+    
+    // Set dock sizes after window is resized
+    int propertyWidth = static_cast<int>(width() * 0.5);
+    resizeDocks({m_propertyDock}, {propertyWidth}, Qt::Horizontal);
+    resizeDocks({m_consoleDock}, {150}, Qt::Vertical);
     
     logMessage("EmberViewer started. Ready to connect.");
 }
@@ -106,6 +114,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    // Handle Enter key on port spin box to trigger connection
+    if (watched == m_portSpin && event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            // Only trigger if not already connected
+            if (m_connectButton->isEnabled()) {
+                onConnectClicked();
+                return true;  // Event handled
+            }
+        }
+    }
+    
     // Reset activity timer on any user interaction
     if (m_crosspointsEnabled) {
         QEvent::Type type = event->type();
@@ -162,6 +182,8 @@ void MainWindow::setupUi()
     connLayout->addWidget(new QLabel("Host:"));
     m_hostEdit = new QLineEdit("localhost");
     m_hostEdit->setMaximumWidth(200);
+    // Connect Enter key to trigger connection
+    connect(m_hostEdit, &QLineEdit::returnPressed, this, &MainWindow::onConnectClicked);
     connLayout->addWidget(m_hostEdit);
     
     connLayout->addWidget(new QLabel("Port:"));
@@ -169,6 +191,8 @@ void MainWindow::setupUi()
     m_portSpin->setRange(1, 65535);
     m_portSpin->setValue(9092);
     m_portSpin->setMaximumWidth(80);
+    // Install event filter to catch Enter key on spin box
+    m_portSpin->installEventFilter(this);
     connLayout->addWidget(m_portSpin);
     
     m_connectButton = new QPushButton("Connect");
@@ -282,7 +306,6 @@ void MainWindow::createDockWindows()
     m_consoleDock = new QDockWidget("Console", this);
     m_consoleLog = new QTextEdit();
     m_consoleLog->setReadOnly(true);
-    m_consoleLog->setMaximumHeight(150);
     m_consoleDock->setWidget(m_consoleLog);
     addDockWidget(Qt::BottomDockWidgetArea, m_consoleDock);
     
@@ -337,21 +360,16 @@ void MainWindow::onConnectionStateChanged(bool connected)
         qInfo().noquote() << "Disconnected";
         
         // If we're currently showing a matrix, remove it from the property panel first
-        QScrollArea *currentScroll = qobject_cast<QScrollArea*>(m_propertyPanel);
-        if (currentScroll && currentScroll->widget()) {
-            MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(currentScroll->widget());
-            if (currentMatrix) {
-                currentScroll->takeWidget();  // Remove matrix without deleting it
-                m_propertyDock->setWidget(nullptr);
-                currentScroll->deleteLater();
-                
-                // Reset to default property panel
-                m_propertyPanel = new QWidget();
-                QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
-                propLayout->addWidget(new QLabel("Not connected"));
-                propLayout->addStretch();
-                m_propertyDock->setWidget(m_propertyPanel);
-            }
+        MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);
+        if (currentMatrix) {
+            m_propertyDock->setWidget(nullptr);
+            
+            // Reset to default property panel
+            m_propertyPanel = new QWidget();
+            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
+            propLayout->addWidget(new QLabel("Not connected"));
+            propLayout->addStretch();
+            m_propertyDock->setWidget(m_propertyPanel);
         }
         
         m_treeWidget->clear();
@@ -867,27 +885,21 @@ void MainWindow::onTreeSelectionChanged()
             // Clear old property panel content
             QWidget *oldWidget = m_propertyPanel;
             if (oldWidget) {
-                // If the old widget is a scroll area with a matrix, remove the matrix first
-                QScrollArea *oldScroll = qobject_cast<QScrollArea*>(oldWidget);
-                if (oldScroll && oldScroll->widget()) {
-                    MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldScroll->widget());
-                    if (oldMatrix) {
-                        oldScroll->takeWidget();  // Remove matrix without deleting it
-                    }
+                // If the old widget is a MatrixWidget, don't delete it (it's stored in m_matrixWidgets)
+                MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldWidget);
+                if (!oldMatrix) {
+                    // Only delete non-matrix widgets
+                    m_propertyDock->setWidget(nullptr);
+                    oldWidget->deleteLater();
+                } else {
+                    // Just remove it from the dock without deleting
+                    m_propertyDock->setWidget(nullptr);
                 }
-                m_propertyDock->setWidget(nullptr);
-                oldWidget->deleteLater();
             }
             
-            // Create scroll area for matrix widget
-            QScrollArea *scrollArea = new QScrollArea();
-            scrollArea->setWidget(matrixWidget);
-            scrollArea->setWidgetResizable(false);  // Don't resize the matrix - let it maintain its size
-            scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-            scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-            
-            m_propertyDock->setWidget(scrollArea);
-            m_propertyPanel = scrollArea;
+            // Directly show the matrix widget (it has internal scroll areas now)
+            m_propertyDock->setWidget(matrixWidget);
+            m_propertyPanel = matrixWidget;
             
             // Update background based on crosspoints state
             updatePropertyPanelBackground();
@@ -895,19 +907,15 @@ void MainWindow::onTreeSelectionChanged()
     } else {
         // For non-matrix items, show the default property panel
         // Check if we need to restore the default panel
-        QScrollArea *currentScroll = qobject_cast<QScrollArea*>(m_propertyPanel);
-        if (currentScroll && currentScroll->widget() && qobject_cast<MatrixWidget*>(currentScroll->widget())) {
+        MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);
+        if (currentMatrix) {
             // Disable crosspoints BEFORE we remove the matrix widget
             if (m_crosspointsEnabled) {
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Remove the MatrixWidget from the scroll area without deleting it
-            currentScroll->takeWidget();
-            
-            // Now delete the scroll area
+            // Just remove the MatrixWidget from dock (don't delete it, it's stored in m_matrixWidgets)
             m_propertyDock->setWidget(nullptr);
-            currentScroll->deleteLater();
             
             // Create new default property panel
             m_propertyPanel = new QWidget();
@@ -923,33 +931,21 @@ void MainWindow::loadSettings()
 {
     QSettings settings("EmberViewer", "EmberViewer");
     
-    // Load connection settings
+    // Load connection settings only
     QString host = settings.value("connection/host", "localhost").toString();
     int port = settings.value("connection/port", 9000).toInt();
     
     m_hostEdit->setText(host);
     m_portSpin->setValue(port);
-    
-    // Load window geometry
-    if (settings.contains("window/geometry")) {
-        restoreGeometry(settings.value("window/geometry").toByteArray());
-    }
-    if (settings.contains("window/state")) {
-        restoreState(settings.value("window/state").toByteArray());
-    }
 }
 
 void MainWindow::saveSettings()
 {
     QSettings settings("EmberViewer", "EmberViewer");
     
-    // Save connection settings
+    // Save connection settings only (don't save window geometry or dock state)
     settings.setValue("connection/host", m_hostEdit->text());
     settings.setValue("connection/port", m_portSpin->value());
-    
-    // Save window geometry
-    settings.setValue("window/geometry", saveGeometry());
-    settings.setValue("window/state", saveState());
     
     // Force immediate write to disk
     settings.sync();
@@ -986,12 +982,9 @@ void MainWindow::onEnableCrosspointsToggled(bool enabled)
     }
     
     // Update only the currently displayed matrix widget (if any)
-    QScrollArea *scrollArea = qobject_cast<QScrollArea*>(m_propertyPanel);
-    if (scrollArea && scrollArea->widget()) {
-        MatrixWidget *matrixWidget = qobject_cast<MatrixWidget*>(scrollArea->widget());
-        if (matrixWidget) {
-            matrixWidget->setCrosspointsEnabled(enabled);
-        }
+    MatrixWidget *matrixWidget = qobject_cast<MatrixWidget*>(m_propertyPanel);
+    if (matrixWidget) {
+        matrixWidget->setCrosspointsEnabled(enabled);
     }
     
     // Update property panel background if matrix is currently displayed
