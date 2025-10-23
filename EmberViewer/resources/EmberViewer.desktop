@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Ember Viewer
+GenericName=Ember+ Protocol Viewer
+Comment=Cross-platform Ember+ protocol viewer and editor
+Exec=EmberViewer
+Icon=EmberViewer
+Terminal=false
+Categories=Network;AudioVideo;Audio;Video;
+Keywords=ember;protocol;audio;video;broadcast;
+StartupNotify=true
+StartupWMClass=EmberViewer
+
