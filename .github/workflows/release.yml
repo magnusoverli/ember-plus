@@ -101,6 +101,42 @@ jobs:
           echo "=== Checking for Wayland libraries ==="
           dpkg -L qtwayland5 | grep -E "\.so" || true
       
+      - name: Pre-bundle Wayland plugins to AppDir
+        run: |
+          echo "=== Creating qt.conf for proper plugin paths ==="
+          mkdir -p AppDir/usr/bin
+          cat > AppDir/usr/bin/qt.conf << 'EOF'
+          [Paths]
+          Plugins = ../lib/qt5/plugins
+          EOF
+          
+          echo "=== Pre-copying Wayland platform plugins to AppDir ==="
+          mkdir -p AppDir/usr/lib/qt5/plugins/platforms
+          cp -v /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqwayland*.so AppDir/usr/lib/qt5/plugins/platforms/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqxcb.so AppDir/usr/lib/qt5/plugins/platforms/ || true
+          
+          echo "=== Pre-copying Wayland support plugins ==="
+          mkdir -p AppDir/usr/lib/qt5/plugins/wayland-decoration-client
+          mkdir -p AppDir/usr/lib/qt5/plugins/wayland-graphics-integration-client
+          mkdir -p AppDir/usr/lib/qt5/plugins/wayland-shell-integration
+          
+          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-decoration-client/*.so AppDir/usr/lib/qt5/plugins/wayland-decoration-client/ || true
+          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-graphics-integration-client/*.so AppDir/usr/lib/qt5/plugins/wayland-graphics-integration-client/ || true
+          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-shell-integration/*.so AppDir/usr/lib/qt5/plugins/wayland-shell-integration/ || true
+          
+          echo "=== Pre-copying Wayland libraries ==="
+          mkdir -p AppDir/usr/lib
+          cp -v /usr/lib/x86_64-linux-gnu/libwayland-client.so.* AppDir/usr/lib/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/libwayland-cursor.so.* AppDir/usr/lib/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/libwayland-egl.so.* AppDir/usr/lib/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon.so.* AppDir/usr/lib/ || true
+          
+          echo "=== Verifying pre-bundled plugins ==="
+          ls -la AppDir/usr/lib/qt5/plugins/platforms/
+          
+          echo "=== Verifying qt.conf ==="
+          cat AppDir/usr/bin/qt.conf
+      
       - name: Create AppImage
         env:
           QMAKE: /usr/lib/qt5/bin/qmake
@@ -112,6 +148,7 @@ jobs:
           export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
           
           # Run linuxdeploy with Qt plugin and icon
+          # This will bundle the Qt plugins we pre-copied plus any dependencies
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
@@ -119,36 +156,25 @@ jobs:
             --desktop-file AppDir/usr/share/applications/emberviewer.desktop \
             --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.png
       
-      - name: Manually add Wayland plugins
+      - name: Verify Wayland plugin in final AppImage
         run: |
-          echo "=== Manually copying Wayland platform plugins ==="
-          mkdir -p AppDir/usr/plugins/platforms
-          cp -v /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqwayland*.so AppDir/usr/plugins/platforms/
-          
-          echo "=== Copying Wayland support plugins ==="
-          mkdir -p AppDir/usr/plugins/wayland-decoration-client
-          mkdir -p AppDir/usr/plugins/wayland-graphics-integration-client
-          mkdir -p AppDir/usr/plugins/wayland-shell-integration
-          
-          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-decoration-client/*.so AppDir/usr/plugins/wayland-decoration-client/ || true
-          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-graphics-integration-client/*.so AppDir/usr/plugins/wayland-graphics-integration-client/ || true
-          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-shell-integration/*.so AppDir/usr/plugins/wayland-shell-integration/ || true
-          
-          echo "=== Copying Wayland libraries ==="
-          mkdir -p AppDir/usr/lib
-          cp -v /usr/lib/x86_64-linux-gnu/libwayland-client.so.* AppDir/usr/lib/ || true
-          cp -v /usr/lib/x86_64-linux-gnu/libwayland-cursor.so.* AppDir/usr/lib/ || true
-          cp -v /usr/lib/x86_64-linux-gnu/libwayland-egl.so.* AppDir/usr/lib/ || true
-          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon.so.* AppDir/usr/lib/ || true
-      
-      - name: Verify Wayland plugin in AppImage
-        run: |
-          echo "=== Checking bundled Qt plugins in AppImage ==="
-          ls -la AppDir/usr/plugins/platforms/
-          if [ -f AppDir/usr/plugins/platforms/libqwayland-egl.so ]; then
-            echo "✓ Wayland plugin bundled!"
+          echo "=== Extracting and checking AppImage contents ==="
+          # Extract the AppImage to verify contents
+          APPIMAGE=$(ls EmberViewer*.AppImage | head -n 1)
+          if [ -n "$APPIMAGE" ]; then
+            ./"$APPIMAGE" --appimage-extract > /dev/null 2>&1 || true
+            
+            echo "=== Checking for Qt platform plugins in extracted AppImage ==="
+            find squashfs-root -name "libqwayland*.so" -o -name "libqxcb.so" || echo "No platform plugins found!"
+            
+            echo ""
+            echo "=== Checking for Wayland support plugins ==="
+            find squashfs-root -type d -name "wayland-*" || echo "No Wayland support directories found!"
+            
+            # Clean up extracted files
+            rm -rf squashfs-root
           else
-            echo "✗ Wayland plugin NOT bundled!"
+            echo "ERROR: AppImage not found for verification!"
           fi
       
       - name: Rename AppImage
