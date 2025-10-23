@@ -53,6 +53,8 @@ public:
     // Query connection state
     bool isConnected(int targetNumber, int sourceNumber) const;
     int getMatrixType() const { return m_matrixType; }
+    QString getTargetLabel(int targetNumber) const;
+    QString getSourceLabel(int sourceNumber) const;
     
     // Crosspoint editing control
     void setCrosspointsEnabled(bool enabled);

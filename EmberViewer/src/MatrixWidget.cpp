@@ -175,6 +175,15 @@ void MatrixWidget::rebuild()
 
 void MatrixWidget::buildGrid()
 {
+    // If grid already exists, just refresh button states (avoid expensive rebuild)
+    if (!m_buttons.isEmpty()) {
+        qDebug() << "Grid already built, refreshing button states only";
+        for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
+            updateConnectionButton(it.key().first, it.key().second);
+        }
+        return;
+    }
+    
     // Clear existing grid
     QLayoutItem *item;
     while ((item = m_grid->takeAt(0)) != nullptr) {
@@ -278,7 +287,8 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
     QPair<int, int> key(targetNumber, sourceNumber);
     
     if (!m_buttons.contains(key)) {
-        qWarning() << "MatrixWidget::updateConnectionButton - Button not found for Target" << targetNumber << "Source" << sourceNumber << "- Grid has" << m_buttons.size() << "buttons";
+        // This is normal - connection state can arrive before UI grid is built
+        qDebug() << "MatrixWidget::updateConnectionButton - Button not found for Target" << targetNumber << "Source" << sourceNumber << "- Grid has" << m_buttons.size() << "buttons";
         return;
     }
     
@@ -444,6 +454,16 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
 bool MatrixWidget::isConnected(int targetNumber, int sourceNumber) const
 {
     return m_connections.contains(QPair<int, int>(targetNumber, sourceNumber));
+}
+
+QString MatrixWidget::getTargetLabel(int targetNumber) const
+{
+    return m_targetLabels.value(targetNumber, QString("Target %1").arg(targetNumber));
+}
+
+QString MatrixWidget::getSourceLabel(int sourceNumber) const
+{
+    return m_sourceLabels.value(sourceNumber, QString("Source %1").arg(sourceNumber));
 }
 
 void MatrixWidget::setCrosspointsEnabled(bool enabled)
