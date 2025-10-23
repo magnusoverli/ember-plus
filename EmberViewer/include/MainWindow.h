@@ -9,7 +9,7 @@
 #include <QTreeWidget>
 #include <QTextEdit>
 #include <QSplitter>
-#include <QDockWidget>
+#include <QGroupBox>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -80,8 +80,10 @@ private:
     QTreeWidget *m_treeWidget;
     QWidget *m_propertyPanel;
     QTextEdit *m_consoleLog;
-    QDockWidget *m_consoleDock;
-    QDockWidget *m_propertyDock;
+    QGroupBox *m_consoleGroup;
+    QGroupBox *m_propertyGroup;
+    QSplitter *m_mainSplitter;
+    QSplitter *m_verticalSplitter;
     
     // Connection controls
     QLineEdit *m_hostEdit;

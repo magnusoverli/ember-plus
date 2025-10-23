@@ -5,6 +5,7 @@
 #include "MainWindow.h"
 #include "EmberConnection.h"
 #include "ParameterDelegate.h"
+#include "PathColumnDelegate.h"
 #include "MatrixWidget.h"
 #include <QMenuBar>
 #include <QToolBar>
@@ -30,8 +31,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_treeWidget(nullptr)
     , m_propertyPanel(nullptr)
     , m_consoleLog(nullptr)
-    , m_consoleDock(nullptr)
-    , m_propertyDock(nullptr)
+    , m_consoleGroup(nullptr)
+    , m_propertyGroup(nullptr)
+    , m_mainSplitter(nullptr)
+    , m_verticalSplitter(nullptr)
     , m_hostEdit(nullptr)
     , m_portSpin(nullptr)
     , m_connectButton(nullptr)
@@ -93,10 +96,14 @@ MainWindow::MainWindow(QWidget *parent)
     // Set default window size (1200x700) - will be overridden by saved settings if they exist
     resize(1200, 700);
     
-    // Set dock sizes after window is resized
-    int propertyWidth = static_cast<int>(width() * 0.5);
-    resizeDocks({m_propertyDock}, {propertyWidth}, Qt::Horizontal);
-    resizeDocks({m_consoleDock}, {150}, Qt::Vertical);
+    // Set splitter sizes after window is resized
+    // Main splitter: 50% tree+console, 50% properties
+    int halfWidth = width() / 2;
+    m_mainSplitter->setSizes(QList<int>() << halfWidth << halfWidth);
+    
+    // Vertical splitter: most space for tree, 150px for console
+    int treeHeight = height() - 150;
+    m_verticalSplitter->setSizes(QList<int>() << treeHeight << 150);
     
     logMessage("EmberViewer started. Ready to connect.");
 }
@@ -148,11 +155,16 @@ void MainWindow::setupUi()
     m_treeWidget = new QTreeWidget(this);
     m_treeWidget->setHeaderLabels(QStringList() << "Path" << "Type" << "Value");
     m_treeWidget->setColumnCount(3);
-    m_treeWidget->setColumnWidth(0, 350);  // Path column - wide enough for breadcrumbs
-    m_treeWidget->setColumnWidth(1, 150);  // Type column - narrow, just "Node" or "Parameter"
+    m_treeWidget->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Path column auto-resizes
+    m_treeWidget->header()->setSectionResizeMode(1, QHeaderView::Fixed);  // Type column fixed
+    m_treeWidget->setColumnWidth(1, 130);  // Type column width
     m_treeWidget->header()->setStretchLastSection(true);  // Value column stretches to fill
     m_treeWidget->setAlternatingRowColors(true);
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
+    
+    // Install path column delegate for extra padding
+    PathColumnDelegate *pathDelegate = new PathColumnDelegate(this);
+    m_treeWidget->setItemDelegateForColumn(0, pathDelegate);  // Path column
     
     // Install parameter delegate for inline editing
     ParameterDelegate *delegate = new ParameterDelegate(this);
@@ -209,13 +221,22 @@ void MainWindow::setupUi()
     
     connLayout->addStretch();
     
-    // Main layout
-    QWidget *centralWidget = new QWidget(this);
-    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
-    mainLayout->addWidget(connectionWidget);
-    mainLayout->addWidget(m_treeWidget);
+    // Will be set up in createDockWindows() with splitters
+    // Store connection widget for later
+    QWidget *tempWidget = new QWidget(this);
+    QVBoxLayout *tempLayout = new QVBoxLayout(tempWidget);
+    tempLayout->addWidget(connectionWidget);
+    tempLayout->setContentsMargins(0, 0, 0, 0);
     
-    setCentralWidget(centralWidget);
+    // Create tree container with connection controls
+    QWidget *treeContainer = new QWidget(this);
+    QVBoxLayout *treeLayout = new QVBoxLayout(treeContainer);
+    treeLayout->addWidget(connectionWidget);
+    treeLayout->addWidget(m_treeWidget);
+    treeLayout->setContentsMargins(0, 0, 0, 0);
+    
+    // Store for use in createDockWindows
+    setCentralWidget(treeContainer);
 }
 
 void MainWindow::setupMenu()
@@ -302,26 +323,39 @@ void MainWindow::setupStatusBar()
 
 void MainWindow::createDockWindows()
 {
-    // Console/Log dock
-    m_consoleDock = new QDockWidget("Console", this);
+    // Get the tree container from central widget
+    QWidget *treeContainer = centralWidget();
+    
+    // Create console group box
+    m_consoleGroup = new QGroupBox("Console", this);
+    QVBoxLayout *consoleLayout = new QVBoxLayout(m_consoleGroup);
     m_consoleLog = new QTextEdit();
     m_consoleLog->setReadOnly(true);
-    m_consoleDock->setWidget(m_consoleLog);
-    addDockWidget(Qt::BottomDockWidgetArea, m_consoleDock);
+    consoleLayout->addWidget(m_consoleLog);
+    consoleLayout->setContentsMargins(5, 5, 5, 5);
     
-    // Property panel dock
-    m_propertyDock = new QDockWidget("Properties", this);
+    // Create property group box
+    m_propertyGroup = new QGroupBox("Properties", this);
+    QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
     m_propertyPanel = new QWidget();
-    QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
-    propLayout->addWidget(new QLabel("Select an item to view properties"));
-    propLayout->addStretch();
-    m_propertyDock->setWidget(m_propertyPanel);
-    addDockWidget(Qt::RightDockWidgetArea, m_propertyDock);
+    QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
+    propContentLayout->addWidget(new QLabel("Select an item to view properties"));
+    propContentLayout->addStretch();
+    propLayout->addWidget(m_propertyPanel);
+    propLayout->setContentsMargins(5, 5, 5, 5);
     
-    // Add dock toggles to View menu (create it here with content)
-    QMenu *viewMenu = menuBar()->addMenu("&View");
-    viewMenu->addAction(m_consoleDock->toggleViewAction());
-    viewMenu->addAction(m_propertyDock->toggleViewAction());
+    // Create vertical splitter (tree + console)
+    m_verticalSplitter = new QSplitter(Qt::Vertical, this);
+    m_verticalSplitter->addWidget(treeContainer);
+    m_verticalSplitter->addWidget(m_consoleGroup);
+    
+    // Create main horizontal splitter (left side + properties)
+    m_mainSplitter = new QSplitter(Qt::Horizontal, this);
+    m_mainSplitter->addWidget(m_verticalSplitter);
+    m_mainSplitter->addWidget(m_propertyGroup);
+    
+    // Set the main splitter as central widget
+    setCentralWidget(m_mainSplitter);
 }
 
 void MainWindow::onConnectClicked()
@@ -362,14 +396,25 @@ void MainWindow::onConnectionStateChanged(bool connected)
         // If we're currently showing a matrix, remove it from the property panel first
         MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);
         if (currentMatrix) {
-            m_propertyDock->setWidget(nullptr);
+            // Remove old layout and widget
+            QLayout *oldLayout = m_propertyGroup->layout();
+            if (oldLayout) {
+                QLayoutItem *item;
+                while ((item = oldLayout->takeAt(0)) != nullptr) {
+                    delete item;
+                }
+                delete oldLayout;
+            }
             
             // Reset to default property panel
             m_propertyPanel = new QWidget();
-            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
-            propLayout->addWidget(new QLabel("Not connected"));
-            propLayout->addStretch();
-            m_propertyDock->setWidget(m_propertyPanel);
+            QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
+            propContentLayout->addWidget(new QLabel("Not connected"));
+            propContentLayout->addStretch();
+            
+            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+            propLayout->addWidget(m_propertyPanel);
+            propLayout->setContentsMargins(5, 5, 5, 5);
         }
         
         m_treeWidget->clear();
@@ -889,16 +934,24 @@ void MainWindow::onTreeSelectionChanged()
                 MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldWidget);
                 if (!oldMatrix) {
                     // Only delete non-matrix widgets
-                    m_propertyDock->setWidget(nullptr);
                     oldWidget->deleteLater();
-                } else {
-                    // Just remove it from the dock without deleting
-                    m_propertyDock->setWidget(nullptr);
                 }
             }
             
+            // Remove old layout
+            QLayout *oldLayout = m_propertyGroup->layout();
+            if (oldLayout) {
+                QLayoutItem *item;
+                while ((item = oldLayout->takeAt(0)) != nullptr) {
+                    delete item;
+                }
+                delete oldLayout;
+            }
+            
             // Directly show the matrix widget (it has internal scroll areas now)
-            m_propertyDock->setWidget(matrixWidget);
+            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+            propLayout->addWidget(matrixWidget);
+            propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = matrixWidget;
             
             // Update background based on crosspoints state
@@ -914,15 +967,25 @@ void MainWindow::onTreeSelectionChanged()
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Just remove the MatrixWidget from dock (don't delete it, it's stored in m_matrixWidgets)
-            m_propertyDock->setWidget(nullptr);
+            // Remove old layout
+            QLayout *oldLayout = m_propertyGroup->layout();
+            if (oldLayout) {
+                QLayoutItem *item;
+                while ((item = oldLayout->takeAt(0)) != nullptr) {
+                    delete item;
+                }
+                delete oldLayout;
+            }
             
             // Create new default property panel
             m_propertyPanel = new QWidget();
-            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
-            propLayout->addWidget(new QLabel("Select an item to view properties"));
-            propLayout->addStretch();
-            m_propertyDock->setWidget(m_propertyPanel);
+            QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
+            propContentLayout->addWidget(new QLabel("Select an item to view properties"));
+            propContentLayout->addStretch();
+            
+            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+            propLayout->addWidget(m_propertyPanel);
+            propLayout->setContentsMargins(5, 5, 5, 5);
         }
     }
 }
