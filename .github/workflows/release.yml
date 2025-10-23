@@ -3,7 +3,7 @@ name: Release Build
 on:
   push:
     tags:
-      - 'v*.*.*'  # Triggers on version tags like v1.2.0
+      - 'v*'  # Triggers on version tags like v1.2.0 or v0.0.8.1
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
