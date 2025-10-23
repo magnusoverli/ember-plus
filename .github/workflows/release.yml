@@ -14,15 +14,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Delete previous dev release
-        continue-on-error: true
-        run: |
-          # Delete the latest-dev pre-release and its tag
-          gh release delete latest-dev --yes || true
-          git push origin --delete latest-dev || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
       - name: Install Qt and dependencies
         run: |
           sudo apt-get update
@@ -175,6 +166,16 @@ jobs:
             ### Requirements
             - Linux x86_64
             - GLIBC 2.31+ (Ubuntu 20.04+, similar for other distros)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Clean up dev release
+        if: success()
+        continue-on-error: true
+        run: |
+          # Delete the latest-dev pre-release and its tag (only after successful release)
+          gh release delete latest-dev --yes || true
+          git push origin --delete latest-dev || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
