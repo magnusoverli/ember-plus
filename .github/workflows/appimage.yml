@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-appimage:
-    runs-on: ubuntu-20.04  # Use older Ubuntu for better compatibility
+    runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for good compatibility and runner availability
     
     steps:
       - name: Checkout code
