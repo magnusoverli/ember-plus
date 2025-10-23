@@ -69,6 +69,8 @@ private:
     void buildGrid();
     void updateConnectionButton(int targetNumber, int sourceNumber);
     void updateHoverHighlight(int targetNumber, int sourceNumber);
+    void connectScrollSync();
+    void clearLayoutAndWidgets(QLayout *layout);
     
     // Matrix metadata
     QString m_identifier;
@@ -88,10 +90,20 @@ private:
     // Connection state: (targetNumber, sourceNumber) -> connected
     QSet<QPair<int, int>> m_connections;
     
-    // UI components
-    QGridLayout *m_grid;
-    QWidget *m_gridWidget;
+    // UI components - Frozen pane structure
     QLabel *m_headerLabel;
+    QWidget *m_cornerWidget;
+    QScrollArea *m_targetHeaderScrollArea;
+    QScrollArea *m_sourcesSidebarScrollArea;
+    QScrollArea *m_buttonGridScrollArea;
+    
+    QWidget *m_targetHeaderContainer;
+    QWidget *m_sourcesSidebarContainer;
+    QWidget *m_buttonGridContainer;
+    
+    QHBoxLayout *m_targetHeaderLayout;
+    QVBoxLayout *m_sourcesSidebarLayout;
+    QGridLayout *m_buttonGridLayout;
     
     // Button references: (targetNumber, sourceNumber) -> button
     QMap<QPair<int, int>, QPushButton*> m_buttons;

@@ -12,6 +12,7 @@
 #include <QEvent>
 #include <QPalette>
 #include <QColor>
+#include <QScrollBar>
 #include <algorithm>
 
 // RotatedLabel implementation
@@ -67,33 +68,120 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     , m_matrixType(2)  // Default to NToN
     , m_targetCount(0)
     , m_sourceCount(0)
-    , m_grid(nullptr)
-    , m_gridWidget(nullptr)
     , m_headerLabel(nullptr)
+    , m_cornerWidget(nullptr)
+    , m_targetHeaderScrollArea(nullptr)
+    , m_sourcesSidebarScrollArea(nullptr)
+    , m_buttonGridScrollArea(nullptr)
+    , m_targetHeaderContainer(nullptr)
+    , m_sourcesSidebarContainer(nullptr)
+    , m_buttonGridContainer(nullptr)
+    , m_targetHeaderLayout(nullptr)
+    , m_sourcesSidebarLayout(nullptr)
+    , m_buttonGridLayout(nullptr)
     , m_hoverTargetNumber(-1)
     , m_hoverSourceNumber(-1)
     , m_crosspointsEnabled(false)
 {
-    auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
+    auto *outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(10, 10, 10, 10);
+    outerLayout->setSpacing(5);
     
-    // Header label
+    // Header label (above the frozen pane grid)
     m_headerLabel = new QLabel("Matrix", this);
     m_headerLabel->setStyleSheet("font-weight: bold; font-size: 12pt;");
-    mainLayout->addWidget(m_headerLabel);
+    outerLayout->addWidget(m_headerLabel);
     
-    // Grid container (will be populated when matrix data is set)
-    m_gridWidget = new QWidget(this);
-    m_grid = new QGridLayout(m_gridWidget);
-    m_grid->setSpacing(GRID_SPACING);
-    m_grid->setContentsMargins(0, 0, 0, 0);
+    // Main frozen pane grid: 2x2 layout
+    auto *frozenPaneWidget = new QWidget(this);
+    auto *frozenPaneLayout = new QGridLayout(frozenPaneWidget);
+    frozenPaneLayout->setSpacing(0);
+    frozenPaneLayout->setContentsMargins(0, 0, 0, 0);
     
-    mainLayout->addWidget(m_gridWidget);
-    mainLayout->addStretch();
+    // [0,0] Corner widget - empty spacer
+    m_cornerWidget = new QWidget(this);
+    m_cornerWidget->setFixedSize(MAX_LABEL_WIDTH, LABEL_HEIGHT + 2);
+    frozenPaneLayout->addWidget(m_cornerWidget, 0, 0);
+    
+    // [0,1] Target header (horizontal scroll only)
+    m_targetHeaderScrollArea = new QScrollArea(this);
+    m_targetHeaderScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_targetHeaderScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Synced from button grid
+    m_targetHeaderScrollArea->setWidgetResizable(false);
+    m_targetHeaderScrollArea->setFrameShape(QFrame::NoFrame);
+    m_targetHeaderScrollArea->setFixedHeight(LABEL_HEIGHT + 2);
+    m_targetHeaderContainer = new QWidget();
+    m_targetHeaderLayout = new QHBoxLayout(m_targetHeaderContainer);
+    m_targetHeaderLayout->setSpacing(GRID_SPACING);
+    m_targetHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    m_targetHeaderScrollArea->setWidget(m_targetHeaderContainer);
+    frozenPaneLayout->addWidget(m_targetHeaderScrollArea, 0, 1);
+    
+    // [1,0] Source sidebar (vertical scroll only)
+    m_sourcesSidebarScrollArea = new QScrollArea(this);
+    m_sourcesSidebarScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_sourcesSidebarScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Synced from button grid
+    m_sourcesSidebarScrollArea->setWidgetResizable(false);
+    m_sourcesSidebarScrollArea->setFrameShape(QFrame::NoFrame);
+    m_sourcesSidebarScrollArea->setFixedWidth(MAX_LABEL_WIDTH + 2);
+    m_sourcesSidebarScrollArea->setStyleSheet("QScrollArea { background-color: transparent; }");
+    m_sourcesSidebarContainer = new QWidget();
+    // No background color set - uses default/transparent
+    m_sourcesSidebarLayout = new QVBoxLayout(m_sourcesSidebarContainer);
+    m_sourcesSidebarLayout->setSpacing(GRID_SPACING);
+    m_sourcesSidebarLayout->setContentsMargins(0, 0, 0, 0);
+    m_sourcesSidebarScrollArea->setWidget(m_sourcesSidebarContainer);
+    frozenPaneLayout->addWidget(m_sourcesSidebarScrollArea, 1, 0);
+    
+    // [1,1] Button grid (both scrollbars)
+    m_buttonGridScrollArea = new QScrollArea(this);
+    m_buttonGridScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_buttonGridScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_buttonGridScrollArea->setWidgetResizable(false);
+    m_buttonGridContainer = new QWidget();
+    m_buttonGridLayout = new QGridLayout(m_buttonGridContainer);
+    m_buttonGridLayout->setSpacing(GRID_SPACING);
+    m_buttonGridLayout->setContentsMargins(0, 0, 0, 0);
+    m_buttonGridScrollArea->setWidget(m_buttonGridContainer);
+    frozenPaneLayout->addWidget(m_buttonGridScrollArea, 1, 1);
+    
+    // Add frozen pane grid to outer layout
+    outerLayout->addWidget(frozenPaneWidget);
+    
+    // Connect scroll synchronization
+    connectScrollSync();
 }
 
 MatrixWidget::~MatrixWidget()
 {
+}
+
+void MatrixWidget::connectScrollSync()
+{
+    // Sync horizontal scrolling: button grid → target header
+    connect(m_buttonGridScrollArea->horizontalScrollBar(), &QScrollBar::valueChanged,
+            this, [this](int value) {
+        m_targetHeaderScrollArea->horizontalScrollBar()->setValue(value);
+    });
+    
+    // Sync vertical scrolling: button grid → source sidebar
+    connect(m_buttonGridScrollArea->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, [this](int value) {
+        m_sourcesSidebarScrollArea->verticalScrollBar()->setValue(value);
+    });
+}
+
+void MatrixWidget::clearLayoutAndWidgets(QLayout *layout)
+{
+    if (!layout) return;
+    
+    QLayoutItem *item;
+    while ((item = layout->takeAt(0)) != nullptr) {
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
 }
 
 void MatrixWidget::setMatrixPath(const QString &path)
@@ -184,68 +272,66 @@ void MatrixWidget::buildGrid()
         return;
     }
     
-    // Clear existing grid
-    QLayoutItem *item;
-    while ((item = m_grid->takeAt(0)) != nullptr) {
-        delete item->widget();
-        delete item;
-    }
+    // Clear existing widgets from all sections
+    clearLayoutAndWidgets(m_targetHeaderLayout);
+    clearLayoutAndWidgets(m_sourcesSidebarLayout);
+    clearLayoutAndWidgets(m_buttonGridLayout);
     m_buttons.clear();
     
-    // Use actual target/source numbers instead of counts
+    // Check if we have data
     if (m_targetNumbers.isEmpty() || m_sourceNumbers.isEmpty()) {
-        auto *emptyLabel = new QLabel("No matrix data", this);
+        auto *emptyLabel = new QLabel("No matrix data", m_buttonGridContainer);
         emptyLabel->setStyleSheet("color: #888;");
-        m_grid->addWidget(emptyLabel, 0, 0);
+        m_buttonGridLayout->addWidget(emptyLabel, 0, 0);
         return;
     }
     
-    // Corner cell
-    auto *corner = new QLabel("SRC \\ TGT", this);
-    corner->setStyleSheet("font-weight: bold; color: #888; font-size: 8pt; padding: 2px;");
-    corner->setAlignment(Qt::AlignCenter);
-    m_grid->addWidget(corner, 0, 0);
-    
-    // Target labels (rotated, on top) - use actual target numbers
+    // Build target header (rotated labels)
     for (int col = 0; col < m_targetNumbers.size(); col++) {
         int tgtNum = m_targetNumbers[col];
         QString label = m_targetLabels.value(tgtNum, QString("T%1").arg(tgtNum));
-        auto *rotatedLabel = new RotatedLabel(label, BUTTON_SIZE, LABEL_HEIGHT, 120, this);
-        m_grid->addWidget(rotatedLabel, 0, col + 1, Qt::AlignHCenter | Qt::AlignTop);
+        auto *rotatedLabel = new RotatedLabel(label, BUTTON_SIZE, LABEL_HEIGHT, 120, 
+                                              m_targetHeaderContainer);
+        m_targetHeaderLayout->addWidget(rotatedLabel);
     }
     
-    // Source labels (left) and buttons - use actual source numbers
+    // Build source sidebar (regular labels)
     for (int row = 0; row < m_sourceNumbers.size(); row++) {
         int srcNum = m_sourceNumbers[row];
-        
-        // Source label
         QString label = m_sourceLabels.value(srcNum, QString("S%1").arg(srcNum));
-        auto *srcLabel = new QLabel(label, this);
+        
+        auto *srcLabel = new QLabel(label, m_sourcesSidebarContainer);
         QFont labelFont = srcLabel->font();
         labelFont.setBold(true);
         srcLabel->setFont(labelFont);
-        srcLabel->setStyleSheet("padding: 2px;");
+        srcLabel->setStyleSheet("padding: 2px; background-color: transparent;");
         srcLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         srcLabel->setFixedHeight(BUTTON_SIZE);
+        srcLabel->setFixedWidth(MAX_LABEL_WIDTH);
+        srcLabel->setAutoFillBackground(false);
         
         // Truncate if too long
         QFontMetrics fm(labelFont);
-        QString elidedText = fm.elidedText(label, Qt::ElideRight, MAX_LABEL_WIDTH);
+        QString elidedText = fm.elidedText(label, Qt::ElideRight, MAX_LABEL_WIDTH - 4);
         srcLabel->setText(elidedText);
         if (elidedText != label) {
             srcLabel->setToolTip(label);
         }
         
-        m_grid->addWidget(srcLabel, row + 1, 0);
+        m_sourcesSidebarLayout->addWidget(srcLabel);
+    }
+    
+    // Build button grid (NO labels, just buttons)
+    for (int row = 0; row < m_sourceNumbers.size(); row++) {
+        int srcNum = m_sourceNumbers[row];
         
-        // Crosspoint buttons - use actual target numbers
         for (int col = 0; col < m_targetNumbers.size(); col++) {
             int tgtNum = m_targetNumbers[col];
             
-            auto *btn = new QPushButton(this);
+            auto *btn = new QPushButton(m_buttonGridContainer);
             btn->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
-            btn->setEnabled(m_crosspointsEnabled);  // Enable based on crosspoints state
-            btn->installEventFilter(this);  // Install event filter for hover detection
+            btn->setEnabled(m_crosspointsEnabled);
+            btn->installEventFilter(this);
             
             QPair<int, int> key(tgtNum, srcNum);
             m_buttons[key] = btn;
@@ -255,7 +341,7 @@ void MatrixWidget::buildGrid()
                 emit crosspointClicked(m_matrixPath, tgtNum, srcNum);
             });
             
-            // Set initial state
+            // Set initial connection state
             bool connected = m_connections.contains(key);
             if (connected) {
                 btn->setStyleSheet(
@@ -277,9 +363,14 @@ void MatrixWidget::buildGrid()
                 );
             }
             
-            m_grid->addWidget(btn, row + 1, col + 1);
+            m_buttonGridLayout->addWidget(btn, row, col);  // Note: no +1 offset
         }
     }
+    
+    // Resize containers to fit content
+    m_targetHeaderContainer->adjustSize();
+    m_sourcesSidebarContainer->adjustSize();
+    m_buttonGridContainer->adjustSize();
 }
 
 void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
