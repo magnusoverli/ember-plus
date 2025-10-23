@@ -43,11 +43,14 @@ Section "Install"
     
     ; Check if app is running
     nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq EmberViewer.exe" /NH'
-    Pop $0
-    Pop $1
-    StrCmp $1 "" +3
-    MessageBox MB_OK|MB_ICONEXCLAMATION "EmberViewer is currently running. Please close it and try again."
-    Abort
+    Pop $0  ; Return code
+    Pop $1  ; Output text
+    
+    ; Check if EmberViewer.exe appears in the output
+    StrCpy $2 $1 15  ; Get first 15 characters
+    StrCmp $2 "EmberViewer.exe" 0 +3  ; If it starts with EmberViewer.exe, app is running
+        MessageBox MB_OK|MB_ICONEXCLAMATION "EmberViewer is currently running. Please close it and try again."
+        Abort
     
     ; Copy files (all files from the build directory)
     File /r "..\..\..\deploy\*.*"
