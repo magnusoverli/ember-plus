@@ -6,6 +6,7 @@
 #include "EmberConnection.h"
 #include "ParameterDelegate.h"
 #include "MatrixWidget.h"
+#include "Logger.h"
 #include <QMenuBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -20,6 +21,8 @@
 #include <QScrollArea>
 #include <QApplication>
 #include <QEvent>
+#include <QDesktopServices>
+#include <QUrl>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -220,6 +223,25 @@ void MainWindow::setupMenu()
     
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
+    
+    QAction *openLogAction = helpMenu->addAction("Open &Log Directory");
+    connect(openLogAction, &QAction::triggered, this, [this]() {
+        QString logDir = Logger::instance()->logDirectory();
+        QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
+    });
+    
+    QAction *showLogPathAction = helpMenu->addAction("Show Log &File Path");
+    connect(showLogPathAction, &QAction::triggered, this, [this]() {
+        QString logPath = Logger::instance()->logFilePath();
+        QMessageBox::information(this, "Log File Location",
+            QString("<p><b>Current log file:</b></p>"
+                    "<p style='font-family: monospace;'>%1</p>"
+                    "<p>Logs are automatically rotated when they exceed 10MB.<br>"
+                    "Up to 5 log files are kept.</p>").arg(logPath));
+    });
+    
+    helpMenu->addSeparator();
+    
     QAction *aboutAction = helpMenu->addAction("&About");
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, "About EmberViewer",
