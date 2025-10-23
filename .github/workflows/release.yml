@@ -95,10 +95,13 @@ jobs:
             libqt5gui5 \
             libqt5widgets5 \
             libqt5network5 \
+            qtwayland5 \
+            libqt5waylandclient5 \
             cmake \
             build-essential \
             ninja-build \
             file \
+            libfuse2 \
             libxcb-xinerama0 \
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
@@ -154,7 +157,7 @@ jobs:
           wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           chmod +x linuxdeploy-plugin-qt-x86_64.AppImage
       
-      - name: Create AppImage with Wayland support
+      - name: Create AppImage with bundled FUSE and Wayland
         run: |
           cd build
           
@@ -165,22 +168,38 @@ jobs:
           ./linuxdeploy-plugin-qt-x86_64.AppImage --appimage-extract
           mv squashfs-root linuxdeploy-plugin-qt-squashfs
           
-          # Set up environment for linuxdeploy
+          # Set up environment for linuxdeploy Qt plugin
           export QMAKE=/usr/bin/qmake
           export QT_SELECT=qt5
           
-          # Make Qt plugin accessible as a plugin
+          # Ensure Qt can find Wayland plugin during deployment
+          export QT_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins:$QT_PLUGIN_PATH
+          
+          # Make Qt plugin accessible
           mkdir -p plugins
           ln -s "$(pwd)/linuxdeploy-plugin-qt-squashfs/AppRun" plugins/linuxdeploy-plugin-qt.sh
           chmod +x plugins/linuxdeploy-plugin-qt.sh
           export LINUXDEPLOY_PLUGIN_PATH="$(pwd)/plugins"
           
-          echo "=== Running linuxdeploy ==="
-          # Create AppImage with Qt plugin
+          echo "=== Running linuxdeploy with Qt plugin ==="
           linuxdeploy-squashfs/AppRun \
             --appdir=AppDir \
             --plugin qt \
             --output appimage
+          
+          echo "=== Manually adding Wayland platform plugin ==="
+          # Ensure wayland plugin is included
+          mkdir -p AppDir/usr/plugins/platforms
+          cp -v /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqwayland*.so AppDir/usr/plugins/platforms/ || true
+          
+          echo "=== Bundling libfuse2 into AppImage ==="
+          # Copy libfuse2 into the AppDir so it's bundled
+          mkdir -p AppDir/usr/lib
+          cp -L /lib/x86_64-linux-gnu/libfuse.so.2* AppDir/usr/lib/ || true
+          
+          echo "=== Listing bundled libraries ==="
+          ls -la AppDir/usr/lib/ | grep -i fuse || echo "No fuse libraries found"
+          ls -la AppDir/usr/plugins/platforms/
           
           echo "=== Checking for created AppImage ==="
           ls -la *.AppImage || echo "No AppImage files found"
@@ -203,25 +222,23 @@ jobs:
             exit 1
           fi
       
-      - name: Configure Wayland support and create FUSE-less AppImage
+      - name: Repackage AppImage with Wayland wrapper
         run: |
           cd build
           
-          # Extract the AppImage to add Wayland wrapper
+          # Extract the AppImage to modify AppRun
           APPIMAGE_FILE=$(ls EmberViewer-*-x86_64.AppImage)
           chmod +x "$APPIMAGE_FILE"
           ./"$APPIMAGE_FILE" --appimage-extract
           mv squashfs-root emberviewer-appdir
           
-          # Create wrapper script for Wayland-first behavior
+          # Create enhanced AppRun with Wayland-first behavior
           cat > emberviewer-appdir/AppRun << 'EOF'
           #!/bin/bash
-          # AppRun wrapper with Wayland-first support
+          # AppRun with Wayland-first support
           
-          # Get the directory where this script is located
           HERE="$(dirname "$(readlink -f "${0}")")"
           
-          # Set up library paths
           export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
           
           # Wayland-first with X11 fallback
@@ -233,35 +250,23 @@ jobs:
               fi
           fi
           
-          # Ensure Qt can find Wayland platform plugin
           export QT_PLUGIN_PATH="${HERE}/usr/plugins:${QT_PLUGIN_PATH}"
           export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms:${QT_QPA_PLATFORM_PLUGIN_PATH}"
           
-          # Execute the application
           exec "${HERE}/usr/bin/EmberViewer" "$@"
           EOF
           
           chmod +x emberviewer-appdir/AppRun
           
-          # Download appimagetool and runtime
+          # Repackage AppImage
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          
-          # Download the modern runtime that works without FUSE
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/runtime-x86_64 -O runtime-x86_64
-          chmod +x runtime-x86_64
-          
-          # Extract appimagetool
           ./appimagetool-x86_64.AppImage --appimage-extract
           
           APPIMAGE_NAME="${APPIMAGE_FILE}"
           rm "$APPIMAGE_FILE"
           
-          # Repackage with the new runtime (no FUSE required)
-          squashfs-root/AppRun emberviewer-appdir "$APPIMAGE_NAME" \
-            --runtime-file runtime-x86_64 \
-            --no-appstream
-          
+          squashfs-root/AppRun emberviewer-appdir "$APPIMAGE_NAME" --no-appstream
           chmod +x "$APPIMAGE_NAME"
       
       - name: Verify AppImage
@@ -295,17 +300,27 @@ jobs:
           body: |
             ## Linux AppImage
             
-            **Wayland Support**: This AppImage defaults to Wayland when available, with automatic X11 fallback.
+            **Wayland Support**: Defaults to Wayland when available, with automatic X11 fallback.
             
-            **No FUSE Required**: This AppImage uses a modern runtime that works without FUSE/libfuse2.
+            ### Requirements
+            **FUSE2 is required** to run AppImages. Install it if not already present:
+            
+            ```bash
+            # Arch/Manjaro/CachyOS
+            sudo pacman -S fuse2
+            
+            # Ubuntu/Debian
+            sudo apt install libfuse2
+            
+            # Fedora
+            sudo dnf install fuse-libs
+            ```
             
             ### Installation
             ```bash
             chmod +x EmberViewer-*-x86_64.AppImage
             ./EmberViewer-*-x86_64.AppImage
             ```
-            
-            No additional dependencies needed - just download and run!
             
             ### Force specific display server
             ```bash
