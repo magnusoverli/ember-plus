@@ -38,6 +38,7 @@ jobs:
           cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_WARN_DEPRECATED=OFF \
             -GNinja
       
       - name: Build EmberViewer

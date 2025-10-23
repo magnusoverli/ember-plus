@@ -42,6 +42,7 @@ jobs:
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_WARN_DEPRECATED=OFF \
             -GNinja
           ninja EmberViewer
       
