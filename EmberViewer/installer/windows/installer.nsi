@@ -46,7 +46,7 @@ Section "Install"
     Abort
     
     ; Copy files (all files from the build directory)
-    File /r "deploy\*.*"
+    File /r "..\..\..\deploy\*.*"
     
     ; Create shortcuts
     CreateDirectory "$SMPROGRAMS\${APPNAME}"
