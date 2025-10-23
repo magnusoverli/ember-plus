@@ -127,6 +127,23 @@ if(APPLE)
     )
 endif()
 
+# Add compiler optimizations for Release builds
+if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${PROJECT_NAME} PRIVATE
+            -O3              # Maximum optimization
+            -march=native    # Optimize for current CPU
+            -DNDEBUG         # Disable assertions
+        )
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(${PROJECT_NAME} PRIVATE
+            /O2              # Maximum optimization
+            /GL              # Whole program optimization
+            /DNDEBUG         # Disable assertions
+        )
+    endif()
+endif()
+
 # Add the IPO property for all relevant targets, if we are building in the
 # release configuration and the platform supports it.
 if (NOT CMAKE_BUILD_TYPE MATCHES "Debug")
