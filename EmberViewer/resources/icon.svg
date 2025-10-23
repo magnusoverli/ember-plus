@@ -1,21 +1,71 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background circle -->
-  <circle cx="128" cy="128" r="120" fill="#1976D2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background -->
+  <rect width="200" height="200" rx="40" fill="#1a1a1a"/>
   
-  <!-- Network/Connection symbol - three nodes connected -->
-  <circle cx="80" cy="100" r="16" fill="white"/>
-  <circle cx="176" cy="100" r="16" fill="white"/>
-  <circle cx="128" cy="170" r="16" fill="white"/>
+  <!-- Gradient for ember effect -->
+  <defs>
+    <linearGradient id="emberGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f7931e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff4757;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="emberGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd93d;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#ff6b35;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
   
-  <!-- Connection lines -->
-  <line x1="80" y1="100" x2="176" y2="100" stroke="white" stroke-width="8"/>
-  <line x1="80" y1="100" x2="128" y2="170" stroke="white" stroke-width="8"/>
-  <line x1="176" y1="100" x2="128" y2="170" stroke="white" stroke-width="8"/>
+  <!-- Tree structure with ember glow -->
+  <!-- Root node (top) -->
+  <circle cx="100" cy="50" r="14" fill="url(#emberGlow)"/>
+  <circle cx="100" cy="50" r="10" fill="url(#emberGradient)"/>
   
-  <!-- Plus symbol in center (Ember+) -->
-  <circle cx="128" cy="128" r="30" fill="#FFA726"/>
-  <line x1="128" y1="113" x2="128" y2="143" stroke="white" stroke-width="6" stroke-linecap="round"/>
-  <line x1="113" y1="128" x2="143" y2="128" stroke="white" stroke-width="6" stroke-linecap="round"/>
+  <!-- Main vertical line -->
+  <rect x="97" y="50" width="6" height="40" fill="url(#emberGradient)" rx="3"/>
+  
+  <!-- Branch lines -->
+  <rect x="60" y="87" width="40" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="100" y="87" width="40" height="6" fill="url(#emberGradient)" rx="3"/>
+  
+  <!-- Second level nodes -->
+  <circle cx="60" cy="90" r="12" fill="url(#emberGlow)"/>
+  <circle cx="60" cy="90" r="8" fill="url(#emberGradient)"/>
+  
+  <circle cx="140" cy="90" r="12" fill="url(#emberGlow)"/>
+  <circle cx="140" cy="90" r="8" fill="url(#emberGradient)"/>
+  
+  <!-- Connecting lines to third level -->
+  <rect x="57" y="90" width="6" height="30" fill="url(#emberGradient)" rx="3"/>
+  <rect x="137" y="90" width="6" height="30" fill="url(#emberGradient)" rx="3"/>
+  
+  <!-- Third level branch lines -->
+  <rect x="40" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="60" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
+  
+  <rect x="120" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="140" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
+  
+  <!-- Leaf nodes -->
+  <circle cx="40" cy="120" r="10" fill="url(#emberGlow)"/>
+  <circle cx="40" cy="120" r="7" fill="url(#emberGradient)"/>
+  
+  <circle cx="80" cy="120" r="10" fill="url(#emberGlow)"/>
+  <circle cx="80" cy="120" r="7" fill="url(#emberGradient)"/>
+  
+  <circle cx="120" cy="120" r="10" fill="url(#emberGlow)"/>
+  <circle cx="120" cy="120" r="7" fill="url(#emberGradient)"/>
+  
+  <circle cx="160" cy="120" r="10" fill="url(#emberGlow)"/>
+  <circle cx="160" cy="120" r="7" fill="url(#emberGradient)"/>
+  
+  <!-- Additional detail nodes -->
+  <rect x="97" y="130" width="6" height="25" fill="url(#emberGradient)" rx="3"/>
+  <rect x="80" y="152" width="40" height="6" fill="url(#emberGradient)" rx="3"/>
+  
+  <circle cx="80" cy="155" r="9" fill="url(#emberGlow)"/>
+  <circle cx="80" cy="155" r="6" fill="url(#emberGradient)"/>
+  
+  <circle cx="120" cy="155" r="9" fill="url(#emberGlow)"/>
+  <circle cx="120" cy="155" r="6" fill="url(#emberGradient)"/>
 </svg>
-
