@@ -80,29 +80,8 @@ jobs:
           Terminal=false
           EOF
           
-          # Create SVG icon
-          cat > AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.svg << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-            <!-- Background circle -->
-            <circle cx="128" cy="128" r="120" fill="#1976D2"/>
-            
-            <!-- Network/Connection symbol - three nodes connected -->
-            <circle cx="80" cy="100" r="16" fill="white"/>
-            <circle cx="176" cy="100" r="16" fill="white"/>
-            <circle cx="128" cy="170" r="16" fill="white"/>
-            
-            <!-- Connection lines -->
-            <line x1="80" y1="100" x2="176" y2="100" stroke="white" stroke-width="8"/>
-            <line x1="80" y1="100" x2="128" y2="170" stroke="white" stroke-width="8"/>
-            <line x1="176" y1="100" x2="128" y2="170" stroke="white" stroke-width="8"/>
-            
-            <!-- Plus symbol in center (Ember+) -->
-            <circle cx="128" cy="128" r="30" fill="#FFA726"/>
-            <line x1="128" y1="113" x2="128" y2="143" stroke="white" stroke-width="6" stroke-linecap="round"/>
-            <line x1="113" y1="128" x2="143" y2="128" stroke="white" stroke-width="6" stroke-linecap="round"/>
-          </svg>
-          EOF
+          # Copy icon from repository
+          cp EmberViewer/resources/icon.svg AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.svg
           
           # Also create PNG version for better compatibility
           sudo apt-get install -y imagemagick
