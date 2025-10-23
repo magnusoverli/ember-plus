@@ -96,12 +96,13 @@ jobs:
           export QT_SELECT=qt5
           export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
           
-          # Run linuxdeploy with Qt plugin
+          # Run linuxdeploy with Qt plugin and icon
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
             --output appimage \
-            --desktop-file AppDir/usr/share/applications/emberviewer.desktop
+            --desktop-file AppDir/usr/share/applications/emberviewer.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.png
       
       - name: Rename AppImage
         run: |
