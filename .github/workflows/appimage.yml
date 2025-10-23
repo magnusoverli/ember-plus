@@ -129,31 +129,31 @@ jobs:
           
           # Create wrapper script for Wayland-first behavior
           cat > squashfs-root/AppRun << 'EOF'
-#!/bin/bash
-# AppRun wrapper with Wayland-first support
-
-# Get the directory where this script is located
-HERE="$(dirname "$(readlink -f "${0}")")"
-
-# Set up library paths
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-
-# Wayland-first with X11 fallback
-if [ -z "$QT_QPA_PLATFORM" ]; then
-    if [ -n "$WAYLAND_DISPLAY" ]; then
-        export QT_QPA_PLATFORM=wayland
-    elif [ -n "$DISPLAY" ]; then
-        export QT_QPA_PLATFORM=xcb
-    fi
-fi
-
-# Ensure Qt can find Wayland platform plugin
-export QT_PLUGIN_PATH="${HERE}/usr/plugins:${QT_PLUGIN_PATH}"
-export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms:${QT_QPA_PLATFORM_PLUGIN_PATH}"
-
-# Execute the application
-exec "${HERE}/usr/bin/EmberViewer" "$@"
-EOF
+          #!/bin/bash
+          # AppRun wrapper with Wayland-first support
+          
+          # Get the directory where this script is located
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          
+          # Set up library paths
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          
+          # Wayland-first with X11 fallback
+          if [ -z "$QT_QPA_PLATFORM" ]; then
+              if [ -n "$WAYLAND_DISPLAY" ]; then
+                  export QT_QPA_PLATFORM=wayland
+              elif [ -n "$DISPLAY" ]; then
+                  export QT_QPA_PLATFORM=xcb
+              fi
+          fi
+          
+          # Ensure Qt can find Wayland platform plugin
+          export QT_PLUGIN_PATH="${HERE}/usr/plugins:${QT_PLUGIN_PATH}"
+          export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms:${QT_QPA_PLATFORM_PLUGIN_PATH}"
+          
+          # Execute the application
+          exec "${HERE}/usr/bin/EmberViewer" "$@"
+          EOF
           
           chmod +x squashfs-root/AppRun
           
