@@ -3,7 +3,6 @@
  */
 
 #include "EmberConnection.h"
-#include "Logger.h"
 #include <ember/Ember.hpp>
 #include <ember/ber/ObjectIdentifier.hpp>
 #include <ember/ber/Null.hpp>
@@ -32,7 +31,6 @@
 #include <s101/MessageType.hpp>
 #include <s101/PackageFlag.hpp>
 #include <s101/StreamEncoder.hpp>
-#include <QJsonObject>
 
 // DomReader implementation
 EmberConnection::DomReader::DomReader(EmberConnection* connection)
@@ -98,11 +96,6 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_host = host;
     m_port = port;
     
-    QJsonObject metadata;
-    metadata["host"] = host;
-    metadata["port"] = port;
-    LOG_INFO("connection", QString("Connecting to %1:%2").arg(host).arg(port), metadata);
-    
     emit logMessage(QString("Connecting to %1:%2...").arg(host).arg(port));
     m_socket->connectToHost(host, port);
 }
@@ -142,11 +135,6 @@ void EmberConnection::onSocketConnected()
     emit connected();
     emit logMessage("Connected to provider");
     
-    QJsonObject metadata;
-    metadata["host"] = m_host;
-    metadata["port"] = m_port;
-    LOG_INFO("connection", "Successfully connected to Ember+ provider", metadata);
-    
     // Send GetDirectory to request root tree
     sendGetDirectory();
 }
@@ -159,24 +147,12 @@ void EmberConnection::onSocketDisconnected()
     m_parameterCache.clear();  // Clear cached parameter metadata
     emit disconnected();
     emit logMessage("Disconnected from provider");
-    
-    QJsonObject metadata;
-    metadata["host"] = m_host;
-    metadata["port"] = m_port;
-    LOG_INFO("connection", "Disconnected from Ember+ provider", metadata);
 }
 
 void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
 {
     QString errorString = m_socket->errorString();
     emit logMessage(QString("Connection error: %1").arg(errorString));
-    
-    QJsonObject metadata;
-    metadata["host"] = m_host;
-    metadata["port"] = m_port;
-    metadata["error_code"] = static_cast<int>(error);
-    metadata["error_message"] = errorString;
-    LOG_ERROR("connection", "Socket error occurred", metadata);
 }
 
 void EmberConnection::onDataReceived()
@@ -698,12 +674,6 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path)
 void EmberConnection::sendParameterValue(const QString &path, const QString &value, int type)
 {
     try {
-        QJsonObject metadata;
-        metadata["path"] = path;
-        metadata["value"] = value;
-        metadata["type"] = type;
-        LOG_INFO("parameter", QString("Setting parameter %1 = %2").arg(path).arg(value), metadata);
-        
         emit logMessage(QString("Setting parameter %1 = %2").arg(path).arg(value));
         
         // Parse path to OID
@@ -796,14 +766,6 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
 {
     try {
         QString operation = connect ? "CONNECT" : "DISCONNECT";
-        
-        QJsonObject metadata;
-        metadata["matrix_path"] = matrixPath;
-        metadata["target"] = targetNumber;
-        metadata["source"] = sourceNumber;
-        metadata["operation"] = operation;
-        LOG_INFO("matrix", QString("Matrix %1: Target %2 %3 Source %4")
-                                  .arg(matrixPath).arg(targetNumber).arg(operation).arg(sourceNumber), metadata);
         
         emit logMessage(QString(">>> Sending %1: Matrix=%2, Target=%3, Source=%4")
                        .arg(operation).arg(matrixPath).arg(targetNumber).arg(sourceNumber));
