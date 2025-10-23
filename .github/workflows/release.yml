@@ -1,0 +1,175 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.2.0
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  release-linux:
+    runs-on: ubuntu-20.04  # Use older Ubuntu for better compatibility
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Qt and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qt5-default \
+            qtbase5-dev \
+            qtbase5-dev-tools \
+            cmake \
+            build-essential \
+            ninja-build \
+            libgl1-mesa-dev \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            wget \
+            file
+      
+      - name: Build EmberViewer (Release)
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -GNinja
+          ninja EmberViewer
+      
+      - name: Verify build
+        run: |
+          ls -lh build/EmberViewer/EmberViewer
+          file build/EmberViewer/EmberViewer
+          ldd build/EmberViewer/EmberViewer
+      
+      - name: Download linuxdeploy and Qt plugin
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-plugin-qt-x86_64.AppImage
+      
+      - name: Create AppDir structure
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          # Copy binary
+          cp build/EmberViewer/EmberViewer AppDir/usr/bin/
+          
+          # Create desktop file
+          cat > AppDir/usr/share/applications/emberviewer.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=EmberViewer
+          Comment=Ember+ Protocol Viewer
+          Exec=EmberViewer
+          Icon=emberviewer
+          Categories=Network;Utility;
+          Terminal=false
+          EOF
+          
+          # Create a simple icon (placeholder - you can replace with actual icon)
+          # For now, we'll skip the icon and linuxdeploy will handle it
+      
+      - name: Create AppImage
+        env:
+          QMAKE: /usr/lib/qt5/bin/qmake
+        run: |
+          # Set environment for Qt plugin
+          export QT_SELECT=qt5
+          export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+          
+          # Run linuxdeploy with Qt plugin
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage \
+            --desktop-file AppDir/usr/share/applications/emberviewer.desktop
+      
+      - name: Rename AppImage
+        run: |
+          # Get version from tag or use commit sha
+          if [ -n "${{ github.ref_name }}" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(git rev-parse --short HEAD)"
+          fi
+          
+          # Find the generated AppImage
+          APPIMAGE=$(ls EmberViewer*.AppImage | head -n 1)
+          
+          if [ -n "$APPIMAGE" ]; then
+            mv "$APPIMAGE" "EmberViewer-${VERSION}-x86_64.AppImage"
+            echo "Created: EmberViewer-${VERSION}-x86_64.AppImage"
+            ls -lh EmberViewer-${VERSION}-x86_64.AppImage
+          else
+            echo "ERROR: AppImage not found!"
+            ls -la
+            exit 1
+          fi
+      
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: EmberViewer-Linux-AppImage
+          path: EmberViewer-*.AppImage
+          retention-days: 30
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: EmberViewer-*.AppImage
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## EmberViewer ${{ github.ref_name }}
+            
+            ### Linux Installation
+            
+            1. Download `EmberViewer-${{ github.ref_name }}-x86_64.AppImage`
+            2. Make it executable: `chmod +x EmberViewer-*.AppImage`
+            3. Run it: `./EmberViewer-*.AppImage`
+            
+            No installation required! The AppImage contains all dependencies.
+            
+            ### Features
+            - Ember+ protocol viewer
+            - Parameter editing (Integer, Real, String, Boolean, Enum, Trigger)
+            - Matrix crosspoint visualization
+            - Read-only matrix display
+            
+            ### Requirements
+            - Linux x86_64
+            - GLIBC 2.31+ (Ubuntu 20.04+, similar for other distros)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  # Placeholder for future macOS release builds
+  # release-macos:
+  #   runs-on: macos-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     # ... macOS AppImage/DMG creation steps
+  
+  # Placeholder for future Windows release builds  
+  # release-windows:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     # ... Windows installer creation steps
+

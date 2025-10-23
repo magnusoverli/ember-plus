@@ -1,60 +1,96 @@
-name: CI
+name: CI Build
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main, develop, feature/* ]
   pull_request:
-    branches: [ master ]
+    branches: [ main, develop ]
 
 jobs:
-  build:
-    name: "${{matrix.config.name}} - ${{matrix.build_type}}"
-    runs-on: ${{matrix.config.os}}
+  build-linux:
+    runs-on: ubuntu-latest
+    
     strategy:
-      fail-fast: false
       matrix:
-        config:
-        - name: "Ubuntu 20.04 (Ninja)"
-          os: ubuntu-20.04
-          generator: "Ninja"
-        - name: "Ubuntu Latest (Ninja)"
-          os: ubuntu-latest
-          generator: "Ninja"
-        - name: "macOS Latest (Ninja)"
-          os: macos-latest
-          generator: "Ninja"
-        #- name: "Windows Latest (Visual Studio)"
-        #  os: windows-latest
-        #  generator: "Visual Studio 17 2022"
-        build_type:
-        - Release
-        - Debug
-
+        build_type: [Debug, Release]
+    
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Install Dependencies (Ubuntu)
-        if: ${{ startsWith(matrix.config.os, 'ubuntu') }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v3
+        with:
+          path: /opt/qt
+          key: ${{ runner.os }}-qt-5.15.2
+      
+      - name: Install Qt and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build qtbase5-dev
-
-      - name: Install Dependencies (macOS)
-        if: ${{ startsWith(matrix.config.os, 'macos') }}
+          sudo apt-get install -y \
+            qt5-default \
+            qtbase5-dev \
+            qtbase5-dev-tools \
+            cmake \
+            build-essential \
+            ninja-build
+      
+      - name: Configure CMake
         run: |
-          brew install cmake ninja qt@5
-          brew link --force qt@5
-          sudo ln -s "$(brew --prefix qt@5)/mkspecs" /opt/homebrew
-          sudo ln -s "$(brew --prefix qt@5)/plugins" /opt/homebrew
-
-      - name: Install Dependencies (Windows)
-        if: ${{ startsWith(matrix.config.os, 'windows') }}
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -GNinja
+      
+      - name: Build libember
         run: |
-          choco install cmake ninja qt5-default
-
-      - name: Configure
-        run: cmake -G "${{matrix.config.generator}}" -B "${{github.workspace}}/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
-
-      - name: Build
-        run: cmake --build "${{github.workspace}}/build" --config "${{matrix.build_type}}"
-
+          cd build
+          ninja libember-static
+      
+      - name: Build libember_slim
+        run: |
+          cd build
+          ninja libember_slim-static
+      
+      - name: Build libs101
+        run: |
+          cd build
+          ninja
+        continue-on-error: true
+      
+      - name: Build EmberViewer
+        run: |
+          cd build
+          ninja EmberViewer
+      
+      - name: Check EmberViewer binary
+        run: |
+          ls -lh build/EmberViewer/EmberViewer
+          file build/EmberViewer/EmberViewer
+          ldd build/EmberViewer/EmberViewer || true
+      
+      - name: Upload EmberViewer artifact
+        uses: actions/upload-artifact@v3
+        if: matrix.build_type == 'Release'
+        with:
+          name: EmberViewer-linux-${{ matrix.build_type }}
+          path: build/EmberViewer/EmberViewer
+          retention-days: 7
+  
+  # Placeholder for future macOS builds
+  # build-macos:
+  #   runs-on: macos-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     # ... macOS specific steps
+  
+  # Placeholder for future Windows builds
+  # build-windows:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     # ... Windows specific steps
