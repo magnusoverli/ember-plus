@@ -31,6 +31,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+public slots:
+    void appendToConsole(const QString &message);
+
 private slots:
     void onConnectClicked();
     void onDisconnectClicked();

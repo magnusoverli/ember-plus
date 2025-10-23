@@ -3,6 +3,7 @@
  */
 
 #include "EmberConnection.h"
+#include <QDebug>
 #include <ember/Ember.hpp>
 #include <ember/ber/ObjectIdentifier.hpp>
 #include <ember/ber/Null.hpp>
@@ -96,7 +97,7 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_host = host;
     m_port = port;
     
-    emit logMessage(QString("Connecting to %1:%2...").arg(host).arg(port));
+    log(LogLevel::Info, QString("Connecting to %1:%2...").arg(host).arg(port));
     m_socket->connectToHost(host, port);
 }
 
@@ -123,9 +124,24 @@ void EmberConnection::setLogLevel(LogLevel level)
 
 void EmberConnection::log(LogLevel level, const QString &message)
 {
-    // Only emit if message level is at or below current log level
-    if (level <= m_logLevel) {
-        emit logMessage(message);
+    if (level > m_logLevel) {
+        return;
+    }
+    
+    switch (level) {
+        case LogLevel::Error:
+            qCritical().noquote() << message;
+            break;
+        case LogLevel::Warning:
+            qWarning().noquote() << message;
+            break;
+        case LogLevel::Info:
+            qInfo().noquote() << message;
+            break;
+        case LogLevel::Debug:
+        case LogLevel::Trace:
+            qDebug().noquote() << message;
+            break;
     }
 }
 
@@ -133,7 +149,7 @@ void EmberConnection::onSocketConnected()
 {
     m_connected = true;
     emit connected();
-    emit logMessage("Connected to provider");
+    log(LogLevel::Info, "Connected to provider");
     
     // Send GetDirectory to request root tree
     sendGetDirectory();
@@ -146,13 +162,13 @@ void EmberConnection::onSocketDisconnected()
     m_domReader->reset();
     m_parameterCache.clear();  // Clear cached parameter metadata
     emit disconnected();
-    emit logMessage("Disconnected from provider");
+    log(LogLevel::Info, "Disconnected from provider");
 }
 
 void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
 {
     QString errorString = m_socket->errorString();
-    emit logMessage(QString("Connection error: %1").arg(errorString));
+    log(LogLevel::Info, QString("Connection error: %1").arg(errorString));
 }
 
 void EmberConnection::onDataReceived()
@@ -163,7 +179,7 @@ void EmberConnection::onDataReceived()
         return;
     }
     
-    emit logMessage(QString("Received %1 bytes").arg(data.size()));
+    log(LogLevel::Info, QString("Received %1 bytes").arg(data.size()));
     
     // Decode S101 frames
     const unsigned char *bytes = reinterpret_cast<const unsigned char*>(data.constData());
@@ -206,21 +222,21 @@ void EmberConnection::handleS101Message(
             
             // Feed EmBER data to DOM reader
             try {
-                emit logMessage("Parsing Glow message...");
+                log(LogLevel::Info, "Parsing Glow message...");
                 m_domReader->read(first, last);
                 
                 // If this is the last package, finalize the tree
                 if (flags.value() & libs101::PackageFlag::LastPackage) {
-                    emit logMessage("Complete message received");
+                    log(LogLevel::Info, "Complete message received");
                     m_domReader->reset();
                 }
             }
             catch (const std::exception &ex) {
-                emit logMessage(QString("Error parsing Glow: %1").arg(ex.what()));
+                log(LogLevel::Info, QString("Error parsing Glow: %1").arg(ex.what()));
             }
         }
         else if (command == libs101::CommandType::KeepAliveRequest) {
-            emit logMessage("Received keep-alive request, sending response");
+            log(LogLevel::Info, "Received keep-alive request, sending response");
             
             // Send keep-alive response
             auto encoder = libs101::StreamEncoder<unsigned char>();
@@ -244,7 +260,7 @@ void EmberConnection::processRoot(libember::dom::Node* root)
         return;
     }
     
-    emit logMessage("Processing Ember+ tree...");
+    log(LogLevel::Info, "Processing Ember+ tree...");
     
     // Detach root from reader
     m_domReader->detachRoot();
@@ -253,7 +269,7 @@ void EmberConnection::processRoot(libember::dom::Node* root)
     try {
         auto glowRoot = dynamic_cast<libember::glow::GlowRootElementCollection*>(root);
         if (glowRoot) {
-            emit logMessage(QString("Root has %1 elements").arg(glowRoot->size()));
+            log(LogLevel::Info, QString("Root has %1 elements").arg(glowRoot->size()));
             
             // Process all root elements
             processElementCollection(glowRoot, "");
@@ -263,7 +279,7 @@ void EmberConnection::processRoot(libember::dom::Node* root)
         delete root;
     }
     catch (const std::exception &ex) {
-        emit logMessage(QString("Error processing tree: %1").arg(ex.what()));
+        log(LogLevel::Info, QString("Error processing tree: %1").arg(ex.what()));
         delete root;
     }
 }
@@ -311,7 +327,7 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         : QString("Node %1").arg(path.back());
     
     if (!hasIdentifier) {
-        emit logMessage(QString("Warning: QNode at %1 missing Identifier property").arg(pathStr));
+        log(LogLevel::Info, QString("Warning: QNode at %1 missing Identifier property").arg(pathStr));
     }
     
     QString description = node->contains(libember::glow::NodeProperty::Description)
@@ -379,16 +395,16 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
     if (hasIdentifier) {
         identifier = QString::fromStdString(param->identifier());
         cache.identifier = identifier;  // Update cache
-        emit logMessage(QString("QParam %1: Identifier='%2' (from message)").arg(pathStr).arg(identifier));
+        log(LogLevel::Info, QString("QParam %1: Identifier='%2' (from message)").arg(pathStr).arg(identifier));
     } else {
         // Use cached value, or generate default if never seen before
         if (!cache.identifier.isEmpty()) {
             identifier = cache.identifier;
-            emit logMessage(QString("QParam %1: Identifier='%2' (from cache)").arg(pathStr).arg(identifier));
+            log(LogLevel::Info, QString("QParam %1: Identifier='%2' (from cache)").arg(pathStr).arg(identifier));
         } else {
             identifier = QString("Param %1").arg(number);
             cache.identifier = identifier;
-            emit logMessage(QString("QParam %1: Identifier='%2' (generated default)").arg(pathStr).arg(identifier));
+            log(LogLevel::Info, QString("QParam %1: Identifier='%2' (generated default)").arg(pathStr).arg(identifier));
         }
     }
     
@@ -418,12 +434,12 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
     if (param->contains(libember::glow::ParameterProperty::Access)) {
         access = param->access().value();
         cache.access = access;  // Update cache
-        emit logMessage(QString("QParam %1: Access=%2 (from message), Type will follow").arg(pathStr).arg(access));
+        log(LogLevel::Info, QString("QParam %1: Access=%2 (from message), Type will follow").arg(pathStr).arg(access));
     } else {
         // Use cached value, or default to ReadWrite if never seen before
         access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadWrite;
         QString source = (cache.access >= 0) ? "from cache" : "default ReadWrite";
-        emit logMessage(QString("QParam %1: Access=%2 (%3)").arg(pathStr).arg(access).arg(source));
+        log(LogLevel::Info, QString("QParam %1: Access=%2 (%3)").arg(pathStr).arg(access).arg(source));
     }
     
     // Get type property - if provided, update cache; otherwise use cached value
@@ -474,7 +490,7 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
         }
     }
     
-    emit logMessage(QString("QParam %1 complete: '%2' = '%3' (Type=%4, Access=%5)").arg(pathStr).arg(identifier).arg(value).arg(type).arg(access));
+    log(LogLevel::Info, QString("QParam %1 complete: '%2' = '%3' (Type=%4, Access=%5)").arg(pathStr).arg(identifier).arg(value).arg(type).arg(access));
     emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues);
 }
 
@@ -601,9 +617,9 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path)
     
     try {
         if (path.isEmpty()) {
-            emit logMessage("Requesting root directory...");
+            log(LogLevel::Info, "Requesting root directory...");
         } else {
-            emit logMessage(QString("Requesting children of %1...").arg(path));
+            log(LogLevel::Info, QString("Requesting children of %1...").arg(path));
         }
         
         // Create GetDirectory command with DirFieldMask requesting all fields
@@ -661,20 +677,20 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path)
             m_socket->flush();
         }
         else {
-            emit logMessage("Failed to send GetDirectory");
+            log(LogLevel::Info, "Failed to send GetDirectory");
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        emit logMessage(QString("Error sending GetDirectory for %1: %2").arg(path).arg(ex.what()));
+        log(LogLevel::Info, QString("Error sending GetDirectory for %1: %2").arg(path).arg(ex.what()));
     }
 }
 
 void EmberConnection::sendParameterValue(const QString &path, const QString &value, int type)
 {
     try {
-        emit logMessage(QString("Setting parameter %1 = %2").arg(path).arg(value));
+        log(LogLevel::Info, QString("Setting parameter %1 = %2").arg(path).arg(value));
         
         // Parse path to OID
         QStringList segments = path.split('.', Qt::SkipEmptyParts);
@@ -716,7 +732,7 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
                 break;
                 
             default:
-                emit logMessage(QString("Unsupported parameter type: %1").arg(type));
+                log(LogLevel::Info, QString("Unsupported parameter type: %1").arg(type));
                 delete param;
                 return;
         }
@@ -749,16 +765,16 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
         
         if (m_socket->write(qdata) > 0) {
             m_socket->flush();
-            emit logMessage(QString("Successfully sent value for %1").arg(path));
+            log(LogLevel::Info, QString("Successfully sent value for %1").arg(path));
         }
         else {
-            emit logMessage(QString("Failed to send value for %1").arg(path));
+            log(LogLevel::Info, QString("Failed to send value for %1").arg(path));
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        emit logMessage(QString("Error sending parameter value for %1: %2").arg(path).arg(ex.what()));
+        log(LogLevel::Info, QString("Error sending parameter value for %1: %2").arg(path).arg(ex.what()));
     }
 }
 
@@ -767,7 +783,7 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
     try {
         QString operation = connect ? "CONNECT" : "DISCONNECT";
         
-        emit logMessage(QString(">>> Sending %1: Matrix=%2, Target=%3, Source=%4")
+        log(LogLevel::Info, QString(">>> Sending %1: Matrix=%2, Target=%3, Source=%4")
                        .arg(operation).arg(matrixPath).arg(targetNumber).arg(sourceNumber));
         
         // Parse matrix path to OID
@@ -790,10 +806,10 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         // Set the operation based on connect/disconnect
         if (connect) {
             connection->setOperation(libember::glow::ConnectionOperation::Connect);
-            emit logMessage(QString("    Operation: Connect (1)"));
+            log(LogLevel::Info, QString("    Operation: Connect (1)"));
         } else {
             connection->setOperation(libember::glow::ConnectionOperation::Disconnect);
-            emit logMessage(QString("    Operation: Disconnect (2)"));
+            log(LogLevel::Info, QString("    Operation: Disconnect (2)"));
         }
         
         // Add source(s) to the connection
@@ -801,7 +817,7 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         libember::ber::ObjectIdentifier sources;
         sources.push_back(sourceNumber);
         connection->setSources(sources);
-        emit logMessage(QString("    Sources: [%1]").arg(sourceNumber));
+        log(LogLevel::Info, QString("    Sources: [%1]").arg(sourceNumber));
         
         // Add connection to the connections sequence
         connectionsSeq->insert(connectionsSeq->end(), connection);
@@ -834,16 +850,16 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         
         if (m_socket->write(qdata) > 0) {
             m_socket->flush();
-            emit logMessage(QString("Successfully sent matrix connection command"));
+            log(LogLevel::Info, QString("Successfully sent matrix connection command"));
         }
         else {
-            emit logMessage(QString("Failed to send matrix connection command"));
+            log(LogLevel::Info, QString("Failed to send matrix connection command"));
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        emit logMessage(QString("Error sending matrix connection for %1: %2").arg(matrixPath).arg(ex.what()));
+        log(LogLevel::Info, QString("Error sending matrix connection for %1: %2").arg(matrixPath).arg(ex.what()));
     }
 }
 
@@ -854,7 +870,7 @@ void EmberConnection::requestMatrixConnections(const QString &matrixPath)
     
     // Request the connection state by asking for the matrix directory
     sendGetDirectoryForPath(matrixPath);
-    emit logMessage(QString("Requesting updated connection state for matrix %1").arg(matrixPath));
+    log(LogLevel::Info, QString("Requesting updated connection state for matrix %1").arg(matrixPath));
 }
 
 void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix)
@@ -891,7 +907,7 @@ void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix
         ? matrix->sourceCount()
         : 0;
     
-    emit logMessage(QString("Matrix: %1 [%2] - Type:%3, %4×%5")
+    log(LogLevel::Info, QString("Matrix: %1 [%2] - Type:%3, %4×%5")
                     .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
     
     emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
@@ -998,7 +1014,7 @@ void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QS
         ? matrix->sourceCount()
         : 0;
     
-    emit logMessage(QString("Matrix: %1 [%2] - Type:%3, %4×%5")
+    log(LogLevel::Info, QString("Matrix: %1 [%2] - Type:%3, %4×%5")
                     .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
     
     emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);

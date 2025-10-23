@@ -278,7 +278,7 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
     QPair<int, int> key(targetNumber, sourceNumber);
     
     if (!m_buttons.contains(key)) {
-        qDebug() << "MatrixWidget::updateConnectionButton - Button not found for Target" << targetNumber << "Source" << sourceNumber << "- Grid has" << m_buttons.size() << "buttons";
+        qWarning() << "MatrixWidget::updateConnectionButton - Button not found for Target" << targetNumber << "Source" << sourceNumber << "- Grid has" << m_buttons.size() << "buttons";
         return;
     }
     

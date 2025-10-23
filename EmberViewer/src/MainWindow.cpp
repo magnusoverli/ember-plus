@@ -22,6 +22,7 @@
 #include <QEvent>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QStandardPaths>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -213,6 +214,14 @@ void MainWindow::setupMenu()
     m_enableCrosspointsAction->setCheckable(true);
     m_enableCrosspointsAction->setChecked(false);
     connect(m_enableCrosspointsAction, &QAction::toggled, this, &MainWindow::onEnableCrosspointsToggled);
+    
+    fileMenu->addSeparator();
+    
+    QAction *openLogsAction = fileMenu->addAction("Open &Log Directory");
+    connect(openLogsAction, &QAction::triggered, this, [this]() {
+        QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
+        QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
+    });
     
     fileMenu->addSeparator();
     
@@ -904,12 +913,14 @@ void MainWindow::saveSettings()
 
 void MainWindow::logMessage(const QString &message)
 {
-    QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
-    QString fullMessage = QString("[%1] %2").arg(timestamp).arg(message);
-    m_consoleLog->append(fullMessage);
-    
-    // Also log to stderr for terminal monitoring
-    qDebug().noquote() << fullMessage;
+    qInfo().noquote() << message;
+}
+
+void MainWindow::appendToConsole(const QString &message)
+{
+    if (m_consoleLog) {
+        m_consoleLog->append(message);
+    }
 }
 
 void MainWindow::onEnableCrosspointsToggled(bool enabled)
