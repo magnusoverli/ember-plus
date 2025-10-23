@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <!-- Background -->
-  <rect width="200" height="200" rx="40" fill="#1a1a1a"/>
+  <rect width="256" height="256" rx="50" fill="#1a1a1a"/>
   
   <!-- Gradient for ember effect -->
   <defs>
@@ -16,56 +16,56 @@
     </linearGradient>
   </defs>
   
-  <!-- Tree structure with ember glow -->
+  <!-- Tree structure with ember glow (scaled from 200x200 to 256x256) -->
   <!-- Root node (top) -->
-  <circle cx="100" cy="50" r="14" fill="url(#emberGlow)"/>
-  <circle cx="100" cy="50" r="10" fill="url(#emberGradient)"/>
+  <circle cx="128" cy="64" r="18" fill="url(#emberGlow)"/>
+  <circle cx="128" cy="64" r="13" fill="url(#emberGradient)"/>
   
   <!-- Main vertical line -->
-  <rect x="97" y="50" width="6" height="40" fill="url(#emberGradient)" rx="3"/>
+  <rect x="124" y="64" width="8" height="51" fill="url(#emberGradient)" rx="4"/>
   
   <!-- Branch lines -->
-  <rect x="60" y="87" width="40" height="6" fill="url(#emberGradient)" rx="3"/>
-  <rect x="100" y="87" width="40" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="77" y="111" width="51" height="8" fill="url(#emberGradient)" rx="4"/>
+  <rect x="128" y="111" width="51" height="8" fill="url(#emberGradient)" rx="4"/>
   
   <!-- Second level nodes -->
-  <circle cx="60" cy="90" r="12" fill="url(#emberGlow)"/>
-  <circle cx="60" cy="90" r="8" fill="url(#emberGradient)"/>
+  <circle cx="77" cy="115" r="15" fill="url(#emberGlow)"/>
+  <circle cx="77" cy="115" r="10" fill="url(#emberGradient)"/>
   
-  <circle cx="140" cy="90" r="12" fill="url(#emberGlow)"/>
-  <circle cx="140" cy="90" r="8" fill="url(#emberGradient)"/>
+  <circle cx="179" cy="115" r="15" fill="url(#emberGlow)"/>
+  <circle cx="179" cy="115" r="10" fill="url(#emberGradient)"/>
   
   <!-- Connecting lines to third level -->
-  <rect x="57" y="90" width="6" height="30" fill="url(#emberGradient)" rx="3"/>
-  <rect x="137" y="90" width="6" height="30" fill="url(#emberGradient)" rx="3"/>
+  <rect x="73" y="115" width="8" height="38" fill="url(#emberGradient)" rx="4"/>
+  <rect x="175" y="115" width="8" height="38" fill="url(#emberGradient)" rx="4"/>
   
   <!-- Third level branch lines -->
-  <rect x="40" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
-  <rect x="60" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="51" y="150" width="26" height="8" fill="url(#emberGradient)" rx="4"/>
+  <rect x="77" y="150" width="26" height="8" fill="url(#emberGradient)" rx="4"/>
   
-  <rect x="120" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
-  <rect x="140" y="117" width="20" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="154" y="150" width="26" height="8" fill="url(#emberGradient)" rx="4"/>
+  <rect x="179" y="150" width="26" height="8" fill="url(#emberGradient)" rx="4"/>
   
   <!-- Leaf nodes -->
-  <circle cx="40" cy="120" r="10" fill="url(#emberGlow)"/>
-  <circle cx="40" cy="120" r="7" fill="url(#emberGradient)"/>
+  <circle cx="51" cy="154" r="13" fill="url(#emberGlow)"/>
+  <circle cx="51" cy="154" r="9" fill="url(#emberGradient)"/>
   
-  <circle cx="80" cy="120" r="10" fill="url(#emberGlow)"/>
-  <circle cx="80" cy="120" r="7" fill="url(#emberGradient)"/>
+  <circle cx="102" cy="154" r="13" fill="url(#emberGlow)"/>
+  <circle cx="102" cy="154" r="9" fill="url(#emberGradient)"/>
   
-  <circle cx="120" cy="120" r="10" fill="url(#emberGlow)"/>
-  <circle cx="120" cy="120" r="7" fill="url(#emberGradient)"/>
+  <circle cx="154" cy="154" r="13" fill="url(#emberGlow)"/>
+  <circle cx="154" cy="154" r="9" fill="url(#emberGradient)"/>
   
-  <circle cx="160" cy="120" r="10" fill="url(#emberGlow)"/>
-  <circle cx="160" cy="120" r="7" fill="url(#emberGradient)"/>
+  <circle cx="205" cy="154" r="13" fill="url(#emberGlow)"/>
+  <circle cx="205" cy="154" r="9" fill="url(#emberGradient)"/>
   
   <!-- Additional detail nodes -->
-  <rect x="97" y="130" width="6" height="25" fill="url(#emberGradient)" rx="3"/>
-  <rect x="80" y="152" width="40" height="6" fill="url(#emberGradient)" rx="3"/>
+  <rect x="124" y="166" width="8" height="32" fill="url(#emberGradient)" rx="4"/>
+  <rect x="102" y="195" width="51" height="8" fill="url(#emberGradient)" rx="4"/>
   
-  <circle cx="80" cy="155" r="9" fill="url(#emberGlow)"/>
-  <circle cx="80" cy="155" r="6" fill="url(#emberGradient)"/>
+  <circle cx="102" cy="198" r="12" fill="url(#emberGlow)"/>
+  <circle cx="102" cy="198" r="8" fill="url(#emberGradient)"/>
   
-  <circle cx="120" cy="155" r="9" fill="url(#emberGlow)"/>
-  <circle cx="120" cy="155" r="6" fill="url(#emberGradient)"/>
+  <circle cx="154" cy="198" r="12" fill="url(#emberGlow)"/>
+  <circle cx="154" cy="198" r="8" fill="url(#emberGradient)"/>
 </svg>
