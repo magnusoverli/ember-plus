@@ -73,6 +73,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: EmberViewer/installer/windows/EmberViewer-*.exe
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -152,5 +154,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: build/EmberViewer-*.AppImage
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
