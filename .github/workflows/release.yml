@@ -203,7 +203,7 @@ jobs:
             exit 1
           fi
       
-      - name: Configure Wayland support
+      - name: Configure Wayland support and create FUSE-less AppImage
         run: |
           cd build
           
@@ -243,15 +243,24 @@ jobs:
           
           chmod +x emberviewer-appdir/AppRun
           
-          # Repackage the AppImage
+          # Download appimagetool and runtime
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
+          
+          # Download the modern runtime that works without FUSE
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/runtime-x86_64 -O runtime-x86_64
+          chmod +x runtime-x86_64
+          
+          # Extract appimagetool
           ./appimagetool-x86_64.AppImage --appimage-extract
           
           APPIMAGE_NAME="${APPIMAGE_FILE}"
           rm "$APPIMAGE_FILE"
           
-          squashfs-root/AppRun emberviewer-appdir "$APPIMAGE_NAME"
+          # Repackage with the new runtime (no FUSE required)
+          squashfs-root/AppRun emberviewer-appdir "$APPIMAGE_NAME" \
+            --runtime-file runtime-x86_64 \
+            --no-appstream
           
           chmod +x "$APPIMAGE_NAME"
       
@@ -288,11 +297,15 @@ jobs:
             
             **Wayland Support**: This AppImage defaults to Wayland when available, with automatic X11 fallback.
             
+            **No FUSE Required**: This AppImage uses a modern runtime that works without FUSE/libfuse2.
+            
             ### Installation
             ```bash
             chmod +x EmberViewer-*-x86_64.AppImage
             ./EmberViewer-*-x86_64.AppImage
             ```
+            
+            No additional dependencies needed - just download and run!
             
             ### Force specific display server
             ```bash
