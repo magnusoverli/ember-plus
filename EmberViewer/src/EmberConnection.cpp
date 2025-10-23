@@ -909,7 +909,7 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path)
             }
             
             auto node = new libember::glow::GlowQualifiedNode(oid);
-            auto command = new libember::glow::GlowCommand(
+            new libember::glow::GlowCommand(
                 node,
                 libember::glow::CommandType::GetDirectory,
                 libember::glow::DirFieldMask::All
@@ -1147,9 +1147,6 @@ void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix
         pathStr += QString::number(num) + ".";
     }
     pathStr.chop(1);  // Remove trailing dot
-    
-    // Check if this is a full matrix refresh (has connections)
-    bool isFullRefresh = (matrix->connections() != nullptr);
     
     int number = path.back();
     

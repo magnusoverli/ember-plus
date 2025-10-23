@@ -2,6 +2,7 @@ build/
 bin/*
 obj/*
 .vs
+.cache/
 *.tmp
 documentation/~$ber+ Documentation.docx
 /libember/.idea/.name
