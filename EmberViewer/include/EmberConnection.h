@@ -10,6 +10,7 @@
 #include <QByteArray>
 #include <QString>
 #include <QMap>
+#include <QTimer>
 #include <ember/dom/AsyncDomReader.hpp>
 #include <s101/StreamDecoder.hpp>
 
@@ -97,6 +98,7 @@ private slots:
     void onSocketDisconnected();
     void onSocketError(QAbstractSocket::SocketError error);
     void onDataReceived();
+    void onConnectionTimeout();
 
 private:
     // Cached parameter metadata to preserve properties across updates
@@ -121,6 +123,10 @@ private:
     
     // Logging helper
     void log(LogLevel level, const QString &message);
+    
+    // Device name detection helper
+    bool isGenericNodeName(const QString &name);
+    void checkAndUpdateDeviceName(const QString &nodePath, const QString &paramPath, const QString &value);
 
     QTcpSocket *m_socket;
     
@@ -135,11 +141,23 @@ private:
     int m_port;
     bool m_connected;
     
+    // Connection timeout
+    QTimer *m_connectionTimer;
+    
     // Cache of parameter metadata (path -> cache)
     QMap<QString, ParameterCache> m_parameterCache;
     
     // Track requested paths to avoid infinite loops
     QSet<QString> m_requestedPaths;
+    
+    // Device name tracking for smart root node naming
+    struct RootNodeInfo {
+        QString path;           // Node path (e.g., "1")
+        QString displayName;    // Current display name
+        bool isGeneric;         // Whether the name is generic and needs improvement
+        QString identityPath;   // Path to identity node (e.g., "1.4")
+    };
+    QMap<QString, RootNodeInfo> m_rootNodes;  // Track root-level nodes
     
     // Log level
     LogLevel m_logLevel;

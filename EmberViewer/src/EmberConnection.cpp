@@ -60,6 +60,7 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_host()
     , m_port(0)
     , m_connected(false)
+    , m_connectionTimer(nullptr)
     , m_logLevel(LogLevel::Info)  // Default to Info level
 {
     m_socket = new QTcpSocket(this);
@@ -76,6 +77,12 @@ EmberConnection::EmberConnection(QObject *parent)
     #endif
     
     connect(m_socket, &QTcpSocket::readyRead, this, &EmberConnection::onDataReceived);
+    
+    // Initialize connection timeout timer (5 seconds)
+    m_connectionTimer = new QTimer(this);
+    m_connectionTimer->setSingleShot(true);
+    m_connectionTimer->setInterval(5000);  // 5 second timeout
+    connect(m_connectionTimer, &QTimer::timeout, this, &EmberConnection::onConnectionTimeout);
     
     // Initialize S101 decoder and DOM reader
     m_s101Decoder = new libs101::StreamDecoder<unsigned char>();
@@ -94,17 +101,51 @@ EmberConnection::~EmberConnection()
 
 void EmberConnection::connectToHost(const QString &host, int port)
 {
+    // Check if already connected or connecting
+    QAbstractSocket::SocketState state = m_socket->state();
+    if (state != QAbstractSocket::UnconnectedState) {
+        log(LogLevel::Warning, QString("Cannot connect: socket is already in state %1").arg(static_cast<int>(state)));
+        
+        // If we're connecting or connected to a different host/port, abort first
+        if (state == QAbstractSocket::ConnectingState || 
+            state == QAbstractSocket::HostLookupState) {
+            log(LogLevel::Info, "Aborting previous connection attempt...");
+            m_socket->abort();
+            m_connectionTimer->stop();
+        } else if (state == QAbstractSocket::ConnectedState) {
+            log(LogLevel::Info, "Already connected");
+            return;
+        } else {
+            // For other states (closing, etc), just return
+            return;
+        }
+    }
+    
     m_host = host;
     m_port = port;
     
-    log(LogLevel::Debug, QString("Connecting to %1:%2...").arg(host).arg(port));
+    log(LogLevel::Info, QString("Connecting to %1:%2...").arg(host).arg(port));
+    
+    // Start connection timeout timer
+    m_connectionTimer->start();
+    
     m_socket->connectToHost(host, port);
 }
 
 void EmberConnection::disconnect()
 {
-    if (m_socket->state() == QAbstractSocket::ConnectedState) {
+    // Stop connection timeout timer
+    m_connectionTimer->stop();
+    
+    QAbstractSocket::SocketState state = m_socket->state();
+    
+    if (state == QAbstractSocket::ConnectedState) {
         m_socket->disconnectFromHost();
+    } else if (state == QAbstractSocket::ConnectingState || 
+               state == QAbstractSocket::HostLookupState) {
+        // Abort pending connection
+        log(LogLevel::Info, "Aborting pending connection...");
+        m_socket->abort();
     }
     
     // Clear request tracking for next connection
@@ -147,6 +188,9 @@ void EmberConnection::log(LogLevel level, const QString &message)
 
 void EmberConnection::onSocketConnected()
 {
+    // Stop connection timeout timer
+    m_connectionTimer->stop();
+    
     m_connected = true;
     emit connected();
     log(LogLevel::Info, "Connected to provider");
@@ -157,18 +201,61 @@ void EmberConnection::onSocketConnected()
 
 void EmberConnection::onSocketDisconnected()
 {
+    // Stop connection timeout timer if still running
+    m_connectionTimer->stop();
+    
     m_connected = false;
     m_s101Decoder->reset();
     m_domReader->reset();
     m_parameterCache.clear();  // Clear cached parameter metadata
+    m_rootNodes.clear();  // Clear root node tracking
     emit disconnected();
-    log(LogLevel::Debug, "Disconnected from provider");
+    log(LogLevel::Info, "Disconnected from provider");
 }
 
 void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
 {
+    // Stop connection timeout timer
+    m_connectionTimer->stop();
+    
     QString errorString = m_socket->errorString();
     log(LogLevel::Error, QString("Connection error: %1").arg(errorString));
+    
+    // For connection errors during connection attempt, abort and cleanup
+    QAbstractSocket::SocketState state = m_socket->state();
+    if (error == QAbstractSocket::ConnectionRefusedError ||
+        error == QAbstractSocket::NetworkError ||
+        error == QAbstractSocket::HostNotFoundError ||
+        error == QAbstractSocket::SocketTimeoutError) {
+        
+        log(LogLevel::Info, "Aborting connection due to error...");
+        
+        // Abort the connection attempt
+        if (state != QAbstractSocket::UnconnectedState) {
+            m_socket->abort();
+        }
+        
+        // The abort() call will trigger onSocketDisconnected if needed
+    }
+}
+
+void EmberConnection::onConnectionTimeout()
+{
+    log(LogLevel::Error, QString("Connection timeout after 5 seconds"));
+    
+    // Abort the connection attempt
+    QAbstractSocket::SocketState state = m_socket->state();
+    if (state == QAbstractSocket::ConnectingState || 
+        state == QAbstractSocket::HostLookupState) {
+        log(LogLevel::Info, "Aborting connection attempt...");
+        m_socket->abort();
+        
+        // Emit disconnected signal to notify UI
+        // (abort() doesn't always trigger disconnected signal for non-connected sockets)
+        if (!m_connected) {
+            emit disconnected();
+        }
+    }
 }
 
 void EmberConnection::onDataReceived()
@@ -330,9 +417,42 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         log(LogLevel::Warning, QString("QNode at %1 missing Identifier property").arg(pathStr));
     }
     
-    QString description = node->contains(libember::glow::NodeProperty::Description)
+    bool hasDescription = node->contains(libember::glow::NodeProperty::Description);
+    QString description = hasDescription
         ? QString::fromStdString(node->description()) 
         : "";
+    
+    // Track root-level nodes for smart device name detection
+    if (pathStr.split('.').size() == 1) {
+        QString displayName = !description.isEmpty() ? description : identifier;
+        bool isGeneric = isGenericNodeName(displayName);
+        
+        log(LogLevel::Info, QString("ROOT QNode [%1]: Identifier='%2' (provided=%3), Description='%4' (provided=%5), Generic=%6")
+            .arg(pathStr).arg(identifier).arg(hasIdentifier ? "yes" : "no")
+            .arg(description).arg(hasDescription ? "yes" : "no")
+            .arg(isGeneric ? "YES" : "no"));
+        
+        // Track this root node
+        RootNodeInfo rootInfo;
+        rootInfo.path = pathStr;
+        rootInfo.displayName = displayName;
+        rootInfo.isGeneric = isGeneric;
+        m_rootNodes[pathStr] = rootInfo;
+    }
+    // Track identity child nodes under root nodes
+    else if (pathStr.split('.').size() == 2) {
+        QString parentPath = pathStr.split('.')[0];
+        if (m_rootNodes.contains(parentPath)) {
+            // Check if this is an identity node
+            QString nodeName = identifier.toLower();
+            if (nodeName == "identity" || nodeName == "_identity" || 
+                nodeName == "deviceinfo" || nodeName == "device_info") {
+                m_rootNodes[parentPath].identityPath = pathStr;
+                log(LogLevel::Info, QString("Detected identity node for root %1: %2")
+                    .arg(parentPath).arg(pathStr));
+            }
+        }
+    }
     
     emit nodeReceived(pathStr, identifier, description);
     
@@ -354,13 +474,47 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
         ? QString::number(number) 
         : QString("%1.%2").arg(parentPath).arg(number);
     
-    QString identifier = node->contains(libember::glow::NodeProperty::Identifier)
+    bool hasIdentifier = node->contains(libember::glow::NodeProperty::Identifier);
+    QString identifier = hasIdentifier
         ? QString::fromStdString(node->identifier())
         : QString("Node %1").arg(number);
     
-    QString description = node->contains(libember::glow::NodeProperty::Description)
+    bool hasDescription = node->contains(libember::glow::NodeProperty::Description);
+    QString description = hasDescription
         ? QString::fromStdString(node->description())
         : "";
+    
+    // Track root-level nodes for smart device name detection
+    if (pathStr.split('.').size() == 1) {
+        QString displayName = !description.isEmpty() ? description : identifier;
+        bool isGeneric = isGenericNodeName(displayName);
+        
+        log(LogLevel::Info, QString("ROOT Node [%1]: Identifier='%2' (provided=%3), Description='%4' (provided=%5), Generic=%6")
+            .arg(pathStr).arg(identifier).arg(hasIdentifier ? "yes" : "no")
+            .arg(description).arg(hasDescription ? "yes" : "no")
+            .arg(isGeneric ? "YES" : "no"));
+        
+        // Track this root node
+        RootNodeInfo rootInfo;
+        rootInfo.path = pathStr;
+        rootInfo.displayName = displayName;
+        rootInfo.isGeneric = isGeneric;
+        m_rootNodes[pathStr] = rootInfo;
+    }
+    // Track identity child nodes under root nodes
+    else if (pathStr.split('.').size() == 2) {
+        QString parentPath = pathStr.split('.')[0];
+        if (m_rootNodes.contains(parentPath)) {
+            // Check if this is an identity node (common names: identity, _identity, deviceInfo, etc.)
+            QString nodeName = identifier.toLower();
+            if (nodeName == "identity" || nodeName == "_identity" || 
+                nodeName == "deviceinfo" || nodeName == "device_info") {
+                m_rootNodes[parentPath].identityPath = pathStr;
+                log(LogLevel::Info, QString("Detected identity node for root %1: %2")
+                    .arg(parentPath).arg(pathStr));
+            }
+        }
+    }
     
     emit nodeReceived(pathStr, identifier, description);
     
@@ -491,6 +645,35 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
     }
     
     log(LogLevel::Debug, QString("QParam %1 complete: '%2' = '%3' (Type=%4, Access=%5)").arg(pathStr).arg(identifier).arg(value).arg(type).arg(access));
+    
+    // Check if this parameter could be a device name for a root node with generic name
+    QStringList pathParts = pathStr.split('.');
+    if (pathParts.size() >= 3) {
+        QString rootPath = pathParts[0];
+        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].isGeneric) {
+            // Check if parameter identifier suggests it's a device name
+            QString paramName = identifier.toLower();
+            if (paramName == "name" || paramName == "device name" || 
+                paramName == "devicename" || paramName == "product") {
+                
+                // Check if under identity node
+                if (!m_rootNodes[rootPath].identityPath.isEmpty()) {
+                    if (pathStr.startsWith(m_rootNodes[rootPath].identityPath + ".")) {
+                        log(LogLevel::Info, QString("Found device name '%1' for root node %2 (from %3)")
+                            .arg(value).arg(rootPath).arg(pathStr));
+                        
+                        // Update the display name
+                        m_rootNodes[rootPath].displayName = value;
+                        m_rootNodes[rootPath].isGeneric = false;
+                        
+                        // Re-emit node with new name
+                        emit nodeReceived(rootPath, value, value);
+                    }
+                }
+            }
+        }
+    }
+    
     emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues);
 }
 
@@ -598,7 +781,90 @@ void EmberConnection::processParameter(libember::glow::GlowParameter* param, con
         }
     }
     
+    // Check if this parameter could be a device name for a root node with generic name
+    QStringList pathParts = pathStr.split('.');
+    if (pathParts.size() >= 3) {
+        QString rootPath = pathParts[0];
+        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].isGeneric) {
+            // Check if parameter identifier suggests it's a device name
+            QString paramName = identifier.toLower();
+            if (paramName == "name" || paramName == "device name" || 
+                paramName == "devicename" || paramName == "product") {
+                
+                // Check if under identity node
+                if (!m_rootNodes[rootPath].identityPath.isEmpty()) {
+                    if (pathStr.startsWith(m_rootNodes[rootPath].identityPath + ".")) {
+                        log(LogLevel::Info, QString("Found device name '%1' for root node %2 (from %3)")
+                            .arg(value).arg(rootPath).arg(pathStr));
+                        
+                        // Update the display name
+                        m_rootNodes[rootPath].displayName = value;
+                        m_rootNodes[rootPath].isGeneric = false;
+                        
+                        // Re-emit node with new name
+                        emit nodeReceived(rootPath, value, value);
+                    }
+                }
+            }
+        }
+    }
+    
     emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues);
+}
+
+bool EmberConnection::isGenericNodeName(const QString &name)
+{
+    // Check if the name is a generic placeholder that should be replaced
+    // with identity information if available
+    static QStringList genericNames = {
+        "Device", "Root", "device", "root", 
+        "Node 0", "Node 1", "Node 2", "Node 3", "Node 4", "Node 5"
+    };
+    
+    return genericNames.contains(name);
+}
+
+void EmberConnection::checkAndUpdateDeviceName(const QString &nodePath, const QString &paramPath, const QString &value)
+{
+    // Check if this parameter could be a device name for a root node
+    // Common patterns: <rootPath>.identity.name, <rootPath>.identity.product, etc.
+    
+    if (value.isEmpty()) {
+        return;
+    }
+    
+    // Extract the potential root path from parameter path
+    // E.g., "1.4.21" -> check if "1" is a tracked root node and "1.4" might be identity
+    QStringList pathParts = paramPath.split('.');
+    if (pathParts.size() < 3) {
+        return;  // Too short to be an identity parameter
+    }
+    
+    QString potentialRootPath = pathParts[0];
+    
+    // Check if we're tracking this root node
+    if (!m_rootNodes.contains(potentialRootPath)) {
+        return;
+    }
+    
+    RootNodeInfo &rootInfo = m_rootNodes[potentialRootPath];
+    
+    // Only update if the current name is generic
+    if (!rootInfo.isGeneric) {
+        return;
+    }
+    
+    // Check if this parameter is under the identity node (if we know it)
+    if (!rootInfo.identityPath.isEmpty()) {
+        if (!paramPath.startsWith(rootInfo.identityPath + ".")) {
+            return;  // Not under the identity path
+        }
+    }
+    
+    // Check if the parameter identifier suggests it's a device name
+    // We'll check this when we get the full parameter info in processParameter
+    log(LogLevel::Debug, QString("Found potential device name for node %1: '%2' from parameter %3")
+        .arg(potentialRootPath).arg(value).arg(paramPath));
 }
 
 void EmberConnection::sendGetDirectory()
