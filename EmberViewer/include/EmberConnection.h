@@ -90,7 +90,7 @@ signals:
                        int type, int targetCount, int sourceCount);
     void matrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label);
     void matrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label);
-    void matrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected);
+    void matrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void matrixConnectionsCleared(const QString &matrixPath);
 
 private slots:

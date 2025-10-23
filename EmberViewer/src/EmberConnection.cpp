@@ -27,6 +27,7 @@
 #include <ember/glow/ParameterType.hpp>
 #include <ember/glow/Access.hpp>
 #include <ember/glow/ConnectionOperation.hpp>
+#include <ember/glow/ConnectionDisposition.hpp>
 #include <ember/util/OctetStream.hpp>
 #include <s101/CommandType.hpp>
 #include <s101/MessageType.hpp>
@@ -1220,12 +1221,14 @@ void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix
                                .arg(targetNumber).arg(sources.size()));
                 
                 if (!sources.empty()) {
+                    int disposition = connection->disposition().value();
+                    
                     // Each subid in the ObjectIdentifier is a connected source number
                     for (auto sourceIt = sources.begin(); sourceIt != sources.end(); ++sourceIt) {
                         int sourceNumber = *sourceIt;
-                        log(LogLevel::Debug, QString(" Emitting connection: Target %1 <- Source %2")
-                                       .arg(targetNumber).arg(sourceNumber));
-                        emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true);
+                        log(LogLevel::Debug, QString(" Emitting connection: Target %1 <- Source %2 (Disposition: %3)")
+                                       .arg(targetNumber).arg(sourceNumber).arg(disposition));
+                        emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true, disposition);
                         connectionCount++;
                     }
                 }
@@ -1323,12 +1326,14 @@ void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QS
                                .arg(targetNumber).arg(sources.size()));
                 
                 if (!sources.empty()) {
+                    int disposition = connection->disposition().value();
+                    
                     // Each subid in the ObjectIdentifier is a connected source number
                     for (auto sourceIt = sources.begin(); sourceIt != sources.end(); ++sourceIt) {
                         int sourceNumber = *sourceIt;
-                        log(LogLevel::Debug, QString(" Emitting connection: Target %1 <- Source %2")
-                                       .arg(targetNumber).arg(sourceNumber));
-                        emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true);
+                        log(LogLevel::Debug, QString(" Emitting connection: Target %1 <- Source %2 (Disposition: %3)")
+                                       .arg(targetNumber).arg(sourceNumber).arg(disposition));
+                        emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true, disposition);
                         connectionCount++;
                     }
                 }

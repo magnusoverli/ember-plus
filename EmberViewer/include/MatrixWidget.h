@@ -46,7 +46,7 @@ public:
     void setMatrixPath(const QString &path);
     void setTargetLabel(int targetNumber, const QString &label);
     void setSourceLabel(int sourceNumber, const QString &label);
-    void setConnection(int targetNumber, int sourceNumber, bool connected);
+    void setConnection(int targetNumber, int sourceNumber, bool connected, int disposition);
     void clearConnections();
     void rebuild();
     
@@ -87,8 +87,12 @@ private:
     QMap<int, QString> m_targetLabels;  // targetNumber -> label
     QMap<int, QString> m_sourceLabels;  // sourceNumber -> label
     
-    // Connection state: (targetNumber, sourceNumber) -> connected
-    QSet<QPair<int, int>> m_connections;
+    // Connection state with disposition
+    struct ConnectionState {
+        bool connected;
+        int disposition;  // 0=Tally, 1=Modified, 2=Pending, 3=Locked
+    };
+    QMap<QPair<int, int>, ConnectionState> m_connections;
     
     // UI components - Frozen pane structure
     QLabel *m_headerLabel;

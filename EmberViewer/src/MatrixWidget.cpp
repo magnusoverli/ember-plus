@@ -238,12 +238,15 @@ void MatrixWidget::setSourceLabel(int sourceNumber, const QString &label)
     }
 }
 
-void MatrixWidget::setConnection(int targetNumber, int sourceNumber, bool connected)
+void MatrixWidget::setConnection(int targetNumber, int sourceNumber, bool connected, int disposition)
 {
     QPair<int, int> key(targetNumber, sourceNumber);
     
     if (connected) {
-        m_connections.insert(key);
+        ConnectionState state;
+        state.connected = true;
+        state.disposition = disposition;
+        m_connections[key] = state;
     } else {
         m_connections.remove(key);
     }
@@ -341,27 +344,7 @@ void MatrixWidget::buildGrid()
                 emit crosspointClicked(m_matrixPath, tgtNum, srcNum);
             });
             
-            // Set initial connection state
-            bool connected = m_connections.contains(key);
-            if (connected) {
-                btn->setStyleSheet(
-                    "QPushButton { "
-                    "  background-color: #4CAF50; "
-                    "  border: 1px solid #45a049; "
-                    "  font-weight: bold; "
-                    "  color: white; "
-                    "  font-size: 8pt; "
-                    "}"
-                );
-                btn->setText("✓");
-            } else {
-                btn->setStyleSheet(
-                    "QPushButton { "
-                    "  background-color: #f5f5f5; "
-                    "  border: 1px solid #ccc; "
-                    "}"
-                );
-            }
+            updateConnectionButton(tgtNum, srcNum);
             
             m_buttonGridLayout->addWidget(btn, row, col);  // Note: no +1 offset
         }
@@ -378,26 +361,13 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
     QPair<int, int> key(targetNumber, sourceNumber);
     
     if (!m_buttons.contains(key)) {
-        // This is normal - connection state can arrive before UI grid is built
         qDebug() << "MatrixWidget::updateConnectionButton - Button not found for Target" << targetNumber << "Source" << sourceNumber << "- Grid has" << m_buttons.size() << "buttons";
         return;
     }
     
     QPushButton *btn = m_buttons[key];
-    bool connected = m_connections.contains(key);
     
-    if (connected) {
-        btn->setStyleSheet(
-            "QPushButton { "
-            "  background-color: #4CAF50; "
-            "  border: 1px solid #45a049; "
-            "  font-weight: bold; "
-            "  color: white; "
-            "  font-size: 8pt; "
-            "}"
-        );
-        btn->setText("✓");
-    } else {
+    if (!m_connections.contains(key)) {
         btn->setStyleSheet(
             "QPushButton { "
             "  background-color: #f5f5f5; "
@@ -405,6 +375,82 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
             "}"
         );
         btn->setText("");
+        return;
+    }
+    
+    const ConnectionState &state = m_connections[key];
+    
+    switch (state.disposition) {
+        case 0:
+            btn->setStyleSheet(
+                "QPushButton { "
+                "  background-color: #4CAF50; "
+                "  border: 1px solid #45a049; "
+                "  font-weight: bold; "
+                "  color: white; "
+                "  font-size: 8pt; "
+                "}"
+            );
+            btn->setText("✓");
+            btn->setToolTip("Connected (Tally)");
+            break;
+        
+        case 1:
+            btn->setStyleSheet(
+                "QPushButton { "
+                "  background-color: #FF9800; "
+                "  border: 1px solid #F57C00; "
+                "  font-weight: bold; "
+                "  color: white; "
+                "  font-size: 8pt; "
+                "}"
+            );
+            btn->setText("~");
+            btn->setToolTip("Modified - Change pending confirmation");
+            break;
+        
+        case 2:
+            btn->setStyleSheet(
+                "QPushButton { "
+                "  background-color: #FFC107; "
+                "  border: 1px solid #FFA000; "
+                "  font-weight: bold; "
+                "  color: #333; "
+                "  font-size: 8pt; "
+                "}"
+            );
+            btn->setText("⏳");
+            btn->setToolTip("Pending - Waiting for device");
+            break;
+        
+        case 3:
+            btn->setStyleSheet(
+                "QPushButton { "
+                "  background-color: #4CAF50; "
+                "  border: 2px solid #F44336; "
+                "  font-weight: bold; "
+                "  color: white; "
+                "  font-size: 8pt; "
+                "}"
+            );
+            btn->setText("🔒");
+            btn->setToolTip("Locked - Cannot be changed");
+            btn->setEnabled(false);
+            break;
+        
+        default:
+            btn->setStyleSheet(
+                "QPushButton { "
+                "  background-color: #4CAF50; "
+                "  border: 1px solid #45a049; "
+                "  font-weight: bold; "
+                "  color: white; "
+                "  font-size: 8pt; "
+                "}"
+            );
+            btn->setText("✓");
+            btn->setToolTip(QString("Connected (Unknown disposition: %1)").arg(state.disposition));
+            break;
     }
 }
 
@@ -544,7 +590,8 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
 
 bool MatrixWidget::isConnected(int targetNumber, int sourceNumber) const
 {
-    return m_connections.contains(QPair<int, int>(targetNumber, sourceNumber));
+    QPair<int, int> key(targetNumber, sourceNumber);
+    return m_connections.contains(key) && m_connections[key].connected;
 }
 
 QString MatrixWidget::getTargetLabel(int targetNumber) const

@@ -47,7 +47,7 @@ private slots:
                          int type, int targetCount, int sourceCount);
     void onMatrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label);
     void onMatrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label);
-    void onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected);
+    void onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void onMatrixConnectionsCleared(const QString &matrixPath);
     void onTreeSelectionChanged();
     void onEnableCrosspointsToggled(bool enabled);

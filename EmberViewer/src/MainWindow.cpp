@@ -774,15 +774,24 @@ void MainWindow::onMatrixSourceReceived(const QString &matrixPath, int sourceNum
     }
 }
 
-void MainWindow::onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected)
+void MainWindow::onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition)
 {
-    qDebug().noquote() << QString("Connection received - Matrix [%1], Target %2, Source %3, Connected: %4")
-               .arg(matrixPath).arg(targetNumber).arg(sourceNumber).arg(connected ? "YES" : "NO");
+    QString dispositionStr;
+    switch (disposition) {
+        case 0: dispositionStr = "Tally"; break;
+        case 1: dispositionStr = "Modified"; break;
+        case 2: dispositionStr = "Pending"; break;
+        case 3: dispositionStr = "Locked"; break;
+        default: dispositionStr = QString("Unknown(%1)").arg(disposition); break;
+    }
+    
+    qDebug().noquote() << QString("Connection received - Matrix [%1], Target %2, Source %3, Connected: %4, Disposition: %5")
+               .arg(matrixPath).arg(targetNumber).arg(sourceNumber).arg(connected ? "YES" : "NO").arg(dispositionStr);
     
     MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
     if (matrixWidget) {
         qDebug().noquote() << QString("Found matrix widget, calling setConnection()");
-        matrixWidget->setConnection(targetNumber, sourceNumber, connected);
+        matrixWidget->setConnection(targetNumber, sourceNumber, connected, disposition);
     } else {
         qWarning().noquote() << QString("No matrix widget found for path [%1]").arg(matrixPath);
     }
@@ -1132,8 +1141,8 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
                    .arg(targetLabel, QString::number(targetNumber));
     }
     
-    // **OPTIMISTIC UPDATE**: Update UI immediately for instant feedback
-    matrixWidget->setConnection(targetNumber, sourceNumber, newState);
+    // **OPTIMISTIC UPDATE**: Update UI immediately for instant feedback (use Pending disposition)
+    matrixWidget->setConnection(targetNumber, sourceNumber, newState, 2);
     
     // Send command to EmberConnection
     m_connection->setMatrixConnection(matrixPath, targetNumber, sourceNumber, newState);
