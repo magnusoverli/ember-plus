@@ -169,21 +169,21 @@ jobs:
           export QMAKE=/usr/bin/qmake
           export QT_SELECT=qt5
           
-          # Make Qt plugin executable and accessible
-          chmod +x linuxdeploy-plugin-qt-squashfs/AppRun
-          export PATH="$(pwd)/linuxdeploy-plugin-qt-squashfs/usr/bin:$PATH"
-          
-          # Set plugin path so linuxdeploy can find it
+          # Make Qt plugin accessible as a plugin
           mkdir -p plugins
-          cp linuxdeploy-plugin-qt-squashfs/AppRun plugins/linuxdeploy-plugin-qt.sh
+          ln -s "$(pwd)/linuxdeploy-plugin-qt-squashfs/AppRun" plugins/linuxdeploy-plugin-qt.sh
           chmod +x plugins/linuxdeploy-plugin-qt.sh
           export LINUXDEPLOY_PLUGIN_PATH="$(pwd)/plugins"
           
+          echo "=== Running linuxdeploy ==="
           # Create AppImage with Qt plugin
           linuxdeploy-squashfs/AppRun \
             --appdir=AppDir \
             --plugin qt \
             --output appimage
+          
+          echo "=== Checking for created AppImage ==="
+          ls -la *.AppImage || echo "No AppImage files found"
           
           # Rename AppImage
           VERSION="${{ github.ref_name }}"
@@ -192,14 +192,15 @@ jobs:
           fi
           VERSION="${VERSION#v}"  # Remove 'v' prefix if present
           
-          mv EmberViewer-*.AppImage "EmberViewer-${VERSION}-x86_64.AppImage" || true
-          
-          # If rename failed, find and rename the AppImage
-          if [ ! -f "EmberViewer-${VERSION}-x86_64.AppImage" ]; then
-            APPIMAGE_FILE=$(ls EmberViewer-*.AppImage 2>/dev/null | head -n1)
-            if [ -n "$APPIMAGE_FILE" ]; then
-              mv "$APPIMAGE_FILE" "EmberViewer-${VERSION}-x86_64.AppImage"
-            fi
+          # Find any AppImage file and rename it
+          APPIMAGE_FILE=$(ls *.AppImage 2>/dev/null | head -n1)
+          if [ -n "$APPIMAGE_FILE" ]; then
+            echo "Found AppImage: $APPIMAGE_FILE"
+            mv "$APPIMAGE_FILE" "EmberViewer-${VERSION}-x86_64.AppImage"
+            echo "Renamed to: EmberViewer-${VERSION}-x86_64.AppImage"
+          else
+            echo "ERROR: No AppImage was created!"
+            exit 1
           fi
       
       - name: Configure Wayland support
