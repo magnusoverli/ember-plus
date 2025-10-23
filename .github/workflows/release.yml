@@ -221,19 +221,80 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
+  release-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '5.15.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          modules: ''
+      
+      - name: Build EmberViewer
+        shell: cmd
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=%Qt5_DIR%
+          cmake --build . --config Release
+      
+      - name: Deploy Qt dependencies
+        shell: cmd
+        run: |
+          mkdir deploy
+          copy build\EmberViewer\Release\EmberViewer.exe deploy\
+          cd deploy
+          windeployqt.exe --release --no-translations EmberViewer.exe
+      
+      - name: Verify deployed files
+        shell: cmd
+        run: |
+          echo === Deployed files ===
+          dir deploy /s
+      
+      - name: Install NSIS
+        run: |
+          choco install nsis -y
+      
+      - name: Create installer
+        shell: cmd
+        run: |
+          cd EmberViewer\installer\windows
+          "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+      
+      - name: Rename installer
+        shell: cmd
+        run: |
+          cd EmberViewer\installer\windows
+          move EmberViewer-Setup.exe EmberViewer-${{ github.ref_name }}-Setup.exe
+      
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmberViewer-Windows-Installer
+          path: EmberViewer/installer/windows/EmberViewer-*.exe
+          retention-days: 30
+      
+      - name: Add installer to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: EmberViewer/installer/windows/EmberViewer-*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
   # Placeholder for future macOS release builds
   # release-macos:
   #   runs-on: macos-latest
   #   steps:
   #     - name: Checkout code
   #       uses: actions/checkout@v4
-  #     # ... macOS AppImage/DMG creation steps
-  
-  # Placeholder for future Windows release builds  
-  # release-windows:
-  #   runs-on: windows-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #     # ... Windows installer creation steps
+  #     # ... macOS DMG creation steps
 
