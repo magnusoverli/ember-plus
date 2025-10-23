@@ -120,7 +120,7 @@ jobs:
           cd build
           ../linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage \
             --desktop-file=../EmberViewer/resources/EmberViewer.desktop \
-            --icon-file=../EmberViewer/resources/EmberViewer.svg
+            --icon-file=../EmberViewer/resources/icon.svg
       
       - name: Rename AppImage
         run: |
