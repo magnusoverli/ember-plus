@@ -10,10 +10,6 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     
-    strategy:
-      matrix:
-        build_type: [Debug, Release]
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,7 +37,7 @@ jobs:
           mkdir -p build
           cd build
           cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_BUILD_TYPE=Release \
             -GNinja
       
       - name: Build libember
@@ -73,9 +69,8 @@ jobs:
       
       - name: Upload EmberViewer artifact
         uses: actions/upload-artifact@v4
-        if: matrix.build_type == 'Release'
         with:
-          name: EmberViewer-linux-${{ matrix.build_type }}
+          name: EmberViewer-linux-Release
           path: build/EmberViewer/EmberViewer
           retention-days: 7
   
