@@ -97,6 +97,9 @@ private:
     // Matrix widgets (path -> widget)
     QMap<QString, MatrixWidget*> m_matrixWidgets;
     
+    // Fast path lookup for tree items
+    QMap<QString, QTreeWidgetItem*> m_pathToItem;
+    
     // Crosspoint editing
     QAction *m_enableCrosspointsAction;
     QTimer *m_activityTimer;

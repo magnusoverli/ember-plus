@@ -209,14 +209,6 @@ void MainWindow::setupMenu()
     
     fileMenu->addSeparator();
     
-    m_enableCrosspointsAction = fileMenu->addAction("Enable &Crosspoints");
-    m_enableCrosspointsAction->setShortcut(QKeySequence("Ctrl+E"));
-    m_enableCrosspointsAction->setCheckable(true);
-    m_enableCrosspointsAction->setChecked(false);
-    connect(m_enableCrosspointsAction, &QAction::toggled, this, &MainWindow::onEnableCrosspointsToggled);
-    
-    fileMenu->addSeparator();
-    
     QAction *openLogsAction = fileMenu->addAction("Open &Log Directory");
     connect(openLogsAction, &QAction::triggered, this, [this]() {
         QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
@@ -228,6 +220,15 @@ void MainWindow::setupMenu()
     QAction *exitAction = fileMenu->addAction("E&xit");
     exitAction->setShortcut(QKeySequence("Ctrl+Q"));
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
+    
+    // Advanced menu
+    QMenu *advancedMenu = menuBar()->addMenu("&Advanced");
+    
+    m_enableCrosspointsAction = advancedMenu->addAction("Enable &Crosspoints");
+    m_enableCrosspointsAction->setShortcut(QKeySequence("Ctrl+E"));
+    m_enableCrosspointsAction->setCheckable(true);
+    m_enableCrosspointsAction->setChecked(false);
+    connect(m_enableCrosspointsAction, &QAction::toggled, this, &MainWindow::onEnableCrosspointsToggled);
     
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
@@ -308,13 +309,13 @@ void MainWindow::onConnectClicked()
     // Clear console log from previous session
     m_consoleLog->clear();
     
-    logMessage(QString("Connecting to %1:%2...").arg(host).arg(port));
+    qDebug().noquote() << QString("Connecting to %1:%2...").arg(host).arg(port);
     m_connection->connectToHost(host, port);
 }
 
 void MainWindow::onDisconnectClicked()
 {
-    logMessage("Disconnecting...");
+    qDebug().noquote() << "Disconnecting...";
     m_connection->disconnect();
 }
 
@@ -333,10 +334,32 @@ void MainWindow::onConnectionStateChanged(bool connected)
     } else {
         m_statusLabel->setText("Not connected");
         m_statusLabel->setStyleSheet("QLabel { color: red; }");
-        logMessage("Disconnected.");
+        qInfo().noquote() << "Disconnected";
+        
+        // If we're currently showing a matrix, remove it from the property panel first
+        QScrollArea *currentScroll = qobject_cast<QScrollArea*>(m_propertyPanel);
+        if (currentScroll && currentScroll->widget()) {
+            MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(currentScroll->widget());
+            if (currentMatrix) {
+                currentScroll->takeWidget();  // Remove matrix without deleting it
+                m_propertyDock->setWidget(nullptr);
+                currentScroll->deleteLater();
+                
+                // Reset to default property panel
+                m_propertyPanel = new QWidget();
+                QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
+                propLayout->addWidget(new QLabel("Not connected"));
+                propLayout->addStretch();
+                m_propertyDock->setWidget(m_propertyPanel);
+            }
+        }
+        
         m_treeWidget->clear();
         
-        // Clear all matrix widgets
+        // Clear the path cache
+        m_pathToItem.clear();
+        
+        // Now it's safe to delete all matrix widgets
         qDeleteAll(m_matrixWidgets);
         m_matrixWidgets.clear();
     }
@@ -364,7 +387,7 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
         item->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
         
         if (isNew) {
-            logMessage(QString("Node: %1 [%2]").arg(displayName).arg(path));
+            qDebug().noquote() << QString("Node: %1 [%2]").arg(displayName).arg(path);
         }
     }
 }
@@ -442,13 +465,13 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
             if (effectiveType == 0) {
                 if (existingCombo->count() == 2 && existingCombo->itemText(0) == "false") {
                     effectiveType = 4;  // Boolean
-                    logMessage(QString("DEBUG: Preserving Boolean widget for %1 (type was 0)").arg(path));
+                    qDebug().noquote() << QString("Preserving Boolean widget for %1 (type was 0)").arg(path);
                 } else {
                     effectiveType = 6;  // Enum
-                    logMessage(QString("DEBUG: Preserving Enum widget for %1 (type was 0)").arg(path));
+                    qDebug().noquote() << QString("Preserving Enum widget for %1 (type was 0)").arg(path);
                 }
             } else {
-                logMessage(QString("DEBUG: Widget exists for %1, type=%2").arg(path).arg(effectiveType));
+                qDebug().noquote() << QString("Widget exists for %1, type=%2").arg(path).arg(effectiveType);
             }
         } else if (existingButton) {
             // Button exists - it's a Trigger
@@ -461,12 +484,12 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
                 QString lowerValue = value.toLower();
                 if (lowerValue == "true" || lowerValue == "false") {
                     effectiveType = 4;  // Boolean
-                    logMessage(QString("DEBUG: No widget for %1, inferring Boolean from value '%2'").arg(path).arg(value));
+                    qDebug().noquote() << QString("No widget for %1, inferring Boolean from value '%2'").arg(path).arg(value);
                 } else {
-                    logMessage(QString("DEBUG: No widget for %1, type=0, value='%2' (not boolean)").arg(path).arg(value));
+                    qDebug().noquote() << QString("No widget for %1, type=0, value='%2' (not boolean)").arg(path).arg(value);
                 }
             } else {
-                logMessage(QString("DEBUG: No widget for %1, type=%2, value='%3'").arg(path).arg(effectiveType).arg(value));
+                qDebug().noquote() << QString("No widget for %1, type=%2, value='%3'").arg(path).arg(effectiveType).arg(value);
             }
         }
         
@@ -485,7 +508,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
             button->setMaximumWidth(100);
             
             connect(button, &QPushButton::clicked, this, [this, path]() {
-                logMessage(QString("Trigger invoked: %1").arg(path));
+                qInfo().noquote() << QString("Trigger invoked: %1").arg(path);
                 // For triggers, send an empty or null value (convention varies)
                 m_connection->sendParameterValue(path, "", 5);  // Type: Trigger
             });
@@ -554,7 +577,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
                     // Connect AFTER setting initial value
                     connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, path, combo](int) {
                         QString newValue = combo->currentText();
-                        logMessage(QString("Boolean changed: %1 → %2").arg(path).arg(newValue));
+                        qDebug().noquote() << QString("Boolean changed: %1 → %2").arg(path).arg(newValue);
                         m_connection->sendParameterValue(path, newValue, 4);  // Type: Boolean
                     });
                 } else if (effectiveType == 6) {
@@ -582,7 +605,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
                         if (idx >= 0 && idx < enumValues.size()) {
                             QString newValue = QString::number(enumValues[idx]);
                             QString displayValue = combo->currentText();
-                            logMessage(QString("Enum changed: %1 → '%2' (value %3)").arg(path).arg(displayValue).arg(newValue));
+                            qDebug().noquote() << QString("Enum changed: %1 → '%2' (value %3)").arg(path).arg(displayValue).arg(newValue);
                             m_connection->sendParameterValue(path, newValue, 6);  // Type: Enum
                         }
                     });
@@ -605,7 +628,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
             // Remove any existing widget
             QWidget *existingWidget = m_treeWidget->itemWidget(item, 2);
             if (existingWidget) {
-                logMessage(QString("DEBUG: REMOVING WIDGET for %1 (fell through to text branch, type=%2, access=%3)").arg(path).arg(effectiveType).arg(access));
+                qDebug().noquote() << QString("REMOVING WIDGET for %1 (fell through to text branch, type=%2, access=%3)").arg(path).arg(effectiveType).arg(access);
                 m_treeWidget->removeItemWidget(item, 2);
                 existingWidget->deleteLater();
             }
@@ -624,7 +647,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         }
         
         if (isNew) {
-            logMessage(QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access));
+            qDebug().noquote() << QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access);
         }
     }
 }
@@ -663,7 +686,7 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
         matrixWidget->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
         
         if (isNew) {
-            logMessage(QString("Matrix: %1 (%2×%3) [%4]").arg(displayName).arg(targetCount).arg(sourceCount).arg(path));
+            qInfo().noquote() << QString("Matrix discovered: %1 (%2×%3)").arg(displayName).arg(targetCount).arg(sourceCount);
         }
     }
 }
@@ -690,26 +713,26 @@ void MainWindow::onMatrixSourceReceived(const QString &matrixPath, int sourceNum
 
 void MainWindow::onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected)
 {
-    logMessage(QString("DEBUG UI: Connection received - Matrix [%1], Target %2, Source %3, Connected: %4")
-               .arg(matrixPath).arg(targetNumber).arg(sourceNumber).arg(connected ? "YES" : "NO"));
+    qDebug().noquote() << QString("Connection received - Matrix [%1], Target %2, Source %3, Connected: %4")
+               .arg(matrixPath).arg(targetNumber).arg(sourceNumber).arg(connected ? "YES" : "NO");
     
     MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
     if (matrixWidget) {
-        logMessage(QString("DEBUG UI: Found matrix widget, calling setConnection()"));
+        qDebug().noquote() << QString("Found matrix widget, calling setConnection()");
         matrixWidget->setConnection(targetNumber, sourceNumber, connected);
     } else {
-        logMessage(QString("DEBUG UI: ERROR - No matrix widget found for path [%1]").arg(matrixPath));
+        qWarning().noquote() << QString("No matrix widget found for path [%1]").arg(matrixPath);
     }
 }
 
 void MainWindow::onMatrixConnectionsCleared(const QString &matrixPath)
 {
-    logMessage(QString("Clearing all connections for matrix %1").arg(matrixPath));
+    qDebug().noquote() << QString("Clearing all connections for matrix %1").arg(matrixPath);
     
     MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
     if (matrixWidget) {
         matrixWidget->clearConnections();
-        logMessage(QString("Connections cleared for matrix %1").arg(matrixPath));
+        qDebug().noquote() << QString("Connections cleared for matrix %1").arg(matrixPath);
     }
 }
 
@@ -717,6 +740,11 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
 {
     if (path.isEmpty()) {
         return nullptr;
+    }
+    
+    // Check cache first for O(1) lookup
+    if (m_pathToItem.contains(path)) {
+        return m_pathToItem[path];
     }
     
     // Split path into segments
@@ -732,25 +760,28 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
         }
         currentPath += pathSegments[i];
         
-        // Search for existing item with this path
-        QTreeWidgetItem *found = nullptr;
+        // Check cache for this intermediate path
+        QTreeWidgetItem *found = m_pathToItem.value(currentPath, nullptr);
         
-        if (parent == nullptr) {
-            // Search in root level
-            for (int j = 0; j < m_treeWidget->topLevelItemCount(); ++j) {
-                QTreeWidgetItem *topItem = m_treeWidget->topLevelItem(j);
-                if (topItem->data(0, Qt::UserRole).toString() == currentPath) {
-                    found = topItem;
-                    break;
+        // If not in cache, search for it
+        if (!found) {
+            if (parent == nullptr) {
+                // Search in root level
+                for (int j = 0; j < m_treeWidget->topLevelItemCount(); ++j) {
+                    QTreeWidgetItem *topItem = m_treeWidget->topLevelItem(j);
+                    if (topItem->data(0, Qt::UserRole).toString() == currentPath) {
+                        found = topItem;
+                        break;
+                    }
                 }
-            }
-        } else {
-            // Search in children of parent
-            for (int j = 0; j < parent->childCount(); ++j) {
-                QTreeWidgetItem *childItem = parent->child(j);
-                if (childItem->data(0, Qt::UserRole).toString() == currentPath) {
-                    found = childItem;
-                    break;
+            } else {
+                // Search in children of parent
+                for (int j = 0; j < parent->childCount(); ++j) {
+                    QTreeWidgetItem *childItem = parent->child(j);
+                    if (childItem->data(0, Qt::UserRole).toString() == currentPath) {
+                        found = childItem;
+                        break;
+                    }
                 }
             }
         }
@@ -768,6 +799,9 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
             found->setData(0, Qt::UserRole, currentPath);
         }
         
+        // Cache this item
+        m_pathToItem[currentPath] = found;
+        
         parent = found;
     }
     
@@ -777,6 +811,7 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
 void MainWindow::clearTree()
 {
     m_treeWidget->clear();
+    m_pathToItem.clear();
 }
 
 void MainWindow::onTreeSelectionChanged()
@@ -832,6 +867,14 @@ void MainWindow::onTreeSelectionChanged()
             // Clear old property panel content
             QWidget *oldWidget = m_propertyPanel;
             if (oldWidget) {
+                // If the old widget is a scroll area with a matrix, remove the matrix first
+                QScrollArea *oldScroll = qobject_cast<QScrollArea*>(oldWidget);
+                if (oldScroll && oldScroll->widget()) {
+                    MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldScroll->widget());
+                    if (oldMatrix) {
+                        oldScroll->takeWidget();  // Remove matrix without deleting it
+                    }
+                }
                 m_propertyDock->setWidget(nullptr);
                 oldWidget->deleteLater();
             }
@@ -854,18 +897,19 @@ void MainWindow::onTreeSelectionChanged()
         // Check if we need to restore the default panel
         QScrollArea *currentScroll = qobject_cast<QScrollArea*>(m_propertyPanel);
         if (currentScroll && currentScroll->widget() && qobject_cast<MatrixWidget*>(currentScroll->widget())) {
-            // Disable crosspoints BEFORE we delete the matrix widget
+            // Disable crosspoints BEFORE we remove the matrix widget
             if (m_crosspointsEnabled) {
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // We're currently showing a matrix, restore default panel
-            QWidget *oldWidget = m_propertyPanel;
-            if (oldWidget) {
-                m_propertyDock->setWidget(nullptr);
-                oldWidget->deleteLater();
-            }
+            // Remove the MatrixWidget from the scroll area without deleting it
+            currentScroll->takeWidget();
             
+            // Now delete the scroll area
+            m_propertyDock->setWidget(nullptr);
+            currentScroll->deleteLater();
+            
+            // Create new default property panel
             m_propertyPanel = new QWidget();
             QVBoxLayout *propLayout = new QVBoxLayout(m_propertyPanel);
             propLayout->addWidget(new QLabel("Select an item to view properties"));
@@ -998,13 +1042,13 @@ void MainWindow::updatePropertyPanelBackground()
 void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber)
 {
     if (!m_crosspointsEnabled) {
-        logMessage("Crosspoint click ignored - crosspoints not enabled");
+        qDebug().noquote() << "Crosspoint click ignored - crosspoints not enabled";
         return;
     }
     
     MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
     if (!matrixWidget) {
-        logMessage("ERROR: Matrix widget not found for path: " + matrixPath);
+        qWarning().noquote() << "Matrix widget not found for path: " + matrixPath;
         return;
     }
     
@@ -1016,17 +1060,24 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
     else if (matrixType == 1) typeStr = "1:1";
     else typeStr = "N:N";
     
-    logMessage(QString("Crosspoint clicked [%1]: Matrix=%2, Target=%3, Source=%4, Current=%5")
-               .arg(typeStr).arg(matrixPath).arg(targetNumber).arg(sourceNumber)
-               .arg(currentlyConnected ? "Connected" : "Disconnected"));
-    
     // For all matrix types, clicking toggles the connection
     // The Ember+ device will handle the matrix type rules (disconnecting other sources, etc.)
     bool newState = !currentlyConnected;
     
+    // Get labels for more readable log messages
+    QString targetLabel = matrixWidget->getTargetLabel(targetNumber);
+    QString sourceLabel = matrixWidget->getSourceLabel(sourceNumber);
+    
+    if (newState) {
+        qInfo().noquote() << QString("Crosspoint CONNECT: %1 [%2] ← %3 [%4]")
+                   .arg(targetLabel, QString::number(targetNumber), sourceLabel, QString::number(sourceNumber));
+    } else {
+        qInfo().noquote() << QString("Crosspoint DISCONNECT: %1 [%2]")
+                   .arg(targetLabel, QString::number(targetNumber));
+    }
+    
     // **OPTIMISTIC UPDATE**: Update UI immediately for instant feedback
     matrixWidget->setConnection(targetNumber, sourceNumber, newState);
-    logMessage(QString("Optimistic UI update: %1").arg(newState ? "Connected" : "Disconnected"));
     
     // Send command to EmberConnection
     m_connection->setMatrixConnection(matrixPath, targetNumber, sourceNumber, newState);
