@@ -1,10 +1,9 @@
 name: CI Build
 
 on:
-  push:
-    branches: [ master, main, develop, feature/* ]
+  workflow_dispatch:  # Manual trigger only
   pull_request:
-    branches: [ master, main, develop ]
+    branches: [ master, main, develop ]  # Still auto-run on PRs
 
 jobs:
   build-linux:
