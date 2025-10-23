@@ -44,7 +44,7 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
     QModelIndex metadataIndex = index.sibling(index.row(), 0);
     int type = metadataIndex.data(TypeRole).toInt();
     int access = metadataIndex.data(AccessRole).toInt();
-    bool isOnline = metadataIndex.data(Qt::UserRole + 4).toBool();
+    bool isOnline = metadataIndex.data(Qt::UserRole + 8).toBool();
 
     // Check if parameter is offline - prevent editing
     if (!isOnline) {

@@ -486,7 +486,8 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
         item->setText(1, "Node");
         item->setText(2, "");  // Keep Value column empty for nodes
         
-        // Store isOnline state in item data (UserRole + 4)
+        // Store isOnline state in item data (UserRole + 4 for nodes)
+        // Note: Parameters use UserRole + 8 to avoid collision with parameter metadata
         item->setData(0, Qt::UserRole + 4, isOnline);
         
         // Apply offline styling if needed
@@ -566,6 +567,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
             enumValuesVar.append(val);
         }
         item->setData(0, Qt::UserRole + 6, QVariant::fromValue(enumValuesVar)); // EnumValuesRole
+        item->setData(0, Qt::UserRole + 8, isOnline);   // IsOnlineRole (after Matrix's UserRole + 7)
         
         // Check if parameter is editable
         // Access: 0=None, 1=ReadOnly, 2=WriteOnly, 3=ReadWrite
