@@ -396,6 +396,7 @@ void EmberConnection::processElementCollection(libember::glow::GlowContainer* co
             processQualifiedParameter(param);
         }
         else if (auto invocationResult = dynamic_cast<libember::glow::GlowInvocationResult*>(element)) {
+            log(LogLevel::Info, "Received InvocationResult!");
             processInvocationResult(element);
         }
         else if (auto matrix = dynamic_cast<libember::glow::GlowMatrix*>(element)) {
@@ -409,6 +410,9 @@ void EmberConnection::processElementCollection(libember::glow::GlowContainer* co
         }
         else if (auto param = dynamic_cast<libember::glow::GlowParameter*>(element)) {
             processParameter(param, parentPath);
+        }
+        else {
+            log(LogLevel::Warning, QString("Unknown element type received (parent: %1)").arg(parentPath));
         }
     }
 }
@@ -468,7 +472,14 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         }
     }
     
-    emit nodeReceived(pathStr, identifier, description);
+    bool isOnline = node->contains(libember::glow::NodeProperty::IsOnline)
+        ? node->isOnline()
+        : true;
+    
+    log(LogLevel::Debug, QString("QNode: %1 - Online: %2")
+        .arg(pathStr).arg(isOnline ? "YES" : "NO"));
+    
+    emit nodeReceived(pathStr, identifier, description, isOnline);
     
     // Process children if present inline
     if (node->children()) {
@@ -530,7 +541,14 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
         }
     }
     
-    emit nodeReceived(pathStr, identifier, description);
+    bool isOnline = node->contains(libember::glow::NodeProperty::IsOnline)
+        ? node->isOnline()
+        : true;
+    
+    log(LogLevel::Debug, QString("Node: %1 - Online: %2")
+        .arg(pathStr).arg(isOnline ? "YES" : "NO"));
+    
+    emit nodeReceived(pathStr, identifier, description, isOnline);
     
     // Process children if present inline
     if (node->children()) {
@@ -680,15 +698,19 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
                         m_rootNodes[rootPath].displayName = value;
                         m_rootNodes[rootPath].isGeneric = false;
                         
-                        // Re-emit node with new name
-                        emit nodeReceived(rootPath, value, value);
+                        // Re-emit node with new name (assume online since we're getting parameter updates)
+                        emit nodeReceived(rootPath, value, value, true);
                     }
                 }
             }
         }
     }
     
-    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues);
+    bool isOnline = param->contains(libember::glow::ParameterProperty::IsOnline)
+        ? param->isOnline()
+        : true;
+    
+    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline);
 }
 
 void EmberConnection::processParameter(libember::glow::GlowParameter* param, const QString& parentPath)
@@ -815,15 +837,19 @@ void EmberConnection::processParameter(libember::glow::GlowParameter* param, con
                         m_rootNodes[rootPath].displayName = value;
                         m_rootNodes[rootPath].isGeneric = false;
                         
-                        // Re-emit node with new name
-                        emit nodeReceived(rootPath, value, value);
+                        // Re-emit node with new name (assume online since we're getting parameter updates)
+                        emit nodeReceived(rootPath, value, value, true);
                     }
                 }
             }
         }
     }
     
-    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues);
+    bool isOnline = param->contains(libember::glow::ParameterProperty::IsOnline)
+        ? param->isOnline()
+        : true;
+    
+    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline);
 }
 
 bool EmberConnection::isGenericNodeName(const QString &name)
@@ -1475,9 +1501,11 @@ void EmberConnection::processFunction(libember::glow::GlowFunction* function, co
 
 void EmberConnection::processInvocationResult(libember::dom::Node* node)
 {
+    log(LogLevel::Info, "processInvocationResult called!");
+    
     auto result = dynamic_cast<libember::glow::GlowInvocationResult*>(node);
     if (!result) {
-        log(LogLevel::Warning, "Invalid invocation result received");
+        log(LogLevel::Warning, "Invalid invocation result received - cast failed");
         return;
     }
     
@@ -1570,6 +1598,10 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     
     auto qualifiedFunction = new libember::glow::GlowQualifiedFunction(oid);
     qualifiedFunction->children()->insert(qualifiedFunction->children()->end(), command);
+    
+    // Also subscribe to the function to receive invocation results
+    auto subscribeCmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+    qualifiedFunction->children()->insert(qualifiedFunction->children()->end(), subscribeCmd);
     
     root->insert(root->end(), qualifiedFunction);
     

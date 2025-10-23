@@ -96,13 +96,14 @@ MainWindow::MainWindow(QWidget *parent)
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
-    // Set default window size (1200x700) - will be overridden by saved settings if they exist
-    resize(1200, 700);
+    // Set default window size (1300x700) - will be overridden by saved settings if they exist
+    resize(1300, 700);
     
     // Set splitter sizes after window is resized
-    // Main splitter: 50% tree+console, 50% properties
-    int halfWidth = width() / 2;
-    m_mainSplitter->setSizes(QList<int>() << halfWidth << halfWidth);
+    // Main splitter: 55% tree+console, 45% properties
+    int leftWidth = width() * 0.55;
+    int rightWidth = width() * 0.45;
+    m_mainSplitter->setSizes(QList<int>() << leftWidth << rightWidth);
     
     // Vertical splitter: most space for tree, 150px for console
     int treeHeight = height() - 150;
@@ -470,7 +471,7 @@ void MainWindow::onLogMessage(const QString &message)
     logMessage(message);
 }
 
-void MainWindow::onNodeReceived(const QString &path, const QString &identifier, const QString &description)
+void MainWindow::onNodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline)
 {
     QTreeWidgetItem *item = findOrCreateTreeItem(path);
     if (item) {
@@ -484,17 +485,36 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
         item->setText(0, displayName);
         item->setText(1, "Node");
         item->setText(2, "");  // Keep Value column empty for nodes
-        item->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
+        
+        // Store isOnline state in item data (UserRole + 4)
+        item->setData(0, Qt::UserRole + 4, isOnline);
+        
+        // Apply offline styling if needed
+        if (!isOnline) {
+            item->setIcon(0, style()->standardIcon(QStyle::SP_MessageBoxWarning));
+            item->setForeground(0, QBrush(QColor("#888888")));
+            item->setForeground(1, QBrush(QColor("#888888")));
+            item->setForeground(2, QBrush(QColor("#888888")));
+            item->setToolTip(0, QString("%1 - Offline").arg(displayName));
+        } else {
+            item->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
+            // Reset foreground to default
+            item->setForeground(0, QBrush());
+            item->setForeground(1, QBrush());
+            item->setForeground(2, QBrush());
+            item->setToolTip(0, "");
+        }
         
         if (isNew) {
-            qDebug().noquote() << QString("Node: %1 [%2]").arg(displayName).arg(path);
+            qDebug().noquote() << QString("Node: %1 [%2] - %3")
+                .arg(displayName).arg(path).arg(isOnline ? "Online" : "Offline");
         }
     }
 }
 
 void MainWindow::onParameterReceived(const QString &path, int /* number */, const QString &identifier, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
-                                    const QStringList &enumOptions, const QList<int> &enumValues)
+                                    const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline)
 {
     // Check if this parameter is actually a matrix label
     // Pattern: matrixPath.666999666.1.N (targets) or matrixPath.666999666.2.N (sources)
@@ -588,8 +608,6 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
                 } else {
                     qDebug().noquote() << QString("No widget for %1, type=0, value='%2' (not boolean)").arg(path).arg(value);
                 }
-            } else {
-                qDebug().noquote() << QString("No widget for %1, type=%2, value='%3'").arg(path).arg(effectiveType).arg(value);
             }
         }
         
