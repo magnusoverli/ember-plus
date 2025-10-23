@@ -218,9 +218,6 @@ void MainWindow::setupMenu()
     exitAction->setShortcut(QKeySequence("Ctrl+Q"));
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
     
-    // View menu
-    QMenu *viewMenu = menuBar()->addMenu("&View");
-    
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
     QAction *aboutAction = helpMenu->addAction("&About");
@@ -285,11 +282,8 @@ void MainWindow::createDockWindows()
     m_propertyDock->setWidget(m_propertyPanel);
     addDockWidget(Qt::RightDockWidgetArea, m_propertyDock);
     
-    // Add dock toggles to View menu
-    QMenu *viewMenu = menuBar()->findChild<QMenu*>("View");
-    if (!viewMenu) {
-        viewMenu = menuBar()->addMenu("&View");
-    }
+    // Add dock toggles to View menu (create it here with content)
+    QMenu *viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction(m_consoleDock->toggleViewAction());
     viewMenu->addAction(m_propertyDock->toggleViewAction());
 }
