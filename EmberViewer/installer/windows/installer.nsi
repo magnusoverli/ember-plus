@@ -16,6 +16,10 @@ RequestExecutionLevel admin
 
 ; Include Modern UI
 !include "MUI2.nsh"
+!include "FileFunc.nsh"
+
+; Insert macros
+!insertmacro GetSize
 
 ; MUI Settings
 !define MUI_ABORTWARNING
@@ -85,8 +89,3 @@ Section "Uninstall"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
     DeleteRegKey HKLM "Software\${APPNAME}"
 SectionEnd
-
-; Functions
-!include "FileFunc.nsh"
-!insertmacro GetSize
-
