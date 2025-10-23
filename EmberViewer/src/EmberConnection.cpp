@@ -622,9 +622,9 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
         cache.access = access;  // Update cache
         log(LogLevel::Debug, QString("QParam %1: Access=%2 (from message), Type will follow").arg(pathStr).arg(access));
     } else {
-        // Use cached value, or default to ReadWrite if never seen before
-        access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadWrite;
-        QString source = (cache.access >= 0) ? "from cache" : "default ReadWrite";
+        // Use cached value, or default to ReadOnly if never seen before
+        access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadOnly;
+        QString source = (cache.access >= 0) ? "from cache" : "default ReadOnly";
         log(LogLevel::Debug, QString("QParam %1: Access=%2 (%3)").arg(pathStr).arg(access).arg(source));
     }
     
@@ -765,8 +765,8 @@ void EmberConnection::processParameter(libember::glow::GlowParameter* param, con
         access = param->access().value();
         cache.access = access;  // Update cache
     } else {
-        // Use cached value, or default to ReadWrite if never seen before
-        access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadWrite;
+        // Use cached value, or default to ReadOnly if never seen before
+        access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadOnly;
     }
     
     // Get type property - if provided, update cache; otherwise use cached value
