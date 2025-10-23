@@ -93,9 +93,19 @@ jobs:
           convert AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.svg \
                   AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.png
       
+      - name: Verify Qt plugins are available
+        run: |
+          echo "=== Checking for Qt platform plugins ==="
+          ls -la /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/ || true
+          echo ""
+          echo "=== Checking for Wayland libraries ==="
+          dpkg -L qtwayland5 | grep -E "\.so" || true
+      
       - name: Create AppImage
         env:
           QMAKE: /usr/lib/qt5/bin/qmake
+          QT_PLUGIN_PATH: /usr/lib/x86_64-linux-gnu/qt5/plugins
+          QT_QPA_PLATFORM_PLUGIN_PATH: /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms
         run: |
           # Set environment for Qt plugin
           export QT_SELECT=qt5
@@ -108,6 +118,16 @@ jobs:
             --output appimage \
             --desktop-file AppDir/usr/share/applications/emberviewer.desktop \
             --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.png
+      
+      - name: Verify Wayland plugin in AppImage
+        run: |
+          echo "=== Checking bundled Qt plugins in AppImage ==="
+          ls -la AppDir/usr/plugins/platforms/ || echo "No platforms directory found"
+          if [ -f AppDir/usr/plugins/platforms/libqwayland-egl.so ]; then
+            echo "✓ Wayland plugin bundled!"
+          else
+            echo "✗ Wayland plugin NOT bundled!"
+          fi
       
       - name: Rename AppImage
         run: |
