@@ -16,13 +16,12 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
-          modules: ''
       
       - name: Build EmberViewer
         shell: cmd
@@ -74,5 +73,71 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: EmberViewer/installer/windows/EmberViewer-*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-linux:
+    name: Linux AppImage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          host: 'linux'
+          target: 'desktop'
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-dev
+      
+      - name: Build EmberViewer
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build . --config Release
+      
+      - name: Install to AppDir
+        run: |
+          cd build
+          make install DESTDIR=AppDir
+      
+      - name: Download linuxdeploy and Qt plugin
+        run: |
+          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+      
+      - name: Create AppImage
+        run: |
+          cd build
+          export QMAKE=$Qt5_DIR/bin/qmake
+          ../linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage \
+            --desktop-file=../EmberViewer/resources/EmberViewer.desktop \
+            --icon-file=../EmberViewer/resources/EmberViewer.svg
+      
+      - name: Rename AppImage
+        run: |
+          cd build
+          mv EmberViewer-*.AppImage EmberViewer-${{ github.ref_name }}-x86_64.AppImage
+      
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmberViewer-Linux-AppImage
+          path: build/EmberViewer-*.AppImage
+          retention-days: 30
+      
+      - name: Add AppImage to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/EmberViewer-*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
