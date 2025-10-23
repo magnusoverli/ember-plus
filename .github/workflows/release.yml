@@ -232,6 +232,17 @@ jobs:
           ./"$APPIMAGE_FILE" --appimage-extract
           mv squashfs-root emberviewer-appdir
           
+          echo "=== Adding Wayland plugins to extracted AppDir ==="
+          # Copy Wayland plugins into the extracted AppImage
+          mkdir -p emberviewer-appdir/usr/plugins/platforms
+          cp -v /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqwayland*.so emberviewer-appdir/usr/plugins/platforms/ || echo "Warning: Could not copy Wayland plugins"
+          
+          # Also copy Wayland libraries that the plugin needs
+          cp -L /usr/lib/x86_64-linux-gnu/libQt5WaylandClient.so.5* emberviewer-appdir/usr/lib/ 2>/dev/null || true
+          
+          echo "=== Verifying plugins in AppDir ==="
+          ls -la emberviewer-appdir/usr/plugins/platforms/
+          
           # Create enhanced AppRun with Wayland-first behavior
           cat > emberviewer-appdir/AppRun << 'EOF'
           #!/bin/bash
