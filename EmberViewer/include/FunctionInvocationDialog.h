@@ -1,0 +1,37 @@
+#ifndef FUNCTIONINVOCATIONDIALOG_H
+#define FUNCTIONINVOCATIONDIALOG_H
+
+#include <QDialog>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
+#include <QFormLayout>
+#include <QDialogButtonBox>
+#include <QLabel>
+#include <QVariant>
+#include <QStringList>
+#include <QList>
+
+class FunctionInvocationDialog : public QDialog
+{
+    Q_OBJECT
+    
+public:
+    explicit FunctionInvocationDialog(const QString &functionName,
+                                     const QString &description,
+                                     const QStringList &argNames,
+                                     const QList<int> &argTypes,
+                                     QWidget *parent = nullptr);
+    
+    QList<QVariant> getArguments() const;
+    
+private:
+    QString m_functionName;
+    QStringList m_argNames;
+    QList<int> m_argTypes;
+    QList<QWidget*> m_inputWidgets;
+    QDialogButtonBox *m_buttonBox;
+};
+
+#endif // FUNCTIONINVOCATIONDIALOG_H

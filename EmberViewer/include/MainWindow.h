@@ -49,6 +49,10 @@ private slots:
     void onMatrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label);
     void onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void onMatrixConnectionsCleared(const QString &matrixPath);
+    void onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
+                           const QStringList &argNames, const QList<int> &argTypes,
+                           const QStringList &resultNames, const QList<int> &resultTypes);
+    void onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
     void onTreeSelectionChanged();
     void onEnableCrosspointsToggled(bool enabled);
     void onActivityTimeout();
@@ -98,6 +102,18 @@ private:
     
     // Matrix widgets (path -> widget)
     QMap<QString, MatrixWidget*> m_matrixWidgets;
+    
+    // Function metadata storage
+    struct FunctionInfo {
+        QString identifier;
+        QString description;
+        QStringList argNames;
+        QList<int> argTypes;
+        QStringList resultNames;
+        QList<int> resultTypes;
+    };
+    QMap<QString, FunctionInfo> m_functions;  // path -> function info
+    QMap<int, QString> m_pendingInvocations;  // invocationId -> function path
     
     // Fast path lookup for tree items
     QMap<QString, QTreeWidgetItem*> m_pathToItem;

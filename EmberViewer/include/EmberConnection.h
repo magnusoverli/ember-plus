@@ -36,6 +36,8 @@ namespace libember {
         class GlowQualifiedParameter;
         class GlowMatrix;
         class GlowQualifiedMatrix;
+        class GlowFunction;
+        class GlowQualifiedFunction;
     }
 }
 
@@ -77,6 +79,9 @@ public:
     
     // Request matrix connection state (forces refresh)
     void requestMatrixConnections(const QString &matrixPath);
+    
+    // Invoke a function with arguments
+    void invokeFunction(const QString &path, const QList<QVariant> &arguments);
 
 signals:
     void connected();
@@ -92,6 +97,10 @@ signals:
     void matrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label);
     void matrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void matrixConnectionsCleared(const QString &matrixPath);
+    void functionReceived(const QString &path, const QString &identifier, const QString &description,
+                         const QStringList &argNames, const QList<int> &argTypes,
+                         const QStringList &resultNames, const QList<int> &resultTypes);
+    void invocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
 
 private slots:
     void onSocketConnected();
@@ -118,6 +127,9 @@ private:
     void processParameter(libember::glow::GlowParameter* param, const QString& parentPath);
     void processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix);
     void processMatrix(libember::glow::GlowMatrix* matrix, const QString& parentPath);
+    void processQualifiedFunction(libember::glow::GlowQualifiedFunction* function);
+    void processFunction(libember::glow::GlowFunction* function, const QString& parentPath);
+    void processInvocationResult(libember::dom::Node* result);
     void sendGetDirectory();
     void sendGetDirectoryForPath(const QString& path);
     
@@ -161,6 +173,10 @@ private:
     
     // Log level
     LogLevel m_logLevel;
+    
+    // Function invocation tracking
+    int m_nextInvocationId;
+    QMap<int, QString> m_pendingInvocations;  // invocationId -> function path
 };
 
 #endif // EMBERCONNECTION_H

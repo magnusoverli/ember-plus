@@ -19,6 +19,11 @@
 #include <ember/glow/GlowTarget.hpp>
 #include <ember/glow/GlowSource.hpp>
 #include <ember/glow/GlowConnection.hpp>
+#include <ember/glow/GlowFunction.hpp>
+#include <ember/glow/GlowQualifiedFunction.hpp>
+#include <ember/glow/GlowInvocation.hpp>
+#include <ember/glow/GlowInvocationResult.hpp>
+#include <ember/glow/GlowTupleItemDescription.hpp>
 #include <ember/glow/MatrixProperty.hpp>
 #include <ember/glow/CommandType.hpp>
 #include <ember/glow/DirFieldMask.hpp>
@@ -55,14 +60,13 @@ void EmberConnection::DomReader::rootReady(libember::dom::Node* root)
 // EmberConnection implementation
 EmberConnection::EmberConnection(QObject *parent)
     : QObject(parent)
-    , m_socket(nullptr)
-    , m_s101Decoder(nullptr)
-    , m_domReader(nullptr)
-    , m_host()
-    , m_port(0)
+    , m_socket(new QTcpSocket(this))
+    , m_s101Decoder(new libs101::StreamDecoder<unsigned char>())
+    , m_domReader(new DomReader(this))
     , m_connected(false)
     , m_connectionTimer(nullptr)
-    , m_logLevel(LogLevel::Info)  // Default to Info level
+    , m_logLevel(LogLevel::Info)
+    , m_nextInvocationId(1)
 {
     m_socket = new QTcpSocket(this);
     
@@ -382,14 +386,23 @@ void EmberConnection::processElementCollection(libember::glow::GlowContainer* co
         if (auto matrix = dynamic_cast<libember::glow::GlowQualifiedMatrix*>(element)) {
             processQualifiedMatrix(matrix);
         }
+        else if (auto function = dynamic_cast<libember::glow::GlowQualifiedFunction*>(element)) {
+            processQualifiedFunction(function);
+        }
         else if (auto node = dynamic_cast<libember::glow::GlowQualifiedNode*>(element)) {
             processQualifiedNode(node);
         }
         else if (auto param = dynamic_cast<libember::glow::GlowQualifiedParameter*>(element)) {
             processQualifiedParameter(param);
         }
+        else if (auto invocationResult = dynamic_cast<libember::glow::GlowInvocationResult*>(element)) {
+            processInvocationResult(element);
+        }
         else if (auto matrix = dynamic_cast<libember::glow::GlowMatrix*>(element)) {
             processMatrix(matrix, parentPath);
+        }
+        else if (auto function = dynamic_cast<libember::glow::GlowFunction*>(element)) {
+            processFunction(function, parentPath);
         }
         else if (auto node = dynamic_cast<libember::glow::GlowNode*>(element)) {
             processNode(node, parentPath);
@@ -1356,4 +1369,231 @@ void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QS
     if (matrix->children()) {
         processElementCollection(matrix->children(), pathStr);
     }
+}
+
+void EmberConnection::processQualifiedFunction(libember::glow::GlowQualifiedFunction* function)
+{
+    auto path = function->path();
+    QString pathStr;
+    for (auto num : path) {
+        pathStr += QString::number(num) + ".";
+    }
+    pathStr.chop(1);
+    
+    QString identifier = function->contains(libember::glow::FunctionProperty::Identifier)
+        ? QString::fromStdString(function->identifier())
+        : QString("Function %1").arg(path.back());
+    
+    QString description = function->contains(libember::glow::FunctionProperty::Description)
+        ? QString::fromStdString(function->description())
+        : QString("");
+    
+    QStringList argNames;
+    QList<int> argTypes;
+    QStringList resultNames;
+    QList<int> resultTypes;
+    
+    if (function->arguments()) {
+        auto argsSeq = function->arguments();
+        for (auto it = argsSeq->begin(); it != argsSeq->end(); ++it) {
+            if (auto arg = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
+                argNames.append(QString::fromStdString(arg->name()));
+                argTypes.append(arg->type().value());
+            }
+        }
+    }
+    
+    if (function->result()) {
+        auto resultsSeq = function->result();
+        for (auto it = resultsSeq->begin(); it != resultsSeq->end(); ++it) {
+            if (auto res = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
+                resultNames.append(QString::fromStdString(res->name()));
+                resultTypes.append(res->type().value());
+            }
+        }
+    }
+    
+    log(LogLevel::Debug, QString("QualifiedFunction: %1 [%2] - %3 args, %4 results")
+        .arg(identifier).arg(pathStr).arg(argNames.size()).arg(resultNames.size()));
+    
+    emit functionReceived(pathStr, identifier, description, argNames, argTypes, resultNames, resultTypes);
+    
+    if (function->children()) {
+        processElementCollection(function->children(), pathStr);
+    }
+}
+
+void EmberConnection::processFunction(libember::glow::GlowFunction* function, const QString& parentPath)
+{
+    int number = function->number();
+    QString pathStr = parentPath.isEmpty() 
+        ? QString::number(number)
+        : QString("%1.%2").arg(parentPath).arg(number);
+    
+    QString identifier = function->contains(libember::glow::FunctionProperty::Identifier)
+        ? QString::fromStdString(function->identifier())
+        : QString("Function %1").arg(number);
+    
+    QString description = function->contains(libember::glow::FunctionProperty::Description)
+        ? QString::fromStdString(function->description())
+        : QString("");
+    
+    QStringList argNames;
+    QList<int> argTypes;
+    QStringList resultNames;
+    QList<int> resultTypes;
+    
+    if (function->arguments()) {
+        auto argsSeq = function->arguments();
+        for (auto it = argsSeq->begin(); it != argsSeq->end(); ++it) {
+            if (auto arg = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
+                argNames.append(QString::fromStdString(arg->name()));
+                argTypes.append(arg->type().value());
+            }
+        }
+    }
+    
+    if (function->result()) {
+        auto resultsSeq = function->result();
+        for (auto it = resultsSeq->begin(); it != resultsSeq->end(); ++it) {
+            if (auto res = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
+                resultNames.append(QString::fromStdString(res->name()));
+                resultTypes.append(res->type().value());
+            }
+        }
+    }
+    
+    log(LogLevel::Debug, QString("Function: %1 [%2] - %3 args, %4 results")
+        .arg(identifier).arg(pathStr).arg(argNames.size()).arg(resultNames.size()));
+    
+    emit functionReceived(pathStr, identifier, description, argNames, argTypes, resultNames, resultTypes);
+    
+    if (function->children()) {
+        processElementCollection(function->children(), pathStr);
+    }
+}
+
+void EmberConnection::processInvocationResult(libember::dom::Node* node)
+{
+    auto result = dynamic_cast<libember::glow::GlowInvocationResult*>(node);
+    if (!result) {
+        log(LogLevel::Warning, "Invalid invocation result received");
+        return;
+    }
+    
+    int invocationId = result->invocationId();
+    bool success = result->success();
+    
+    QList<QVariant> resultValues;
+    if (result->result()) {
+        std::vector<libember::glow::Value> values;
+        result->typedResult(std::back_inserter(values));
+        
+        for (const auto& val : values) {
+            switch (val.type().value()) {
+                case libember::glow::ParameterType::Integer:
+                    resultValues.append(QVariant::fromValue(val.toInteger()));
+                    break;
+                case libember::glow::ParameterType::Real:
+                    resultValues.append(QVariant::fromValue(val.toReal()));
+                    break;
+                case libember::glow::ParameterType::String:
+                    resultValues.append(QString::fromStdString(val.toString()));
+                    break;
+                case libember::glow::ParameterType::Boolean:
+                    resultValues.append(val.toBoolean());
+                    break;
+                default:
+                    resultValues.append(QVariant());
+                    break;
+            }
+        }
+    }
+    
+    log(LogLevel::Info, QString("Invocation result received - ID: %1, Success: %2, Values: %3")
+        .arg(invocationId).arg(success ? "YES" : "NO").arg(resultValues.size()));
+    
+    if (m_pendingInvocations.contains(invocationId)) {
+        m_pendingInvocations.remove(invocationId);
+    }
+    
+    emit invocationResultReceived(invocationId, success, resultValues);
+}
+
+void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> &arguments)
+{
+    if (!m_connected) {
+        log(LogLevel::Error, "Cannot invoke function - not connected");
+        return;
+    }
+    
+    int invocationId = m_nextInvocationId++;
+    m_pendingInvocations[invocationId] = path;
+    
+    QStringList pathParts = path.split('.');
+    libember::ber::ObjectIdentifier oid;
+    for (const QString &part : pathParts) {
+        oid.push_back(part.toInt());
+    }
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    auto invocation = new libember::glow::GlowInvocation();
+    invocation->setInvocationId(invocationId);
+    
+    if (!arguments.isEmpty()) {
+        std::vector<libember::glow::Value> glowArgs;
+        for (const QVariant &arg : arguments) {
+            switch (arg.type()) {
+                case QVariant::Int:
+                case QVariant::LongLong:
+                    glowArgs.push_back(libember::glow::Value(static_cast<long>(arg.toLongLong())));
+                    break;
+                case QVariant::Double:
+                    glowArgs.push_back(libember::glow::Value(arg.toDouble()));
+                    break;
+                case QVariant::String:
+                    glowArgs.push_back(libember::glow::Value(arg.toString().toStdString()));
+                    break;
+                case QVariant::Bool:
+                    glowArgs.push_back(libember::glow::Value(arg.toBool()));
+                    break;
+                default:
+                    log(LogLevel::Warning, QString("Unsupported argument type: %1").arg(arg.typeName()));
+                    break;
+            }
+        }
+        invocation->setTypedArguments(glowArgs.begin(), glowArgs.end());
+    }
+    
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Invoke);
+    command->setInvocation(invocation);
+    
+    auto qualifiedFunction = new libember::glow::GlowQualifiedFunction(oid);
+    qualifiedFunction->children()->insert(qualifiedFunction->children()->end(), command);
+    
+    root->insert(root->end(), qualifiedFunction);
+    
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);
+    encoder.encode(0x00);
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    log(LogLevel::Info, QString("Invoked function [%1] with invocation ID %2 and %3 arguments")
+        .arg(path).arg(invocationId).arg(arguments.size()));
+    
+    delete root;
 }

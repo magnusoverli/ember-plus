@@ -7,6 +7,7 @@
 #include "ParameterDelegate.h"
 #include "PathColumnDelegate.h"
 #include "MatrixWidget.h"
+#include "FunctionInvocationDialog.h"
 #include <QMenuBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -90,6 +91,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
     connect(m_connection, &EmberConnection::matrixConnectionReceived, this, &MainWindow::onMatrixConnectionReceived);
     connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
+    connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
+    connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
@@ -160,7 +163,41 @@ void MainWindow::setupUi()
     m_treeWidget->setColumnWidth(1, 130);  // Type column width
     m_treeWidget->header()->setStretchLastSection(true);  // Value column stretches to fill
     m_treeWidget->setAlternatingRowColors(true);
+    m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
+    connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        QTreeWidgetItem *item = m_treeWidget->itemAt(pos);
+        if (!item) return;
+        
+        QString type = item->text(1);
+        if (type == "Function") {
+            QString path = item->data(0, Qt::UserRole).toString();
+            if (!m_functions.contains(path)) return;
+            
+            QMenu contextMenu;
+            QAction *invokeAction = contextMenu.addAction("Invoke Function...");
+            
+            QAction *selected = contextMenu.exec(m_treeWidget->mapToGlobal(pos));
+            if (selected == invokeAction) {
+                FunctionInfo funcInfo = m_functions[path];
+                
+                FunctionInvocationDialog dialog(funcInfo.identifier, funcInfo.description,
+                                               funcInfo.argNames, funcInfo.argTypes, this);
+                
+                if (dialog.exec() == QDialog::Accepted) {
+                    QList<QVariant> arguments = dialog.getArguments();
+                    
+                    int invocationId = m_connection->property("nextInvocationId").toInt();
+                    m_pendingInvocations[invocationId] = path;
+                    
+                    m_connection->invokeFunction(path, arguments);
+                    
+                    qInfo().noquote() << QString("Invoking function '%1' with %2 arguments")
+                        .arg(funcInfo.identifier).arg(arguments.size());
+                }
+            }
+        }
+    });
     
     // Install path column delegate for extra padding
     PathColumnDelegate *pathDelegate = new PathColumnDelegate(this);
@@ -1154,3 +1191,71 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
     });
 }
 
+
+void MainWindow::onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
+                                   const QStringList &argNames, const QList<int> &argTypes,
+                                   const QStringList &resultNames, const QList<int> &resultTypes)
+{
+    QTreeWidgetItem *item = findOrCreateTreeItem(path);
+    if (item) {
+        bool isNew = item->text(1).isEmpty();
+        
+        QString displayName = !description.isEmpty() ? description : identifier;
+        
+        item->setText(0, displayName);
+        item->setText(1, "Function");
+        item->setText(2, "");
+        item->setIcon(0, QIcon::fromTheme("system-run", style()->standardIcon(QStyle::SP_CommandLink)));
+        
+        FunctionInfo info;
+        info.identifier = identifier;
+        info.description = description;
+        info.argNames = argNames;
+        info.argTypes = argTypes;
+        info.resultNames = resultNames;
+        info.resultTypes = resultTypes;
+        m_functions[path] = info;
+        
+        if (isNew) {
+            QString argsStr;
+            for (int i = 0; i < argNames.size(); i++) {
+                if (i > 0) argsStr += ", ";
+                argsStr += argNames[i];
+            }
+            qDebug().noquote() << QString("Function: %1 [%2] (%3 args)")
+                .arg(displayName).arg(path).arg(argNames.size());
+        }
+    }
+}
+
+void MainWindow::onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results)
+{
+    QString functionPath = m_pendingInvocations.value(invocationId, "Unknown");
+    m_pendingInvocations.remove(invocationId);
+    
+    FunctionInfo funcInfo = m_functions.value(functionPath);
+    
+    QString resultText;
+    if (success) {
+        resultText = QString("✅ Function '%1' invoked successfully").arg(funcInfo.identifier);
+        if (!results.isEmpty()) {
+            resultText += "\n\nReturn values:";
+            for (int i = 0; i < results.size() && i < funcInfo.resultNames.size(); i++) {
+                QString valueName = funcInfo.resultNames[i];
+                QVariant value = results[i];
+                resultText += QString("\n  • %1: %2").arg(valueName).arg(value.toString());
+            }
+        }
+    } else {
+        resultText = QString("❌ Function '%1' invocation failed").arg(funcInfo.identifier);
+    }
+    
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("Function Invocation Result");
+    msgBox.setText(resultText);
+    msgBox.setIcon(success ? QMessageBox::Information : QMessageBox::Warning);
+    msgBox.exec();
+    
+    qInfo().noquote() << QString("Invocation result - ID: %1, Success: %2, Results: %3")
+        .arg(invocationId).arg(success ? "YES" : "NO").arg(results.size());
+}
