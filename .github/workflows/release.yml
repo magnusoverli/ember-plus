@@ -171,35 +171,35 @@ jobs:
           chmod +x appimagetool-x86_64.AppImage
           
           # Create a custom AppRun script with Wayland support
-          cat > AppDir/AppRun << 'APPRUNEOF'
-#!/bin/bash
-# AppRun script for EmberViewer with Wayland support
-
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-
-# Export library paths
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-export QT_PLUGIN_PATH="${HERE}/usr/lib/qt5/plugins"
-
-# Prefer Wayland but allow X11 fallback
-if [ -z "$QT_QPA_PLATFORM" ]; then
-    # Check if running in Wayland session
-    if [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
-        export QT_QPA_PLATFORM=wayland
-        echo "EmberViewer: Using Wayland platform" >&2
-    else
-        echo "EmberViewer: Using X11 platform" >&2
-    fi
-fi
-
-# Debug: Show platform selection
-echo "QT_QPA_PLATFORM=$QT_QPA_PLATFORM" >&2
-echo "QT_PLUGIN_PATH=$QT_PLUGIN_PATH" >&2
-
-# Execute the application
-exec "${HERE}/usr/bin/EmberViewer" "$@"
-APPRUNEOF
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          # AppRun script for EmberViewer with Wayland support
+          
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          
+          # Export library paths
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          export QT_PLUGIN_PATH="${HERE}/usr/lib/qt5/plugins"
+          
+          # Prefer Wayland but allow X11 fallback
+          if [ -z "$QT_QPA_PLATFORM" ]; then
+              # Check if running in Wayland session
+              if [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+                  export QT_QPA_PLATFORM=wayland
+                  echo "EmberViewer: Using Wayland platform" >&2
+              else
+                  echo "EmberViewer: Using X11 platform" >&2
+              fi
+          fi
+          
+          # Debug: Show platform selection
+          echo "QT_QPA_PLATFORM=$QT_QPA_PLATFORM" >&2
+          echo "QT_PLUGIN_PATH=$QT_PLUGIN_PATH" >&2
+          
+          # Execute the application
+          exec "${HERE}/usr/bin/EmberViewer" "$@"
+          EOF
           
           chmod +x AppDir/AppRun
           
