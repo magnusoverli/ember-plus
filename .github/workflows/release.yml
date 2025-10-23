@@ -119,10 +119,32 @@ jobs:
             --desktop-file AppDir/usr/share/applications/emberviewer.desktop \
             --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/emberviewer.png
       
+      - name: Manually add Wayland plugins
+        run: |
+          echo "=== Manually copying Wayland platform plugins ==="
+          mkdir -p AppDir/usr/plugins/platforms
+          cp -v /usr/lib/x86_64-linux-gnu/qt5/plugins/platforms/libqwayland*.so AppDir/usr/plugins/platforms/
+          
+          echo "=== Copying Wayland support plugins ==="
+          mkdir -p AppDir/usr/plugins/wayland-decoration-client
+          mkdir -p AppDir/usr/plugins/wayland-graphics-integration-client
+          mkdir -p AppDir/usr/plugins/wayland-shell-integration
+          
+          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-decoration-client/*.so AppDir/usr/plugins/wayland-decoration-client/ || true
+          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-graphics-integration-client/*.so AppDir/usr/plugins/wayland-graphics-integration-client/ || true
+          cp -rv /usr/lib/x86_64-linux-gnu/qt5/plugins/wayland-shell-integration/*.so AppDir/usr/plugins/wayland-shell-integration/ || true
+          
+          echo "=== Copying Wayland libraries ==="
+          mkdir -p AppDir/usr/lib
+          cp -v /usr/lib/x86_64-linux-gnu/libwayland-client.so.* AppDir/usr/lib/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/libwayland-cursor.so.* AppDir/usr/lib/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/libwayland-egl.so.* AppDir/usr/lib/ || true
+          cp -v /usr/lib/x86_64-linux-gnu/libxkbcommon.so.* AppDir/usr/lib/ || true
+      
       - name: Verify Wayland plugin in AppImage
         run: |
           echo "=== Checking bundled Qt plugins in AppImage ==="
-          ls -la AppDir/usr/plugins/platforms/ || echo "No platforms directory found"
+          ls -la AppDir/usr/plugins/platforms/
           if [ -f AppDir/usr/plugins/platforms/libqwayland-egl.so ]; then
             echo "✓ Wayland plugin bundled!"
           else
