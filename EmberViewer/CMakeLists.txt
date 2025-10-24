@@ -55,13 +55,6 @@ endif()
 # Find Qt5 - works on Linux, Windows, and macOS
 find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
 
-# Collect source files
-file(GLOB_RECURSE SOURCE_FILES
-    src/*.cpp
-    src/*.h
-    include/*.h
-)
-
 # Collect UI files
 file(GLOB UI_FILES
     ui/*.ui
@@ -78,6 +71,17 @@ add_library(EmberViewerLib STATIC
     src/ParameterDelegate.cpp
     include/MatrixWidget.h
     include/ParameterDelegate.h
+)
+
+# Collect source files (excluding those in EmberViewerLib to avoid duplicate compilation)
+file(GLOB_RECURSE SOURCE_FILES
+    src/*.cpp
+    src/*.h
+    include/*.h
+)
+list(REMOVE_ITEM SOURCE_FILES 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ParameterDelegate.cpp
 )
 
 target_compile_features(EmberViewerLib
@@ -139,6 +143,7 @@ target_include_directories(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
+        EmberViewerLib
         Qt5::Core
         Qt5::Gui
         Qt5::Widgets
