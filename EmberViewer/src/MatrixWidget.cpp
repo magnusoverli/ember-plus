@@ -60,11 +60,9 @@ void RotatedLabel::paintEvent(QPaintEvent *)
     painter.translate(width() / 2, height() / 2);
     painter.rotate(-90);
     
-    // Draw text centered
-    QFontMetrics fm(font);
-    int textWidth = fm.horizontalAdvance(m_displayText);
-    int textHeight = fm.height();
-    painter.drawText(-textWidth / 2, textHeight / 4, m_displayText);
+    // Draw text bottom-aligned (AlignLeft in rotated space = bottom on screen)
+    QRect boundingRect(-height() / 2, -width() / 2, height(), width());
+    painter.drawText(boundingRect, Qt::AlignLeft | Qt::AlignVCenter, m_displayText);
     
     painter.restore();
 }
