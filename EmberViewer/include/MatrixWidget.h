@@ -15,6 +15,7 @@
 #include <QStringList>
 #include <QMap>
 #include <QSet>
+#include <QSplitter>
 
 // Custom widget for rotated text labels (90° counter-clockwise)
 class RotatedLabel : public QWidget
@@ -64,13 +65,19 @@ signals:
     
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     
+private slots:
+    void onTopSplitterMoved(int pos, int index);
+    void onBottomSplitterMoved(int pos, int index);
+
 private:
     void buildGrid();
     void updateConnectionButton(int targetNumber, int sourceNumber);
     void updateHoverHighlight(int targetNumber, int sourceNumber);
     void connectScrollSync();
     void clearLayoutAndWidgets(QLayout *layout);
+    void enforceStaticHandlePositions();
     
     // Matrix metadata
     QString m_identifier;
@@ -94,17 +101,28 @@ private:
     };
     QMap<QPair<int, int>, ConnectionState> m_connections;
     
-    // UI components - Frozen pane structure
+    // UI components - Frozen pane structure with splitters
     QLabel *m_headerLabel;
+    
+    // Splitter structure
+    QSplitter *m_outerVerticalSplitter;
+    QSplitter *m_topHorizontalSplitter;
+    QSplitter *m_bottomHorizontalSplitter;
+    
+    // Top row widgets
     QWidget *m_cornerWidget;
     QScrollArea *m_targetHeaderScrollArea;
+    
+    // Bottom row widgets
     QScrollArea *m_sourcesSidebarScrollArea;
     QScrollArea *m_buttonGridScrollArea;
     
+    // Container widgets
     QWidget *m_targetHeaderContainer;
     QWidget *m_sourcesSidebarContainer;
     QWidget *m_buttonGridContainer;
     
+    // Layouts
     QHBoxLayout *m_targetHeaderLayout;
     QVBoxLayout *m_sourcesSidebarLayout;
     QGridLayout *m_buttonGridLayout;
@@ -119,6 +137,9 @@ private:
     // Crosspoint editing state
     bool m_crosspointsEnabled;
     QString m_matrixPath;  // OID path for signal emission
+    
+    // Splitter state tracking
+    bool m_userAdjustedHandles;
     
     // Constants
     static const int BUTTON_SIZE = 18;

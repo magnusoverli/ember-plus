@@ -13,7 +13,14 @@
 #include <QPalette>
 #include <QColor>
 #include <QScrollBar>
+#include <QSplitter>
 #include <algorithm>
+
+// Define static constants
+const int MatrixWidget::BUTTON_SIZE;
+const int MatrixWidget::GRID_SPACING;
+const int MatrixWidget::LABEL_HEIGHT;
+const int MatrixWidget::MAX_LABEL_WIDTH;
 
 // RotatedLabel implementation
 RotatedLabel::RotatedLabel(const QString &text, int buttonWidth, int labelHeight, int maxTextLength, QWidget *parent)
@@ -69,6 +76,9 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     , m_targetCount(0)
     , m_sourceCount(0)
     , m_headerLabel(nullptr)
+    , m_outerVerticalSplitter(nullptr)
+    , m_topHorizontalSplitter(nullptr)
+    , m_bottomHorizontalSplitter(nullptr)
     , m_cornerWidget(nullptr)
     , m_targetHeaderScrollArea(nullptr)
     , m_sourcesSidebarScrollArea(nullptr)
@@ -82,71 +92,112 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     , m_hoverTargetNumber(-1)
     , m_hoverSourceNumber(-1)
     , m_crosspointsEnabled(false)
+    , m_userAdjustedHandles(false)
 {
     auto *outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(10, 10, 10, 10);
     outerLayout->setSpacing(5);
     
-    // Header label (above the frozen pane grid)
+    // Header label (above the frozen pane)
     m_headerLabel = new QLabel("Matrix", this);
     m_headerLabel->setStyleSheet("font-weight: bold; font-size: 12pt;");
     outerLayout->addWidget(m_headerLabel);
     
-    // Main frozen pane grid: 2x2 layout
-    auto *frozenPaneWidget = new QWidget(this);
-    auto *frozenPaneLayout = new QGridLayout(frozenPaneWidget);
-    frozenPaneLayout->setSpacing(0);
-    frozenPaneLayout->setContentsMargins(0, 0, 0, 0);
+    // Create outer vertical splitter (top row vs bottom row)
+    m_outerVerticalSplitter = new QSplitter(Qt::Vertical, this);
+    m_outerVerticalSplitter->setChildrenCollapsible(false);
+    m_outerVerticalSplitter->setHandleWidth(6);
+    m_outerVerticalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
     
-    // [0,0] Corner widget - empty spacer
-    m_cornerWidget = new QWidget(this);
-    m_cornerWidget->setFixedSize(MAX_LABEL_WIDTH, LABEL_HEIGHT + 2);
-    frozenPaneLayout->addWidget(m_cornerWidget, 0, 0);
+    // === TOP ROW: Corner + Target Headers ===
+    m_topHorizontalSplitter = new QSplitter(Qt::Horizontal);
+    m_topHorizontalSplitter->setChildrenCollapsible(false);
+    m_topHorizontalSplitter->setHandleWidth(6);
+    m_topHorizontalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
     
-    // [0,1] Target header (horizontal scroll only)
-    m_targetHeaderScrollArea = new QScrollArea(this);
+    // [Top-Left] Corner widget - empty spacer
+    m_cornerWidget = new QWidget();
+    m_cornerWidget->setMinimumWidth(50);
+    m_cornerWidget->setMaximumWidth(200);
+    m_cornerWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    
+    // [Top-Right] Target header (horizontal scroll only)
+    m_targetHeaderScrollArea = new QScrollArea();
     m_targetHeaderScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_targetHeaderScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Synced from button grid
+    m_targetHeaderScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_targetHeaderScrollArea->setWidgetResizable(false);
     m_targetHeaderScrollArea->setFrameShape(QFrame::NoFrame);
-    m_targetHeaderScrollArea->setFixedHeight(LABEL_HEIGHT + 2);
+    m_targetHeaderScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_targetHeaderContainer = new QWidget();
     m_targetHeaderLayout = new QHBoxLayout(m_targetHeaderContainer);
     m_targetHeaderLayout->setSpacing(GRID_SPACING);
     m_targetHeaderLayout->setContentsMargins(0, 0, 0, 0);
     m_targetHeaderScrollArea->setWidget(m_targetHeaderContainer);
-    frozenPaneLayout->addWidget(m_targetHeaderScrollArea, 0, 1);
     
-    // [1,0] Source sidebar (vertical scroll only)
-    m_sourcesSidebarScrollArea = new QScrollArea(this);
+    m_topHorizontalSplitter->addWidget(m_cornerWidget);
+    m_topHorizontalSplitter->addWidget(m_targetHeaderScrollArea);
+    m_topHorizontalSplitter->setStretchFactor(0, 0);  // Corner doesn't stretch
+    m_topHorizontalSplitter->setStretchFactor(1, 1);  // Headers stretch
+    
+    // === BOTTOM ROW: Source Sidebar + Button Grid ===
+    m_bottomHorizontalSplitter = new QSplitter(Qt::Horizontal);
+    m_bottomHorizontalSplitter->setChildrenCollapsible(false);
+    m_bottomHorizontalSplitter->setHandleWidth(6);
+    m_bottomHorizontalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
+    
+    // [Bottom-Left] Source sidebar (vertical scroll only)
+    m_sourcesSidebarScrollArea = new QScrollArea();
     m_sourcesSidebarScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_sourcesSidebarScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Synced from button grid
+    m_sourcesSidebarScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_sourcesSidebarScrollArea->setWidgetResizable(false);
     m_sourcesSidebarScrollArea->setFrameShape(QFrame::NoFrame);
-    m_sourcesSidebarScrollArea->setFixedWidth(MAX_LABEL_WIDTH + 2);
     m_sourcesSidebarScrollArea->setStyleSheet("QScrollArea { background-color: transparent; }");
+    m_sourcesSidebarScrollArea->setMinimumWidth(50);
+    m_sourcesSidebarScrollArea->setMaximumWidth(200);
+    m_sourcesSidebarScrollArea->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     m_sourcesSidebarContainer = new QWidget();
-    // No background color set - uses default/transparent
     m_sourcesSidebarLayout = new QVBoxLayout(m_sourcesSidebarContainer);
     m_sourcesSidebarLayout->setSpacing(GRID_SPACING);
     m_sourcesSidebarLayout->setContentsMargins(0, 0, 0, 0);
     m_sourcesSidebarScrollArea->setWidget(m_sourcesSidebarContainer);
-    frozenPaneLayout->addWidget(m_sourcesSidebarScrollArea, 1, 0);
     
-    // [1,1] Button grid (both scrollbars)
-    m_buttonGridScrollArea = new QScrollArea(this);
+    // [Bottom-Right] Button grid (both scrollbars)
+    m_buttonGridScrollArea = new QScrollArea();
     m_buttonGridScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_buttonGridScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_buttonGridScrollArea->setWidgetResizable(false);
+    m_buttonGridScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_buttonGridContainer = new QWidget();
     m_buttonGridLayout = new QGridLayout(m_buttonGridContainer);
     m_buttonGridLayout->setSpacing(GRID_SPACING);
     m_buttonGridLayout->setContentsMargins(0, 0, 0, 0);
     m_buttonGridScrollArea->setWidget(m_buttonGridContainer);
-    frozenPaneLayout->addWidget(m_buttonGridScrollArea, 1, 1);
     
-    // Add frozen pane grid to outer layout
-    outerLayout->addWidget(frozenPaneWidget);
+    m_bottomHorizontalSplitter->addWidget(m_sourcesSidebarScrollArea);
+    m_bottomHorizontalSplitter->addWidget(m_buttonGridScrollArea);
+    m_bottomHorizontalSplitter->setStretchFactor(0, 0);  // Sidebar doesn't stretch
+    m_bottomHorizontalSplitter->setStretchFactor(1, 1);  // Grid stretches
+    
+    // Add both rows to outer vertical splitter
+    m_outerVerticalSplitter->addWidget(m_topHorizontalSplitter);
+    m_outerVerticalSplitter->addWidget(m_bottomHorizontalSplitter);
+    
+    // Set initial sizes for vertical splitter (target headers smaller than button grid)
+    m_outerVerticalSplitter->setMinimumHeight(200);
+    m_outerVerticalSplitter->setStretchFactor(0, 0);  // Top row doesn't stretch much
+    m_outerVerticalSplitter->setStretchFactor(1, 1);  // Bottom row stretches
+    
+    // Note: Don't call setSizes() here - it will be set in resizeEvent() 
+    // to maintain static handle positions regardless of initial widget size
+    
+    // Add the splitter to outer layout
+    outerLayout->addWidget(m_outerVerticalSplitter);
+    
+    // Connect splitter synchronization
+    connect(m_topHorizontalSplitter, &QSplitter::splitterMoved,
+            this, &MatrixWidget::onTopSplitterMoved);
+    connect(m_bottomHorizontalSplitter, &QSplitter::splitterMoved,
+            this, &MatrixWidget::onBottomSplitterMoved);
     
     // Connect scroll synchronization
     connectScrollSync();
@@ -154,6 +205,54 @@ MatrixWidget::MatrixWidget(QWidget *parent)
 
 MatrixWidget::~MatrixWidget()
 {
+}
+
+void MatrixWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    
+    // Only enforce static positions if user hasn't manually adjusted handles
+    if (!m_userAdjustedHandles) {
+        enforceStaticHandlePositions();
+    }
+}
+
+void MatrixWidget::enforceStaticHandlePositions()
+{
+    // Get current widget dimensions
+    int totalHeight = m_outerVerticalSplitter->height();
+    int totalWidth = m_outerVerticalSplitter->width();
+    
+    // Calculate sizes to keep handles at static distances from edges
+    int topSectionHeight = LABEL_HEIGHT + 2;  // Static distance from top
+    int bottomSectionHeight = totalHeight - topSectionHeight - m_outerVerticalSplitter->handleWidth();
+    
+    // Ensure bottom section doesn't go negative
+    if (bottomSectionHeight < 100) {
+        bottomSectionHeight = 100;
+        topSectionHeight = totalHeight - bottomSectionHeight - m_outerVerticalSplitter->handleWidth();
+    }
+    
+    QList<int> verticalSizes;
+    verticalSizes << topSectionHeight << bottomSectionHeight;
+    m_outerVerticalSplitter->setSizes(verticalSizes);
+    
+    // Calculate horizontal splits (same for both top and bottom)
+    int leftSectionWidth = MAX_LABEL_WIDTH;  // Static distance from left
+    int rightSectionWidth = totalWidth - leftSectionWidth - m_topHorizontalSplitter->handleWidth();
+    
+    // Ensure right section doesn't go negative
+    if (rightSectionWidth < 100) {
+        rightSectionWidth = 100;
+        leftSectionWidth = totalWidth - rightSectionWidth - m_topHorizontalSplitter->handleWidth();
+    }
+    
+    QList<int> horizontalSizes;
+    horizontalSizes << leftSectionWidth << rightSectionWidth;
+    
+    // Set both horizontal splitters to same width split
+    m_topHorizontalSplitter->setSizes(horizontalSizes);
+    m_bottomHorizontalSplitter->setSizes(horizontalSizes);
 }
 
 void MatrixWidget::connectScrollSync()
@@ -169,6 +268,52 @@ void MatrixWidget::connectScrollSync()
             this, [this](int value) {
         m_sourcesSidebarScrollArea->verticalScrollBar()->setValue(value);
     });
+}
+
+void MatrixWidget::onTopSplitterMoved(int pos, int index)
+{
+    // User manually moved a handle - remember this
+    m_userAdjustedHandles = true;
+    
+    // When top splitter moves (corner vs target headers), sync bottom splitter
+    // to maintain same width for corner and source sidebar
+    if (index == 1) {  // Handle between corner and target headers
+        QList<int> topSizes = m_topHorizontalSplitter->sizes();
+        QList<int> bottomSizes = m_bottomHorizontalSplitter->sizes();
+        
+        // Update bottom splitter to match top splitter's left width
+        if (topSizes.size() >= 2 && bottomSizes.size() >= 2) {
+            bottomSizes[0] = topSizes[0];  // Match corner width to sidebar width
+            
+            // Temporarily block signals to avoid infinite recursion
+            m_bottomHorizontalSplitter->blockSignals(true);
+            m_bottomHorizontalSplitter->setSizes(bottomSizes);
+            m_bottomHorizontalSplitter->blockSignals(false);
+        }
+    }
+}
+
+void MatrixWidget::onBottomSplitterMoved(int pos, int index)
+{
+    // User manually moved a handle - remember this
+    m_userAdjustedHandles = true;
+    
+    // When bottom splitter moves (sidebar vs button grid), sync top splitter
+    // to maintain same width for corner and source sidebar
+    if (index == 1) {  // Handle between sidebar and button grid
+        QList<int> topSizes = m_topHorizontalSplitter->sizes();
+        QList<int> bottomSizes = m_bottomHorizontalSplitter->sizes();
+        
+        // Update top splitter to match bottom splitter's left width
+        if (topSizes.size() >= 2 && bottomSizes.size() >= 2) {
+            topSizes[0] = bottomSizes[0];  // Match corner width to sidebar width
+            
+            // Temporarily block signals to avoid infinite recursion
+            m_topHorizontalSplitter->blockSignals(true);
+            m_topHorizontalSplitter->setSizes(topSizes);
+            m_topHorizontalSplitter->blockSignals(false);
+        }
+    }
 }
 
 void MatrixWidget::clearLayoutAndWidgets(QLayout *layout)
@@ -305,8 +450,9 @@ void MatrixWidget::buildGrid()
         QString label = m_sourceLabels.value(srcNum, QString("S%1").arg(srcNum));
         
         auto *srcLabel = new QLabel(label, m_sourcesSidebarContainer);
-        QFont labelFont = srcLabel->font();
+        QFont labelFont;
         labelFont.setBold(true);
+        labelFont.setPointSize(9);
         srcLabel->setFont(labelFont);
         srcLabel->setStyleSheet("padding: 2px; background-color: transparent;");
         srcLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
