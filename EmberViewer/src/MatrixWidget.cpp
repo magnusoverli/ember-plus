@@ -23,7 +23,8 @@ const int MatrixWidget::LABEL_HEIGHT;
 const int MatrixWidget::MAX_LABEL_WIDTH;
 
 // RotatedLabel implementation
-RotatedLabel::RotatedLabel(const QString &text, int buttonWidth, int labelHeight, int maxTextLength, QWidget *parent)
+// RotatedLabel implementation
+RotatedLabel::RotatedLabel(const QString &text, int buttonWidth, QWidget *parent)
     : QWidget(parent), m_fullText(text), m_displayText(text)
 {
     QFont font;
@@ -31,17 +32,41 @@ RotatedLabel::RotatedLabel(const QString &text, int buttonWidth, int labelHeight
     font.setPointSize(9);
     setFont(font);
     
-    QFontMetrics fm(font);
-    int textWidth = fm.horizontalAdvance(text);
+    // Set fixed width (matches button width), but allow height to vary
+    setFixedWidth(buttonWidth);
+    setMinimumHeight(50);  // Minimum reasonable height
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     
-    // If text is too long, truncate with ellipsis
-    if (textWidth > maxTextLength) {
-        m_displayText = fm.elidedText(text, Qt::ElideRight, maxTextLength);
-        setToolTip(text);
+    // Initial display text will be updated when widget is sized
+    updateDisplayText();
+}
+
+void RotatedLabel::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateDisplayText();
+}
+
+void RotatedLabel::updateDisplayText()
+{
+    QFont font;
+    font.setBold(true);
+    font.setPointSize(9);
+    QFontMetrics fm(font);
+    
+    int textWidth = fm.horizontalAdvance(m_fullText);
+    int availableHeight = height();  // After rotation, height becomes horizontal space
+    
+    // Truncate only if text exceeds available height
+    if (textWidth > availableHeight) {
+        m_displayText = fm.elidedText(m_fullText, Qt::ElideRight, availableHeight);
+        setToolTip(m_fullText);  // Show full text on hover
+    } else {
+        m_displayText = m_fullText;
+        setToolTip("");  // No tooltip needed if full text fits
     }
     
-    // Fixed size: width matches button, height provides space for rotated text
-    setFixedSize(buttonWidth, labelHeight);
+    update();  // Trigger repaint
 }
 
 void RotatedLabel::paintEvent(QPaintEvent *)
@@ -67,6 +92,69 @@ void RotatedLabel::paintEvent(QPaintEvent *)
     painter.restore();
 }
 
+
+
+// SourceLabel implementation
+SourceLabel::SourceLabel(const QString &text, int buttonHeight, QWidget *parent)
+    : QWidget(parent), m_fullText(text), m_displayText(text)
+{
+    QFont font;
+    font.setBold(true);
+    font.setPointSize(9);
+    setFont(font);
+    
+    // Set fixed height (matches button height), but allow width to vary
+    setFixedHeight(buttonHeight);
+    setMinimumWidth(50);  // Minimum reasonable width
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    
+    // Initial display text will be updated when widget is sized
+    updateDisplayText();
+}
+
+void SourceLabel::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateDisplayText();
+}
+
+void SourceLabel::updateDisplayText()
+{
+    QFont font;
+    font.setBold(true);
+    font.setPointSize(9);
+    QFontMetrics fm(font);
+    
+    int textWidth = fm.horizontalAdvance(m_fullText);
+    int availableWidth = width() - 4;  // Leave small padding
+    
+    // Truncate only if text exceeds available width
+    if (textWidth > availableWidth) {
+        m_displayText = fm.elidedText(m_fullText, Qt::ElideRight, availableWidth);
+        setToolTip(m_fullText);  // Show full text on hover
+    } else {
+        m_displayText = m_fullText;
+        setToolTip("");  // No tooltip needed if full text fits
+    }
+    
+    update();  // Trigger repaint
+}
+
+void SourceLabel::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::TextAntialiasing);
+    
+    QFont font;
+    font.setBold(true);
+    font.setPointSize(9);
+    painter.setFont(font);
+    
+    // Draw text right-aligned, vertically centered
+    QRect boundingRect(0, 0, width(), height());
+    painter.drawText(boundingRect, Qt::AlignRight | Qt::AlignVCenter, m_displayText);
+}
 // MatrixWidget implementation
 MatrixWidget::MatrixWidget(QWidget *parent)
     : QWidget(parent)
@@ -123,7 +211,7 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     m_targetHeaderScrollArea = new QScrollArea();
     m_targetHeaderScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_targetHeaderScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_targetHeaderScrollArea->setWidgetResizable(false);
+    m_targetHeaderScrollArea->setWidgetResizable(true);
     m_targetHeaderScrollArea->setFrameShape(QFrame::NoFrame);
     m_targetHeaderScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_targetHeaderContainer = new QWidget();
@@ -147,7 +235,7 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     m_sourcesSidebarScrollArea = new QScrollArea();
     m_sourcesSidebarScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_sourcesSidebarScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_sourcesSidebarScrollArea->setWidgetResizable(false);
+    m_sourcesSidebarScrollArea->setWidgetResizable(true);
     m_sourcesSidebarScrollArea->setFrameShape(QFrame::NoFrame);
     m_sourcesSidebarScrollArea->setStyleSheet("QScrollArea { background-color: transparent; }");
     m_sourcesSidebarScrollArea->setMinimumWidth(50);
@@ -196,6 +284,8 @@ MatrixWidget::MatrixWidget(QWidget *parent)
             this, &MatrixWidget::onTopSplitterMoved);
     connect(m_bottomHorizontalSplitter, &QSplitter::splitterMoved,
             this, &MatrixWidget::onBottomSplitterMoved);
+    connect(m_outerVerticalSplitter, &QSplitter::splitterMoved,
+            this, &MatrixWidget::onVerticalSplitterMoved);
     
     // Connect scroll synchronization
     connectScrollSync();
@@ -221,14 +311,23 @@ void MatrixWidget::enforceStaticHandlePositions()
     int totalHeight = m_outerVerticalSplitter->height();
     int totalWidth = m_outerVerticalSplitter->width();
     
-    // Calculate sizes to keep handles at static distances from edges
-    int topSectionHeight = LABEL_HEIGHT + 2;  // Static distance from top
+    // Calculate sizes to keep labels anchored to bottom with minimum spacing from top
+    const int minLabelHeight = 50;
+    const int minTopMargin = 10;  // Minimum space above labels
+    
+    // Default: give labels reasonable space
+    int topSectionHeight = LABEL_HEIGHT + 2;  // Use default label height
     int bottomSectionHeight = totalHeight - topSectionHeight - m_outerVerticalSplitter->handleWidth();
     
-    // Ensure bottom section doesn't go negative
+    // Ensure bottom section has minimum size
     if (bottomSectionHeight < 100) {
         bottomSectionHeight = 100;
         topSectionHeight = totalHeight - bottomSectionHeight - m_outerVerticalSplitter->handleWidth();
+    }
+    
+    // Ensure top section has minimum size
+    if (topSectionHeight < minLabelHeight + minTopMargin) {
+        topSectionHeight = minLabelHeight + minTopMargin;
     }
     
     QList<int> verticalSizes;
@@ -252,6 +351,7 @@ void MatrixWidget::enforceStaticHandlePositions()
     m_topHorizontalSplitter->setSizes(horizontalSizes);
     m_bottomHorizontalSplitter->setSizes(horizontalSizes);
 }
+
 
 void MatrixWidget::connectScrollSync()
 {
@@ -312,6 +412,19 @@ void MatrixWidget::onBottomSplitterMoved(int pos, int index)
             m_topHorizontalSplitter->blockSignals(false);
         }
     }
+}
+
+void MatrixWidget::onVerticalSplitterMoved(int pos, int index)
+{
+    // User manually moved the vertical handle - remember this
+    m_userAdjustedHandles = true;
+    
+    // The vertical splitter controls the height of the target label area
+    // When it moves, the labels automatically resize due to their Expanding size policy
+    // and the updateDisplayText() in resizeEvent() will recalculate truncation
+    
+    // No additional synchronization needed - labels are in the top section
+    // and will naturally resize to fill the available height
 }
 
 void MatrixWidget::clearLayoutAndWidgets(QLayout *layout)
@@ -437,35 +550,17 @@ void MatrixWidget::buildGrid()
     for (int col = 0; col < m_targetNumbers.size(); col++) {
         int tgtNum = m_targetNumbers[col];
         QString label = m_targetLabels.value(tgtNum, QString("T%1").arg(tgtNum));
-        auto *rotatedLabel = new RotatedLabel(label, BUTTON_SIZE, LABEL_HEIGHT, 120, 
+        auto *rotatedLabel = new RotatedLabel(label, BUTTON_SIZE, 
                                               m_targetHeaderContainer);
         m_targetHeaderLayout->addWidget(rotatedLabel);
     }
     
-    // Build source sidebar (regular labels)
+    // Build source sidebar (using SourceLabel)
     for (int row = 0; row < m_sourceNumbers.size(); row++) {
         int srcNum = m_sourceNumbers[row];
         QString label = m_sourceLabels.value(srcNum, QString("S%1").arg(srcNum));
         
-        auto *srcLabel = new QLabel(label, m_sourcesSidebarContainer);
-        QFont labelFont;
-        labelFont.setBold(true);
-        labelFont.setPointSize(9);
-        srcLabel->setFont(labelFont);
-        srcLabel->setStyleSheet("padding: 2px; background-color: transparent;");
-        srcLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        srcLabel->setFixedHeight(BUTTON_SIZE);
-        srcLabel->setFixedWidth(MAX_LABEL_WIDTH);
-        srcLabel->setAutoFillBackground(false);
-        
-        // Truncate if too long
-        QFontMetrics fm(labelFont);
-        QString elidedText = fm.elidedText(label, Qt::ElideRight, MAX_LABEL_WIDTH - 4);
-        srcLabel->setText(elidedText);
-        if (elidedText != label) {
-            srcLabel->setToolTip(label);
-        }
-        
+        auto *srcLabel = new SourceLabel(label, BUTTON_SIZE, m_sourcesSidebarContainer);
         m_sourcesSidebarLayout->addWidget(srcLabel);
     }
     
@@ -496,6 +591,13 @@ void MatrixWidget::buildGrid()
     }
     
     // Resize containers to fit content
+    
+    // Set container width to match button grid columns exactly
+    int targetHeaderWidth = m_targetNumbers.size() * BUTTON_SIZE;
+    // Set container height to match button grid rows exactly
+    int sourcesSidebarHeight = m_sourceNumbers.size() * BUTTON_SIZE;
+    m_sourcesSidebarContainer->setFixedHeight(sourcesSidebarHeight);
+    m_targetHeaderContainer->setFixedWidth(targetHeaderWidth);
     m_targetHeaderContainer->adjustSize();
     m_sourcesSidebarContainer->adjustSize();
     m_buttonGridContainer->adjustSize();

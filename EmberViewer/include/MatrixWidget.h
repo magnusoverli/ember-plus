@@ -22,12 +22,32 @@ class RotatedLabel : public QWidget
 {
     Q_OBJECT
 public:
-    RotatedLabel(const QString &text, int buttonWidth, int labelHeight, int maxTextLength = 120, QWidget *parent = nullptr);
+    RotatedLabel(const QString &text, int buttonWidth, QWidget *parent = nullptr);
     
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     
 private:
+
+    void updateDisplayText();
+    QString m_fullText;
+    QString m_displayText;
+};
+
+// Custom widget for source labels (horizontal expansion)
+class SourceLabel : public QWidget
+{
+    Q_OBJECT
+public:
+    SourceLabel(const QString &text, int buttonHeight, QWidget *parent = nullptr);
+    
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    
+private:
+    void updateDisplayText();
     QString m_fullText;
     QString m_displayText;
 };
@@ -70,6 +90,7 @@ protected:
 private slots:
     void onTopSplitterMoved(int pos, int index);
     void onBottomSplitterMoved(int pos, int index);
+    void onVerticalSplitterMoved(int pos, int index);
 
 private:
     void buildGrid();
