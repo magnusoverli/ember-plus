@@ -72,6 +72,43 @@ file(GLOB RESOURCE_FILES
     resources/*.qrc
 )
 
+# Create a library for shared code (for testing)
+add_library(EmberViewerLib STATIC
+    src/MatrixWidget.cpp
+    src/ParameterDelegate.cpp
+    include/MatrixWidget.h
+    include/ParameterDelegate.h
+)
+
+target_compile_features(EmberViewerLib
+    PRIVATE
+        cxx_std_11
+)
+
+set_target_properties(EmberViewerLib
+    PROPERTIES
+        AUTOMOC ON
+        POSITION_INDEPENDENT_CODE ON
+)
+
+target_include_directories(EmberViewerLib
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(EmberViewerLib
+    PUBLIC
+        Qt5::Core
+        Qt5::Gui
+        Qt5::Widgets
+        Qt5::Network
+        libs101::s101
+        libformula::formula
+        ${LIBEMBER_TARGET}
+)
+
 add_executable(${PROJECT_NAME}
     ${SOURCE_FILES}
     ${UI_FILES}
@@ -171,5 +208,12 @@ if(WIN32)
             COMMAND ${WINDEPLOYQT_EXECUTABLE} $<TARGET_FILE:${PROJECT_NAME}>
         )
     endif()
+endif()
+
+
+# <<<  Tests  >>>
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS)
+    add_subdirectory(tests)
 endif()
 
