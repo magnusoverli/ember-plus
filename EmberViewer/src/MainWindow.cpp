@@ -54,7 +54,6 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setupUi();
     setupMenu();
-    setupToolBar();
     setupStatusBar();
     createDockWindows();
     
@@ -64,12 +63,12 @@ MainWindow::MainWindow(QWidget *parent)
     // Setup activity timer (60 second timeout)
     m_activityTimer = new QTimer(this);
     m_activityTimer->setSingleShot(true);
-    m_activityTimer->setInterval(60000); // 60 seconds
+    m_activityTimer->setInterval(ACTIVITY_TIMEOUT_MS);
     connect(m_activityTimer, &QTimer::timeout, this, &MainWindow::onActivityTimeout);
     
     // Setup tick timer (1 second updates for status bar)
     m_tickTimer = new QTimer(this);
-    m_tickTimer->setInterval(1000); // 1 second
+    m_tickTimer->setInterval(TICK_INTERVAL_MS); // 1 second
     connect(m_tickTimer, &QTimer::timeout, this, &MainWindow::onActivityTimerTick);
     
     // Load saved settings
@@ -239,7 +238,7 @@ void MainWindow::setupUi()
     connLayout->addWidget(new QLabel("Port:"));
     m_portSpin = new QSpinBox();
     m_portSpin->setRange(1, 65535);
-    m_portSpin->setValue(9092);
+    m_portSpin->setValue(DEFAULT_EMBER_PORT);
     m_portSpin->setMaximumWidth(80);
     // Install event filter to catch Enter key on spin box
     m_portSpin->installEventFilter(this);
@@ -327,11 +326,6 @@ void MainWindow::setupMenu()
     });
 }
 
-void MainWindow::setupToolBar()
-{
-    QToolBar *toolBar = addToolBar("Main Toolbar");
-    toolBar->setMovable(false);
-}
 
 void MainWindow::setupStatusBar()
 {
@@ -520,7 +514,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
     // Check if this parameter is actually a matrix label
     // Pattern: matrixPath.666999666.1.N (targets) or matrixPath.666999666.2.N (sources)
     QStringList pathParts = path.split('.');
-    if (pathParts.size() >= 4 && pathParts[pathParts.size() - 3] == "666999666") {
+    if (pathParts.size() >= 4 && pathParts[pathParts.size() - 3] == QString::number(MATRIX_LABEL_PATH_MARKER)) {
         // This is a label! Extract matrix path and target/source info
         QString labelType = pathParts[pathParts.size() - 2];  // "1" for targets, "2" for sources
         int number = pathParts.last().toInt();
@@ -533,9 +527,11 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         if (matrixWidget) {
             if (labelType == "1") {
                 // Target label
+                Q_ASSERT(matrixWidget != nullptr);
                 matrixWidget->setTargetLabel(number, value);
             } else if (labelType == "2") {
                 // Source label
+                Q_ASSERT(matrixWidget != nullptr);
                 matrixWidget->setSourceLabel(number, value);
             }
         }
@@ -937,11 +933,6 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
     return parent;
 }
 
-void MainWindow::clearTree()
-{
-    m_treeWidget->clear();
-    m_pathToItem.clear();
-}
 
 void MainWindow::onTreeSelectionChanged()
 {
@@ -1021,7 +1012,6 @@ void MainWindow::onTreeSelectionChanged()
             m_propertyPanel = matrixWidget;
             
             // Update background based on crosspoints state
-            updatePropertyPanelBackground();
         }
     } else {
         // For non-matrix items, show the default property panel
@@ -1062,7 +1052,7 @@ void MainWindow::loadSettings()
     
     // Load connection settings only
     QString host = settings.value("connection/host", "localhost").toString();
-    int port = settings.value("connection/port", 9000).toInt();
+    int port = settings.value("connection/port", DEFAULT_PORT_FALLBACK).toInt();
     
     m_hostEdit->setText(host);
     m_portSpin->setValue(port);
@@ -1116,8 +1106,6 @@ void MainWindow::onEnableCrosspointsToggled(bool enabled)
         matrixWidget->setCrosspointsEnabled(enabled);
     }
     
-    // Update property panel background if matrix is currently displayed
-    updatePropertyPanelBackground();
 }
 
 void MainWindow::onActivityTimeout()
@@ -1154,12 +1142,6 @@ void MainWindow::updateCrosspointsStatusBar()
     }
 }
 
-void MainWindow::updatePropertyPanelBackground()
-{
-    // The MatrixWidget itself handles its own background color
-    // This method is kept for potential future use but currently does nothing
-    // since MatrixWidget::setCrosspointsEnabled() already sets the background
-}
 
 void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber)
 {

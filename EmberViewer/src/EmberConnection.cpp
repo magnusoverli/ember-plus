@@ -86,7 +86,7 @@ EmberConnection::EmberConnection(QObject *parent)
     // Initialize connection timeout timer (5 seconds)
     m_connectionTimer = new QTimer(this);
     m_connectionTimer->setSingleShot(true);
-    m_connectionTimer->setInterval(5000);  // 5 second timeout
+    m_connectionTimer->setInterval(CONNECTION_TIMEOUT_MS);  // 5 second timeout
     connect(m_connectionTimer, &QTimer::timeout, this, &EmberConnection::onConnectionTimeout);
     
     // Initialize S101 decoder and DOM reader

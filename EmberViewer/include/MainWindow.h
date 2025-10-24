@@ -66,7 +66,6 @@ protected:
 private:
     void setupUi();
     void setupMenu();
-    void setupToolBar();
     void setupStatusBar();
     void createDockWindows();
 
@@ -75,10 +74,8 @@ private:
     
     void logMessage(const QString &message);
     QTreeWidgetItem* findOrCreateTreeItem(const QString &path);
-    void clearTree();
     void resetActivityTimer();
     void updateCrosspointsStatusBar();
-    void updatePropertyPanelBackground();
 
     // UI Components
     QTreeWidget *m_treeWidget;
@@ -118,6 +115,11 @@ private:
     // Fast path lookup for tree items
     QMap<QString, QTreeWidgetItem*> m_pathToItem;
     
+    // State
+    bool m_isConnected;
+    bool m_showOidPath;
+    bool m_crosspointsEnabled;
+
     // Crosspoint editing
     QAction *m_enableCrosspointsAction;
     QTimer *m_activityTimer;
@@ -125,10 +127,13 @@ private:
     int m_activityTimeRemaining;
     QLabel *m_crosspointsStatusLabel;
     
-    // State
-    bool m_isConnected;
-    bool m_showOidPath;
-    bool m_crosspointsEnabled;
+    
+    // Constants
+    static constexpr int MATRIX_LABEL_PATH_MARKER = 666999666;
+    static constexpr int ACTIVITY_TIMEOUT_MS = 60000;  // 60 seconds
+    static constexpr int TICK_INTERVAL_MS = 1000;       // 1 second
+    static constexpr int DEFAULT_EMBER_PORT = 9092;
+    static constexpr int DEFAULT_PORT_FALLBACK = 9000;  // For settings
 };
 
 #endif // MAINWINDOW_H
