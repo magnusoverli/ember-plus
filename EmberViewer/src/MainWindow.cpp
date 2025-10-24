@@ -165,7 +165,6 @@ void MainWindow::setupUi()
     m_treeWidget->header()->setStretchLastSection(true);  // Value column stretches to fill
     m_treeWidget->setAlternatingRowColors(true);
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, this, &MainWindow::onTreeContextMenu);
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
     connect(m_treeWidget, &QTreeWidget::itemExpanded, this, &MainWindow::onItemExpanded);
     connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainWindow::onItemCollapsed);
@@ -1275,57 +1274,6 @@ void MainWindow::onInvocationResultReceived(int invocationId, bool success, cons
         .arg(invocationId).arg(success ? "YES" : "NO").arg(results.size());
 }
 
-// Subscription support - Context Menu
-void MainWindow::onTreeContextMenu(const QPoint &pos)
-{
-    QTreeWidgetItem *item = m_treeWidget->itemAt(pos);
-    if (!item) return;
-    
-    QString path = item->data(0, Qt::UserRole).toString();
-    QString type = item->text(1);
-    bool isSubscribed = m_subscribedPaths.contains(path);
-    
-    QMenu menu;
-    
-    if (type == "Parameter" || type == "Node" || type == "Matrix") {
-        if (!isSubscribed) {
-            QAction *subscribeAction = menu.addAction("Subscribe");
-            connect(subscribeAction, &QAction::triggered, [=]() {
-                if (type == "Parameter") {
-                    m_connection->subscribeToParameter(path, false);
-                } else if (type == "Node") {
-                    m_connection->subscribeToNode(path, false);
-                } else if (type == "Matrix") {
-                    m_connection->subscribeToMatrix(path, false);
-                }
-                m_subscribedPaths.insert(path);
-                SubscriptionState state;
-                state.subscribedAt = QDateTime::currentDateTime();
-                state.autoSubscribed = false;
-                m_subscriptionStates[path] = state;
-            });
-        } else {
-            QAction *unsubscribeAction = menu.addAction("Unsubscribe");
-            connect(unsubscribeAction, &QAction::triggered, [=]() {
-                if (type == "Parameter") {
-                    m_connection->unsubscribeFromParameter(path);
-                } else if (type == "Node") {
-                    m_connection->unsubscribeFromNode(path);
-                } else if (type == "Matrix") {
-                    m_connection->unsubscribeFromMatrix(path);
-                }
-                m_subscribedPaths.remove(path);
-                m_subscriptionStates.remove(path);
-            });
-        }
-    }
-    
-    if (!menu.isEmpty()) {
-        menu.exec(m_treeWidget->mapToGlobal(pos));
-    }
-}
-
-// Auto-subscribe on expand
 void MainWindow::onItemExpanded(QTreeWidgetItem *item)
 {
     QString path = item->data(0, Qt::UserRole).toString();
@@ -1353,7 +1301,6 @@ void MainWindow::onItemExpanded(QTreeWidgetItem *item)
     }
 }
 
-// Unsubscribe on collapse
 void MainWindow::onItemCollapsed(QTreeWidgetItem *item)
 {
     QString path = item->data(0, Qt::UserRole).toString();
@@ -1378,21 +1325,11 @@ void MainWindow::onItemCollapsed(QTreeWidgetItem *item)
     }
 }
 
-// Helper to set item display name
 void MainWindow::setItemDisplayName(QTreeWidgetItem *item, const QString &baseName)
 {
-    // Simply set the text - no icons needed
     item->setText(0, baseName);
 }
 
-// No-op for backward compatibility (subscription tracking still works, just no visual indicator)
-void MainWindow::updateItemSubscriptionIcon(QTreeWidgetItem *item)
-{
-    // Intentionally empty - subscriptions work without visual indicators
-    Q_UNUSED(item);
-}
-
-// Subscribe to all currently expanded items (called on connect)
 void MainWindow::subscribeToExpandedItems()
 {
     QTreeWidgetItemIterator it(m_treeWidget);

@@ -57,7 +57,6 @@ private slots:
     void onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
     void onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
     void onTreeSelectionChanged();
-    void onTreeContextMenu(const QPoint &pos);
     void onItemExpanded(QTreeWidgetItem *item);
     void onItemCollapsed(QTreeWidgetItem *item);
     void onEnableCrosspointsToggled(bool enabled);
@@ -81,7 +80,6 @@ private:
     QTreeWidgetItem* findOrCreateTreeItem(const QString &path);
     void resetActivityTimer();
     void updateCrosspointsStatusBar();
-    void updateItemSubscriptionIcon(QTreeWidgetItem *item);
     void subscribeToExpandedItems();
     
     // Widgets
