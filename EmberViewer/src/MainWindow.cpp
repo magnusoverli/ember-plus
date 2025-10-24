@@ -1,6 +1,10 @@
 /*
- * MainWindow.cpp - Main application window implementation
- */
+    EmberViewer - Main application window implementation
+    
+    Copyright (C) 2025 Magnus Overli
+    Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+*/
 
 #include "MainWindow.h"
 #include "EmberConnection.h"
@@ -8,6 +12,7 @@
 #include "PathColumnDelegate.h"
 #include "MatrixWidget.h"
 #include "FunctionInvocationDialog.h"
+#include "version.h"
 #include <QMenuBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -321,11 +326,17 @@ void MainWindow::setupMenu()
     QAction *aboutAction = helpMenu->addAction("&About");
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, "About EmberViewer",
-            "<h3>EmberViewer v1.0.0</h3>"
+            "<h3>EmberViewer v" EMBERVIEWER_VERSION_STRING "</h3>"
             "<p>A modern, cross-platform Ember+ protocol viewer.</p>"
-            "<p>Built with Qt5 and libember.</p>"
-            "<p>© 2025 Magnus Overli<br>"
-            "<a href='https://github.com/magnusoverli/ember-plus'>github.com/magnusoverli/ember-plus</a></p>");
+            "<p><b>Built with:</b><br>"
+            "Qt5 and libember by Lawo GmbH</p>"
+            "<p><b>License:</b><br>"
+            "Distributed under the Boost Software License, Version 1.0<br>"
+            "See LICENSE_1_0.txt for details</p>"
+            "<p><b>Copyright:</b><br>"
+            "© 2012-2019 Lawo GmbH (libember)<br>"
+            "© 2025 Magnus Overli (EmberViewer)</p>"
+            "<p><a href='https://github.com/magnusoverli/ember-plus'>github.com/magnusoverli/ember-plus</a></p>");
     });
 }
 

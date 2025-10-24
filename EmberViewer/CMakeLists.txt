@@ -10,7 +10,51 @@ cmake_policy(SET CMP0063 NEW)
 # Allow interprocedural optimization
 cmake_policy(SET CMP0069 NEW)
 
-project(EmberViewer VERSION 1.0.0 LANGUAGES CXX)
+################################ Version Detection ##############################
+
+# Detect version from git tags
+find_package(Git QUIET)
+set(VERSION_MAJOR 0)
+set(VERSION_MINOR 0)
+set(VERSION_PATCH 0)
+set(GIT_VERSION "unknown")
+
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --match "v*" --abbrev=7 --dirty
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_RESULT
+    )
+    
+    if(GIT_RESULT EQUAL 0 AND GIT_VERSION MATCHES "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+        set(VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(VERSION_MINOR ${CMAKE_MATCH_2})
+        set(VERSION_PATCH ${CMAKE_MATCH_3})
+        message(STATUS "Detected version from git: ${GIT_VERSION}")
+    else()
+        message(WARNING "Could not detect version from git tags, using fallback version 0.0.0")
+        set(GIT_VERSION "0.0.0-unknown")
+    endif()
+else()
+    message(WARNING "Git not found, using fallback version 0.0.0")
+    set(GIT_VERSION "0.0.0-unknown")
+endif()
+
+set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+
+project(EmberViewer VERSION ${PROJECT_VERSION} LANGUAGES CXX)
+
+# Generate version header
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/include/version.h
+    @ONLY
+)
+
+message(STATUS "EmberViewer version: ${PROJECT_VERSION} (${GIT_VERSION})")
 
 # Use GNUInstallDirs to make sure libraries are installed into correct locations
 # on all platforms.
@@ -98,6 +142,7 @@ set_target_properties(EmberViewerLib
 target_include_directories(EmberViewerLib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/include
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -138,6 +183,7 @@ set_target_properties(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 

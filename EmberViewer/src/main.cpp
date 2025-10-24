@@ -1,10 +1,10 @@
 /*
- * EmberViewer - Cross-platform Ember+ Protocol Viewer
- * Copyright (c) 2025 Magnus Overli
- * 
- * This application provides a modern, cross-platform GUI for browsing
- * and controlling Ember+ providers.
- */
+    EmberViewer - Cross-platform Ember+ Protocol Viewer
+    
+    Copyright (C) 2025 Magnus Overli
+    Distributed under the Boost Software License, Version 1.0.
+    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+*/
 
 #include <QApplication>
 #include <QFile>
@@ -15,6 +15,7 @@
 #include <QMutex>
 #include <QDebug>
 #include "MainWindow.h"
+#include "version.h"
 
 static QFile *logFile = nullptr;
 static QMutex logMutex;
@@ -60,7 +61,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     
     QApplication::setApplicationName("EmberViewer");
-    QApplication::setApplicationVersion("1.0.0");
+    QApplication::setApplicationVersion(EMBERVIEWER_VERSION_STRING);
     QApplication::setOrganizationName("Magnus Overli");
     QApplication::setOrganizationDomain("github.com/magnusoverli");
     
