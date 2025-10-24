@@ -780,7 +780,7 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
         
         item->setText(0, displayName);
         item->setText(1, "Matrix");
-        item->setText(2, QString("%1×%2").arg(targetCount).arg(sourceCount));
+        item->setText(2, QString("%1×%2").arg(sourceCount).arg(targetCount));
         item->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogDetailedView));
         
         // Store matrix path in user data for later retrieval
@@ -802,7 +802,7 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
         matrixWidget->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
         
         if (isNew) {
-            qInfo().noquote() << QString("Matrix discovered: %1 (%2×%3)").arg(displayName).arg(targetCount).arg(sourceCount);
+            qInfo().noquote() << QString("Matrix discovered: %1 (%2×%3)").arg(displayName).arg(sourceCount).arg(targetCount);
         }
     }
 }
