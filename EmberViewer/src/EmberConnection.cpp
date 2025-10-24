@@ -64,7 +64,9 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_s101Decoder(new libs101::StreamDecoder<unsigned char>())
     , m_domReader(new DomReader(this))
     , m_connected(false)
+    , m_emberDataReceived(false)
     , m_connectionTimer(nullptr)
+    , m_protocolTimer(nullptr)
     , m_logLevel(LogLevel::Info)
     , m_nextInvocationId(1)
 {
@@ -86,8 +88,14 @@ EmberConnection::EmberConnection(QObject *parent)
     // Initialize connection timeout timer (5 seconds)
     m_connectionTimer = new QTimer(this);
     m_connectionTimer->setSingleShot(true);
-    m_connectionTimer->setInterval(CONNECTION_TIMEOUT_MS);  // 5 second timeout
+    m_connectionTimer->setInterval(CONNECTION_TIMEOUT_MS);
     connect(m_connectionTimer, &QTimer::timeout, this, &EmberConnection::onConnectionTimeout);
+    
+    // Initialize protocol timeout timer (10 seconds)
+    m_protocolTimer = new QTimer(this);
+    m_protocolTimer->setSingleShot(true);
+    m_protocolTimer->setInterval(PROTOCOL_TIMEOUT_MS);
+    connect(m_protocolTimer, &QTimer::timeout, this, &EmberConnection::onProtocolTimeout);
     
     // Initialize S101 decoder and DOM reader
     m_s101Decoder = new libs101::StreamDecoder<unsigned char>();
@@ -139,8 +147,9 @@ void EmberConnection::connectToHost(const QString &host, int port)
 
 void EmberConnection::disconnect()
 {
-    // Stop connection timeout timer
+    // Stop timers
     m_connectionTimer->stop();
+    m_protocolTimer->stop();
     
     QAbstractSocket::SocketState state = m_socket->state();
     
@@ -197,8 +206,13 @@ void EmberConnection::onSocketConnected()
     m_connectionTimer->stop();
     
     m_connected = true;
+    m_emberDataReceived = false;
     emit connected();
     log(LogLevel::Info, "Connected to provider");
+    
+    // Start protocol timeout timer - will be cancelled if we receive valid Ember+ data
+    m_protocolTimer->start();
+    log(LogLevel::Info, "Waiting for Ember+ response...");
     
     // Send GetDirectory to request root tree
     sendGetDirectory();
@@ -206,10 +220,12 @@ void EmberConnection::onSocketConnected()
 
 void EmberConnection::onSocketDisconnected()
 {
-    // Stop connection timeout timer if still running
+    // Stop timers if still running
     m_connectionTimer->stop();
+    m_protocolTimer->stop();
     
     m_connected = false;
+    m_emberDataReceived = false;
     m_s101Decoder->reset();
     m_domReader->reset();
     m_parameterCache.clear();  // Clear cached parameter metadata
@@ -260,6 +276,17 @@ void EmberConnection::onConnectionTimeout()
         if (!m_connected) {
             emit disconnected();
         }
+    }
+}
+
+void EmberConnection::onProtocolTimeout()
+{
+    log(LogLevel::Error, QString("No Ember+ response received after 3 seconds. This port does not appear to be serving Ember+ protocol."));
+    
+    // Disconnect - this port doesn't seem to be Ember+
+    if (m_connected) {
+        log(LogLevel::Info, "Disconnecting due to protocol timeout...");
+        disconnect();
     }
 }
 
@@ -324,7 +351,11 @@ void EmberConnection::handleS101Message(
                 }
             }
             catch (const std::exception &ex) {
-                log(LogLevel::Error, QString("Error parsing Glow: %1").arg(ex.what()));
+                log(LogLevel::Error, QString("Error parsing Ember+ data: %1").arg(ex.what()));
+                log(LogLevel::Error, QString("This port is not serving valid Ember+ protocol. Disconnecting..."));
+                // Disconnect immediately - we're receiving invalid Ember+ data
+                disconnect();
+                return;
             }
         }
         else if (command == libs101::CommandType::KeepAliveRequest) {
@@ -350,6 +381,13 @@ void EmberConnection::processRoot(libember::dom::Node* root)
 {
     if (!root) {
         return;
+    }
+    
+    // Stop protocol timeout timer - we've received valid Ember+ data!
+    if (!m_emberDataReceived) {
+        m_emberDataReceived = true;
+        m_protocolTimer->stop();
+        log(LogLevel::Info, "Ember+ protocol confirmed");
     }
     
     log(LogLevel::Trace, "Processing Ember+ tree...");

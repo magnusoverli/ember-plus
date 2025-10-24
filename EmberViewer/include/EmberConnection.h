@@ -108,6 +108,7 @@ private slots:
     void onSocketError(QAbstractSocket::SocketError error);
     void onDataReceived();
     void onConnectionTimeout();
+    void onProtocolTimeout();
 
 private:
     // Cached parameter metadata to preserve properties across updates
@@ -152,9 +153,11 @@ private:
     QString m_host;
     int m_port;
     bool m_connected;
+    bool m_emberDataReceived;  // Track if we've received any valid Ember+ data
     
     // Connection timeout
     QTimer *m_connectionTimer;
+    QTimer *m_protocolTimer;  // Timeout for waiting for Ember+ protocol response
     
     // Cache of parameter metadata (path -> cache)
     QMap<QString, ParameterCache> m_parameterCache;
@@ -180,7 +183,8 @@ private:
 
 public:
     // Constants
-    static constexpr int CONNECTION_TIMEOUT_MS = 5000;  // 5 seconds
+    static constexpr int CONNECTION_TIMEOUT_MS = 5000;   // 5 seconds for TCP connection
+    static constexpr int PROTOCOL_TIMEOUT_MS = 3000;     // 3 seconds for Ember+ protocol response
 };
 
 #endif // EMBERCONNECTION_H
