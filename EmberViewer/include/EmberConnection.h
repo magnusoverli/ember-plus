@@ -138,6 +138,7 @@ private:
     
     // Device name detection helper
     bool isGenericNodeName(const QString &name);
+    void checkAndUpdateDeviceName(const QString &nodePath, const QString &paramPath, const QString &value);
 
     QTcpSocket *m_socket;
     
@@ -176,7 +177,8 @@ private:
     // Function invocation tracking
     int m_nextInvocationId;
     QMap<int, QString> m_pendingInvocations;  // invocationId -> function path
-    
+
+public:
     // Constants
     static constexpr int CONNECTION_TIMEOUT_MS = 5000;  // 5 seconds
 };

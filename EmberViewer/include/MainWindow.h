@@ -126,8 +126,8 @@ private:
     QTimer *m_tickTimer;
     int m_activityTimeRemaining;
     QLabel *m_crosspointsStatusLabel;
-    
-    
+
+public:
     // Constants
     static constexpr int MATRIX_LABEL_PATH_MARKER = 666999666;
     static constexpr int ACTIVITY_TIMEOUT_MS = 60000;  // 60 seconds
