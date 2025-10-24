@@ -289,6 +289,16 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     // Add the splitter to outer layout
     outerLayout->addWidget(m_outerVerticalSplitter);
     
+    // Set all child widgets to transparent background so parent background shows through
+    m_outerVerticalSplitter->setStyleSheet(m_outerVerticalSplitter->styleSheet() + " QSplitter { background: transparent; }");
+    m_topHorizontalSplitter->setStyleSheet(m_topHorizontalSplitter->styleSheet() + " QSplitter { background: transparent; }");
+    m_bottomHorizontalSplitter->setStyleSheet(m_bottomHorizontalSplitter->styleSheet() + " QSplitter { background: transparent; }");
+    m_targetHeaderScrollArea->setStyleSheet("QScrollArea { background-color: transparent; }");
+    m_targetHeaderContainer->setStyleSheet("QWidget { background-color: transparent; }");
+    m_buttonGridScrollArea->setStyleSheet("QScrollArea { background-color: transparent; }");
+    m_buttonGridContainer->setStyleSheet("QWidget { background-color: transparent; }");
+    m_sourcesSidebarContainer->setStyleSheet("QWidget { background-color: transparent; }");
+    
     // Connect splitter synchronization
     connect(m_topHorizontalSplitter, &QSplitter::splitterMoved,
             this, &MatrixWidget::onTopSplitterMoved);
@@ -464,12 +474,7 @@ void MatrixWidget::setMatrixInfo(const QString &identifier, const QString &descr
     m_targetCount = targetCount;
     m_sourceCount = sourceCount;
     
-    // Update header
-    QString header = identifier;
-    if (!description.isEmpty() && description != identifier) {
-        header = description;
-    }
-    
+    // Update header - show only type and dimensions
     QString typeStr;
     switch (type) {
         case 0: typeStr = "1:N"; break;
@@ -478,8 +483,8 @@ void MatrixWidget::setMatrixInfo(const QString &identifier, const QString &descr
         default: typeStr = QString::number(type); break;
     }
     
-    m_headerLabel->setText(QString("<b>%1</b> (%2) - %3×%4")
-                           .arg(header).arg(typeStr).arg(sourceCount).arg(targetCount));
+    m_headerLabel->setText(QString("<b>%1</b>  •  %2×%3")
+                           .arg(typeStr).arg(sourceCount).arg(targetCount));
 }
 
 void MatrixWidget::setTargetLabel(int targetNumber, const QString &label)
