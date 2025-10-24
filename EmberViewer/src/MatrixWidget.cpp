@@ -241,6 +241,7 @@ void MatrixWidget::setSourceLabel(int sourceNumber, const QString &label)
 void MatrixWidget::setConnection(int targetNumber, int sourceNumber, bool connected, int disposition)
 {
     QPair<int, int> key(targetNumber, sourceNumber);
+    Q_ASSERT(targetNumber >= 0 && sourceNumber >= 0);
     
     if (connected) {
         ConnectionState state;
@@ -359,6 +360,7 @@ void MatrixWidget::buildGrid()
 void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
 {
     QPair<int, int> key(targetNumber, sourceNumber);
+    Q_ASSERT(targetNumber >= 0 && sourceNumber >= 0);
     
     if (!m_buttons.contains(key)) {
         qDebug() << "MatrixWidget::updateConnectionButton - Button not found for Target" << targetNumber << "Source" << sourceNumber << "- Grid has" << m_buttons.size() << "buttons";
@@ -591,6 +593,7 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
 bool MatrixWidget::isConnected(int targetNumber, int sourceNumber) const
 {
     QPair<int, int> key(targetNumber, sourceNumber);
+    Q_ASSERT(targetNumber >= 0 && sourceNumber >= 0);
     return m_connections.contains(key) && m_connections[key].connected;
 }
 
