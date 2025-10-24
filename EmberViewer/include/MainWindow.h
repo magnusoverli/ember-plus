@@ -17,8 +17,10 @@
 #include <QCheckBox>
 #include <QStatusBar>
 #include <QSettings>
-#include <QMap>
+#include <QAction>
 #include <QTimer>
+#include <QDateTime>
+#include <QSet>
 
 class EmberConnection;
 class MatrixWidget;
@@ -53,11 +55,14 @@ private slots:
                            const QStringList &argNames, const QList<int> &argTypes,
                            const QStringList &resultNames, const QList<int> &resultTypes);
     void onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
+    void onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
     void onTreeSelectionChanged();
+    void onTreeContextMenu(const QPoint &pos);
+    void onItemExpanded(QTreeWidgetItem *item);
+    void onItemCollapsed(QTreeWidgetItem *item);
     void onEnableCrosspointsToggled(bool enabled);
     void onActivityTimeout();
     void onActivityTimerTick();
-    void onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -68,16 +73,18 @@ private:
     void setupMenu();
     void setupStatusBar();
     void createDockWindows();
-
     void loadSettings();
     void saveSettings();
     
     void logMessage(const QString &message);
+    void setItemDisplayName(QTreeWidgetItem *item, const QString &baseName);
     QTreeWidgetItem* findOrCreateTreeItem(const QString &path);
     void resetActivityTimer();
     void updateCrosspointsStatusBar();
-
-    // UI Components
+    void updateItemSubscriptionIcon(QTreeWidgetItem *item);
+    void subscribeToExpandedItems();
+    
+    // Widgets
     QTreeWidget *m_treeWidget;
     QWidget *m_propertyPanel;
     QTextEdit *m_consoleLog;
@@ -114,6 +121,14 @@ private:
     
     // Fast path lookup for tree items
     QMap<QString, QTreeWidgetItem*> m_pathToItem;
+    
+    // Subscription tracking
+    QSet<QString> m_subscribedPaths;
+    struct SubscriptionState {
+        QDateTime subscribedAt;
+        bool autoSubscribed;
+    };
+    QMap<QString, SubscriptionState> m_subscriptionStates;
     
     // State
     bool m_isConnected;

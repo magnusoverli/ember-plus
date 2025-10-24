@@ -11,6 +11,7 @@
 #include <QString>
 #include <QMap>
 #include <QTimer>
+#include <QDateTime>
 #include <ember/dom/AsyncDomReader.hpp>
 #include <s101/StreamDecoder.hpp>
 
@@ -87,6 +88,7 @@ signals:
     void connected();
     void disconnected();
     void logMessage(const QString &message);
+    void treePopulated();  // Emitted when initial tree is received
     void nodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
     void parameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                           int access, int type, const QVariant &minimum, const QVariant &maximum,
@@ -180,8 +182,25 @@ private:
     // Function invocation tracking
     int m_nextInvocationId;
     QMap<int, QString> m_pendingInvocations;  // invocationId -> function path
+    
+    // Subscription tracking
+    struct SubscriptionState {
+        QDateTime subscribedAt;
+        bool autoSubscribed;  // true if auto-subscribed on expand, false if manual
+    };
+    QMap<QString, SubscriptionState> m_subscriptions;  // path -> subscription info
 
 public:
+    // Subscription methods
+    void subscribeToParameter(const QString &path, bool autoSubscribed = false);
+    void subscribeToNode(const QString &path, bool autoSubscribed = false);
+    void subscribeToMatrix(const QString &path, bool autoSubscribed = false);
+    void unsubscribeFromParameter(const QString &path);
+    void unsubscribeFromNode(const QString &path);
+    void unsubscribeFromMatrix(const QString &path);
+    void unsubscribeAll();
+    bool isSubscribed(const QString &path) const;
+    
     // Constants
     static constexpr int CONNECTION_TIMEOUT_MS = 5000;   // 5 seconds for TCP connection
     static constexpr int PROTOCOL_TIMEOUT_MS = 3000;     // 3 seconds for Ember+ protocol response

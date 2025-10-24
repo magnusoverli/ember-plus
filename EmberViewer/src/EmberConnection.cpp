@@ -164,6 +164,7 @@ void EmberConnection::disconnect()
     
     // Clear request tracking for next connection
     m_requestedPaths.clear();
+    m_subscriptions.clear();  // Clear all subscriptions on disconnect
 }
 
 bool EmberConnection::isConnected() const
@@ -384,8 +385,10 @@ void EmberConnection::processRoot(libember::dom::Node* root)
     }
     
     // Stop protocol timeout timer - we've received valid Ember+ data!
+    bool isFirstData = false;
     if (!m_emberDataReceived) {
         m_emberDataReceived = true;
+        isFirstData = true;
         m_protocolTimer->stop();
         log(LogLevel::Info, "Ember+ protocol confirmed");
     }
@@ -404,13 +407,17 @@ void EmberConnection::processRoot(libember::dom::Node* root)
             // Process all root elements
             processElementCollection(glowRoot, "");
         }
-        
-        // Clean up
-        delete root;
+    } catch (const std::exception& e) {
+        log(LogLevel::Error, QString("Error processing Ember+ tree: %1").arg(e.what()));
     }
-    catch (const std::exception &ex) {
-        log(LogLevel::Error, QString("Error processing tree: %1").arg(ex.what()));
-        delete root;
+    
+    // Always delete the root
+    delete root;
+    
+    // Emit treePopulated signal if this was the first data received
+    if (isFirstData) {
+        log(LogLevel::Debug, "Initial tree populated, emitting treePopulated signal");
+        emit treePopulated();
     }
 }
 
@@ -1662,8 +1669,383 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     m_socket->write(qdata);
     m_socket->flush();
     
-    log(LogLevel::Info, QString("Invoked function [%1] with invocation ID %2 and %3 arguments")
-        .arg(path).arg(invocationId).arg(arguments.size()));
+    log(LogLevel::Debug, QString("Sent GetDirectory request (root)"));
+    delete root;
+}
+
+// Subscription methods
+void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscribed)
+{
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot subscribe - not connected");
+        return;
+    }
+    
+    if (m_subscriptions.contains(path)) {
+        log(LogLevel::Debug, QString("Already subscribed to %1").arg(path));
+        return;
+    }
+    
+    // Parse path to OID
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    
+    // Create qualified parameter with subscribe command
+    auto param = new libember::glow::GlowQualifiedParameter(oid);
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+    param->children()->insert(param->children()->end(), command);
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    root->insert(root->end(), param);
+    
+    // Encode to BER
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    // Encode to S101
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);  // Slot
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);  // Version
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);  // DTD
+    encoder.encode(0x00);  // AppBytes
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    // Send
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    // Track subscription
+    SubscriptionState state;
+    state.subscribedAt = QDateTime::currentDateTime();
+    state.autoSubscribed = autoSubscribed;
+    m_subscriptions[path] = state;
+    
+    log(LogLevel::Debug, QString("Subscribed to parameter: %1 %2")
+        .arg(path)
+        .arg(autoSubscribed ? "(auto)" : "(manual)"));
     
     delete root;
+}
+
+void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
+{
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot subscribe - not connected");
+        return;
+    }
+    
+    if (m_subscriptions.contains(path)) {
+        log(LogLevel::Debug, QString("Already subscribed to %1").arg(path));
+        return;
+    }
+    
+    // Parse path to OID
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    
+    // Create qualified node with subscribe command
+    auto node = new libember::glow::GlowQualifiedNode(oid);
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+    node->children()->insert(node->children()->end(), command);
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    root->insert(root->end(), node);
+    
+    // Encode to BER
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    // Encode to S101
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);
+    encoder.encode(0x00);
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    // Send
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    // Track subscription
+    SubscriptionState state;
+    state.subscribedAt = QDateTime::currentDateTime();
+    state.autoSubscribed = autoSubscribed;
+    m_subscriptions[path] = state;
+    
+    log(LogLevel::Debug, QString("Subscribed to node: %1 %2")
+        .arg(path)
+        .arg(autoSubscribed ? "(auto)" : "(manual)"));
+    
+    delete root;
+}
+
+void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed)
+{
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot subscribe - not connected");
+        return;
+    }
+    
+    if (m_subscriptions.contains(path)) {
+        log(LogLevel::Debug, QString("Already subscribed to %1").arg(path));
+        return;
+    }
+    
+    // Parse path to OID
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    
+    // Create qualified matrix with subscribe command
+    auto matrix = new libember::glow::GlowQualifiedMatrix(oid);
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+    matrix->children()->insert(matrix->children()->end(), command);
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    root->insert(root->end(), matrix);
+    
+    // Encode to BER
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    // Encode to S101
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);
+    encoder.encode(0x00);
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    // Send
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    // Track subscription
+    SubscriptionState state;
+    state.subscribedAt = QDateTime::currentDateTime();
+    state.autoSubscribed = autoSubscribed;
+    m_subscriptions[path] = state;
+    
+    log(LogLevel::Debug, QString("Subscribed to matrix: %1 %2")
+        .arg(path)
+        .arg(autoSubscribed ? "(auto)" : "(manual)"));
+    
+    delete root;
+}
+
+void EmberConnection::unsubscribeFromParameter(const QString &path)
+{
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot unsubscribe - not connected");
+        return;
+    }
+    
+    if (!m_subscriptions.contains(path)) {
+        log(LogLevel::Debug, QString("Not subscribed to %1").arg(path));
+        return;
+    }
+    
+    // Parse path to OID
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    
+    // Create qualified parameter with unsubscribe command
+    auto param = new libember::glow::GlowQualifiedParameter(oid);
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Unsubscribe);
+    param->children()->insert(param->children()->end(), command);
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    root->insert(root->end(), param);
+    
+    // Encode to BER
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    // Encode to S101
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);
+    encoder.encode(0x00);
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    // Send
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    // Remove from tracking
+    m_subscriptions.remove(path);
+    
+    log(LogLevel::Debug, QString("Unsubscribed from parameter: %1").arg(path));
+    
+    delete root;
+}
+
+void EmberConnection::unsubscribeFromNode(const QString &path)
+{
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot unsubscribe - not connected");
+        return;
+    }
+    
+    if (!m_subscriptions.contains(path)) {
+        log(LogLevel::Debug, QString("Not subscribed to %1").arg(path));
+        return;
+    }
+    
+    // Parse path to OID
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    
+    // Create qualified node with unsubscribe command
+    auto node = new libember::glow::GlowQualifiedNode(oid);
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Unsubscribe);
+    node->children()->insert(node->children()->end(), command);
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    root->insert(root->end(), node);
+    
+    // Encode to BER
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    // Encode to S101
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);
+    encoder.encode(0x00);
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    // Send
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    // Remove from tracking
+    m_subscriptions.remove(path);
+    
+    log(LogLevel::Debug, QString("Unsubscribed from node: %1").arg(path));
+    
+    delete root;
+}
+
+void EmberConnection::unsubscribeFromMatrix(const QString &path)
+{
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot unsubscribe - not connected");
+        return;
+    }
+    
+    if (!m_subscriptions.contains(path)) {
+        log(LogLevel::Debug, QString("Not subscribed to %1").arg(path));
+        return;
+    }
+    
+    // Parse path to OID
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    
+    // Create qualified matrix with unsubscribe command
+    auto matrix = new libember::glow::GlowQualifiedMatrix(oid);
+    auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Unsubscribe);
+    matrix->children()->insert(matrix->children()->end(), command);
+    
+    auto root = new libember::glow::GlowRootElementCollection();
+    root->insert(root->end(), matrix);
+    
+    // Encode to BER
+    libember::util::OctetStream stream;
+    root->encode(stream);
+    
+    // Encode to S101
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    encoder.encode(0x00);
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::EmBER);
+    encoder.encode(0x01);
+    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+    encoder.encode(0x01);
+    encoder.encode(0x00);
+    encoder.encode(stream.begin(), stream.end());
+    encoder.finish();
+    
+    // Send
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+    m_socket->write(qdata);
+    m_socket->flush();
+    
+    // Remove from tracking
+    m_subscriptions.remove(path);
+    
+    log(LogLevel::Debug, QString("Unsubscribed from matrix: %1").arg(path));
+    
+    delete root;
+}
+
+void EmberConnection::unsubscribeAll()
+{
+    if (!m_socket || !m_connected) {
+        return;
+    }
+    
+    QStringList paths = m_subscriptions.keys();
+    for (const QString &path : paths) {
+        // Determine type and call appropriate unsubscribe
+        // For now, just try unsubscribing as parameter (most common)
+        unsubscribeFromParameter(path);
+    }
+}
+
+bool EmberConnection::isSubscribed(const QString &path) const
+{
+    return m_subscriptions.contains(path);
 }

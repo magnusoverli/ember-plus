@@ -83,6 +83,7 @@ MainWindow::MainWindow(QWidget *parent)
         onConnectionStateChanged(false);
     });
     connect(m_connection, &EmberConnection::logMessage, this, &MainWindow::onLogMessage);
+    connect(m_connection, &EmberConnection::treePopulated, this, &MainWindow::subscribeToExpandedItems);
     connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
     connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
     connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
@@ -164,7 +165,10 @@ void MainWindow::setupUi()
     m_treeWidget->header()->setStretchLastSection(true);  // Value column stretches to fill
     m_treeWidget->setAlternatingRowColors(true);
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, this, &MainWindow::onTreeContextMenu);
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
+    connect(m_treeWidget, &QTreeWidget::itemExpanded, this, &MainWindow::onItemExpanded);
+    connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainWindow::onItemCollapsed);
     connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         QTreeWidgetItem *item = m_treeWidget->itemAt(pos);
         if (!item) return;
@@ -454,6 +458,10 @@ void MainWindow::onConnectionStateChanged(bool connected)
         // Clear the path cache
         m_pathToItem.clear();
         
+        // Clear subscription tracking
+        m_subscribedPaths.clear();
+        m_subscriptionStates.clear();
+        
         // Now it's safe to delete all matrix widgets
         qDeleteAll(m_matrixWidgets);
         m_matrixWidgets.clear();
@@ -476,7 +484,7 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
         // If no description, fall back to identifier
         QString displayName = !description.isEmpty() ? description : identifier;
         
-        item->setText(0, displayName);
+        setItemDisplayName(item, displayName);
         item->setText(1, "Node");
         item->setText(2, "");  // Keep Value column empty for nodes
         
@@ -544,7 +552,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         // Only log if this is a new parameter (no text set yet)
         bool isNew = item->text(1).isEmpty();
         
-        item->setText(0, identifier);
+        setItemDisplayName(item, identifier);
         item->setText(1, "Parameter");
         item->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
         
@@ -778,7 +786,7 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
         // For matrices: prefer description as display name (like nodes)
         QString displayName = !description.isEmpty() ? description : identifier;
         
-        item->setText(0, displayName);
+        setItemDisplayName(item, displayName);
         item->setText(1, "Matrix");
         item->setText(2, QString("%1×%2").arg(sourceCount).arg(targetCount));
         item->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogDetailedView));
@@ -792,13 +800,22 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
         if (!matrixWidget) {
             matrixWidget = new MatrixWidget(this);
             m_matrixWidgets[path] = matrixWidget;
+            matrixWidget->setMatrixPath(path);
             
-            // Connect crosspoint click signal
             connect(matrixWidget, &MatrixWidget::crosspointClicked,
                     this, &MainWindow::onCrosspointClicked);
+            
+            // Auto-subscribe to matrix for connection updates
+            if (m_isConnected && !m_subscribedPaths.contains(path)) {
+                m_connection->subscribeToMatrix(path, true);
+                m_subscribedPaths.insert(path);
+                SubscriptionState state;
+                state.subscribedAt = QDateTime::currentDateTime();
+                state.autoSubscribed = true;
+                m_subscriptionStates[path] = state;
+            }
         }
         
-        matrixWidget->setMatrixPath(path);
         matrixWidget->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
         
         if (isNew) {
@@ -1186,13 +1203,9 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
     // Send command to EmberConnection
     m_connection->setMatrixConnection(matrixPath, targetNumber, sourceNumber, newState);
     
-    // Request updated connection state from the device after a short delay to verify
-    // Reduced from 100ms to 20ms for faster verification
-    QTimer::singleShot(20, this, [this, matrixPath]() {
-        m_connection->requestMatrixConnections(matrixPath);
-    });
+    // Note: With subscription enabled, we'll receive automatic updates from the provider
+    // No need to manually request matrix connections anymore
 }
-
 
 void MainWindow::onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
                                    const QStringList &argNames, const QList<int> &argTypes,
@@ -1204,7 +1217,7 @@ void MainWindow::onFunctionReceived(const QString &path, const QString &identifi
         
         QString displayName = !description.isEmpty() ? description : identifier;
         
-        item->setText(0, displayName);
+        setItemDisplayName(item, displayName);
         item->setText(1, "Function");
         item->setText(2, "");
         item->setIcon(0, QIcon::fromTheme("system-run", style()->standardIcon(QStyle::SP_CommandLink)));
@@ -1260,4 +1273,154 @@ void MainWindow::onInvocationResultReceived(int invocationId, bool success, cons
     
     qInfo().noquote() << QString("Invocation result - ID: %1, Success: %2, Results: %3")
         .arg(invocationId).arg(success ? "YES" : "NO").arg(results.size());
+}
+
+// Subscription support - Context Menu
+void MainWindow::onTreeContextMenu(const QPoint &pos)
+{
+    QTreeWidgetItem *item = m_treeWidget->itemAt(pos);
+    if (!item) return;
+    
+    QString path = item->data(0, Qt::UserRole).toString();
+    QString type = item->text(1);
+    bool isSubscribed = m_subscribedPaths.contains(path);
+    
+    QMenu menu;
+    
+    if (type == "Parameter" || type == "Node" || type == "Matrix") {
+        if (!isSubscribed) {
+            QAction *subscribeAction = menu.addAction("Subscribe");
+            connect(subscribeAction, &QAction::triggered, [=]() {
+                if (type == "Parameter") {
+                    m_connection->subscribeToParameter(path, false);
+                } else if (type == "Node") {
+                    m_connection->subscribeToNode(path, false);
+                } else if (type == "Matrix") {
+                    m_connection->subscribeToMatrix(path, false);
+                }
+                m_subscribedPaths.insert(path);
+                SubscriptionState state;
+                state.subscribedAt = QDateTime::currentDateTime();
+                state.autoSubscribed = false;
+                m_subscriptionStates[path] = state;
+            });
+        } else {
+            QAction *unsubscribeAction = menu.addAction("Unsubscribe");
+            connect(unsubscribeAction, &QAction::triggered, [=]() {
+                if (type == "Parameter") {
+                    m_connection->unsubscribeFromParameter(path);
+                } else if (type == "Node") {
+                    m_connection->unsubscribeFromNode(path);
+                } else if (type == "Matrix") {
+                    m_connection->unsubscribeFromMatrix(path);
+                }
+                m_subscribedPaths.remove(path);
+                m_subscriptionStates.remove(path);
+            });
+        }
+    }
+    
+    if (!menu.isEmpty()) {
+        menu.exec(m_treeWidget->mapToGlobal(pos));
+    }
+}
+
+// Auto-subscribe on expand
+void MainWindow::onItemExpanded(QTreeWidgetItem *item)
+{
+    QString path = item->data(0, Qt::UserRole).toString();
+    QString type = item->text(1);
+    
+    if (path.isEmpty() || m_subscribedPaths.contains(path)) {
+        return;  // Already subscribed or no path
+    }
+    
+    // Subscribe based on type
+    if (type == "Node") {
+        m_connection->subscribeToNode(path, true);
+    } else if (type == "Parameter") {
+        m_connection->subscribeToParameter(path, true);
+    } else if (type == "Matrix") {
+        m_connection->subscribeToMatrix(path, true);
+    }
+    
+    if (!type.isEmpty()) {
+        m_subscribedPaths.insert(path);
+        SubscriptionState state;
+        state.subscribedAt = QDateTime::currentDateTime();
+        state.autoSubscribed = true;
+        m_subscriptionStates[path] = state;
+    }
+}
+
+// Unsubscribe on collapse
+void MainWindow::onItemCollapsed(QTreeWidgetItem *item)
+{
+    QString path = item->data(0, Qt::UserRole).toString();
+    QString type = item->text(1);
+    
+    if (path.isEmpty() || !m_subscribedPaths.contains(path)) {
+        return;  // Not subscribed
+    }
+    
+    // Only auto-unsubscribe if it was auto-subscribed
+    if (m_subscriptionStates.contains(path) && m_subscriptionStates[path].autoSubscribed) {
+        if (type == "Node") {
+            m_connection->unsubscribeFromNode(path);
+        } else if (type == "Parameter") {
+            m_connection->unsubscribeFromParameter(path);
+        } else if (type == "Matrix") {
+            m_connection->unsubscribeFromMatrix(path);
+        }
+        
+        m_subscribedPaths.remove(path);
+        m_subscriptionStates.remove(path);
+    }
+}
+
+// Helper to set item display name
+void MainWindow::setItemDisplayName(QTreeWidgetItem *item, const QString &baseName)
+{
+    // Simply set the text - no icons needed
+    item->setText(0, baseName);
+}
+
+// No-op for backward compatibility (subscription tracking still works, just no visual indicator)
+void MainWindow::updateItemSubscriptionIcon(QTreeWidgetItem *item)
+{
+    // Intentionally empty - subscriptions work without visual indicators
+    Q_UNUSED(item);
+}
+
+// Subscribe to all currently expanded items (called on connect)
+void MainWindow::subscribeToExpandedItems()
+{
+    QTreeWidgetItemIterator it(m_treeWidget);
+    while (*it) {
+        if ((*it)->isExpanded()) {
+            QString path = (*it)->data(0, Qt::UserRole).toString();
+            QString type = (*it)->text(1);
+            
+            if (!path.isEmpty() && !m_subscribedPaths.contains(path)) {
+                SubscriptionState state;
+                state.subscribedAt = QDateTime::currentDateTime();
+                state.autoSubscribed = true;
+                
+                if (type == "Node") {
+                    m_connection->subscribeToNode(path, true);
+                    m_subscribedPaths.insert(path);
+                    m_subscriptionStates[path] = state;
+                } else if (type == "Parameter") {
+                    m_connection->subscribeToParameter(path, true);
+                    m_subscribedPaths.insert(path);
+                    m_subscriptionStates[path] = state;
+                } else if (type == "Matrix") {
+                    m_connection->subscribeToMatrix(path, true);
+                    m_subscribedPaths.insert(path);
+                    m_subscriptionStates[path] = state;
+                }
+            }
+        }
+        ++it;
+    }
 }
