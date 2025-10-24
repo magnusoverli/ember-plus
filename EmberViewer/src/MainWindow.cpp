@@ -803,6 +803,10 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
             
             connect(matrixWidget, &MatrixWidget::crosspointClicked,
                     this, &MainWindow::onCrosspointClicked);
+            connect(matrixWidget, &MatrixWidget::crosspointToggleRequested,
+                    this, [this]() {
+                m_enableCrosspointsAction->trigger();
+            });
             
             // Auto-subscribe to matrix for connection updates
             if (m_isConnected && !m_subscribedPaths.contains(path)) {

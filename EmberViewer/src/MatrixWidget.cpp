@@ -14,6 +14,7 @@
 #include <QColor>
 #include <QScrollBar>
 #include <QSplitter>
+#include <QIcon>
 #include <algorithm>
 
 // Define static constants
@@ -201,11 +202,20 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     m_topHorizontalSplitter->setHandleWidth(6);
     m_topHorizontalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
     
-    // [Top-Left] Corner widget - empty spacer
-    m_cornerWidget = new QWidget();
+    // [Top-Left] Corner widget - button to toggle crosspoint editing
+    m_cornerWidget = new QPushButton();
     m_cornerWidget->setMinimumWidth(50);
     m_cornerWidget->setMaximumWidth(200);
     m_cornerWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    m_cornerWidget->setStyleSheet("QPushButton { background-color: transparent; border: none; }");
+    m_cornerWidget->setCursor(Qt::PointingHandCursor);
+    m_cornerWidget->setToolTip("Toggle crosspoint editing mode");
+    QIcon initialIcon(":/lock-closed.png");
+    qDebug() << "Initial corner icon isNull:" << initialIcon.isNull() << "availableSizes:" << initialIcon.availableSizes();
+    m_cornerWidget->setIcon(initialIcon);
+    m_cornerWidget->setIconSize(QSize(32, 32));
+    
+    connect(m_cornerWidget, &QPushButton::clicked, this, &MatrixWidget::crosspointToggleRequested);
     
     // [Top-Right] Target header (horizontal scroll only)
     m_targetHeaderScrollArea = new QScrollArea();
@@ -856,6 +866,18 @@ QString MatrixWidget::getSourceLabel(int sourceNumber) const
 void MatrixWidget::setCrosspointsEnabled(bool enabled)
 {
     m_crosspointsEnabled = enabled;
+    
+    // Update corner button icon based on state
+    QIcon icon;
+    if (enabled) {
+        icon = QIcon(":/lock-open.png");
+        qDebug() << "Setting lock-open icon, isNull:" << icon.isNull() << "sizes:" << icon.availableSizes();
+    } else {
+        icon = QIcon(":/lock-closed.png");
+        qDebug() << "Setting lock-closed icon, isNull:" << icon.isNull() << "sizes:" << icon.availableSizes();
+    }
+    m_cornerWidget->setIcon(icon);
+    m_cornerWidget->setIconSize(QSize(32, 32));
     
     // Update background color based on state
     if (enabled) {

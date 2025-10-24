@@ -82,6 +82,7 @@ public:
 
 signals:
     void crosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
+    void crosspointToggleRequested();
     
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -131,7 +132,7 @@ private:
     QSplitter *m_bottomHorizontalSplitter;
     
     // Top row widgets
-    QWidget *m_cornerWidget;
+    QPushButton *m_cornerWidget;
     QScrollArea *m_targetHeaderScrollArea;
     
     // Bottom row widgets

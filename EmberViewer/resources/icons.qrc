@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file>lock-closed.png</file>
+        <file>lock-open.png</file>
+        <file>lock-closed.svg</file>
+        <file>lock-open.svg</file>
+        <file>icon.svg</file>
+    </qresource>
+</RCC>
