@@ -304,23 +304,9 @@ void MainWindow::setupMenu()
     
     fileMenu->addSeparator();
     
-    QAction *saveDeviceAction = fileMenu->addAction("&Save Ember Device...");
+    QAction *saveDeviceAction = fileMenu->addAction("&Save Device Snapshot...");
     saveDeviceAction->setShortcut(QKeySequence("Ctrl+S"));
     connect(saveDeviceAction, &QAction::triggered, this, &MainWindow::onSaveEmberDevice);
-    
-    fileMenu->addSeparator();
-    
-    QAction *emulatorAction = fileMenu->addAction("Open &Emulator");
-    emulatorAction->setShortcut(QKeySequence("Ctrl+Shift+E"));
-    connect(emulatorAction, &QAction::triggered, this, &MainWindow::onOpenEmulator);
-    
-    fileMenu->addSeparator();
-    
-    QAction *openLogsAction = fileMenu->addAction("Open &Log Directory");
-    connect(openLogsAction, &QAction::triggered, this, [this]() {
-        QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
-        QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
-    });
     
     fileMenu->addSeparator();
     
@@ -328,14 +314,29 @@ void MainWindow::setupMenu()
     exitAction->setShortcut(QKeySequence("Ctrl+Q"));
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
     
-    // Advanced menu
-    QMenu *advancedMenu = menuBar()->addMenu("&Advanced");
+    // Edit menu
+    QMenu *editMenu = menuBar()->addMenu("&Edit");
     
-    m_enableCrosspointsAction = advancedMenu->addAction("Enable &Crosspoints");
+    m_enableCrosspointsAction = editMenu->addAction("Enable &Crosspoints");
     m_enableCrosspointsAction->setShortcut(QKeySequence("Ctrl+E"));
     m_enableCrosspointsAction->setCheckable(true);
     m_enableCrosspointsAction->setChecked(false);
     connect(m_enableCrosspointsAction, &QAction::toggled, this, &MainWindow::onEnableCrosspointsToggled);
+    
+    // Tools menu
+    QMenu *toolsMenu = menuBar()->addMenu("&Tools");
+    
+    QAction *emulatorAction = toolsMenu->addAction("Open &Emulator...");
+    emulatorAction->setShortcut(QKeySequence("Ctrl+Shift+E"));
+    connect(emulatorAction, &QAction::triggered, this, &MainWindow::onOpenEmulator);
+    
+    toolsMenu->addSeparator();
+    
+    QAction *openLogsAction = toolsMenu->addAction("Open &Log Directory");
+    connect(openLogsAction, &QAction::triggered, this, [this]() {
+        QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
+        QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
+    });
     
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
