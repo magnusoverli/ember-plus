@@ -19,8 +19,6 @@ FunctionInvocationDialog::FunctionInvocationDialog(const QString &functionName,
                                                  const QList<int> &argTypes,
                                                  QWidget *parent)
     : QDialog(parent)
-    , m_functionName(functionName)
-    , m_argNames(argNames)
     , m_argTypes(argTypes)
 {
     setWindowTitle(QString("Invoke Function: %1").arg(functionName));

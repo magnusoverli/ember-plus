@@ -35,8 +35,6 @@ public:
     QList<QVariant> getArguments() const;
     
 private:
-    QString m_functionName;
-    QStringList m_argNames;
     QList<int> m_argTypes;
     QList<QWidget*> m_inputWidgets;
     QDialogButtonBox *m_buttonBox;

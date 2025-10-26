@@ -913,49 +913,6 @@ bool EmberConnection::isGenericNodeName(const QString &name)
     return genericNames.contains(name);
 }
 
-void EmberConnection::checkAndUpdateDeviceName(const QString &nodePath, const QString &paramPath, const QString &value)
-{
-    // Check if this parameter could be a device name for a root node
-    // Common patterns: <rootPath>.identity.name, <rootPath>.identity.product, etc.
-    
-    if (value.isEmpty()) {
-        return;
-    }
-    
-    // Extract the potential root path from parameter path
-    // E.g., "1.4.21" -> check if "1" is a tracked root node and "1.4" might be identity
-    QStringList pathParts = paramPath.split('.');
-    if (pathParts.size() < 3) {
-        return;  // Too short to be an identity parameter
-    }
-    
-    QString potentialRootPath = pathParts[0];
-    
-    // Check if we're tracking this root node
-    if (!m_rootNodes.contains(potentialRootPath)) {
-        return;
-    }
-    
-    RootNodeInfo &rootInfo = m_rootNodes[potentialRootPath];
-    
-    // Only update if the current name is generic
-    if (!rootInfo.isGeneric) {
-        return;
-    }
-    
-    // Check if this parameter is under the identity node (if we know it)
-    if (!rootInfo.identityPath.isEmpty()) {
-        if (!paramPath.startsWith(rootInfo.identityPath + ".")) {
-            return;  // Not under the identity path
-        }
-    }
-    
-    // Check if the parameter identifier suggests it's a device name
-    // We'll check this when we get the full parameter info in processParameter
-    log(LogLevel::Debug, QString("Found potential device name for node %1: '%2' from parameter %3")
-        .arg(potentialRootPath).arg(value).arg(paramPath));
-}
-
 void EmberConnection::sendGetDirectory()
 {
     sendGetDirectoryForPath("");
@@ -2071,20 +2028,6 @@ void EmberConnection::unsubscribeFromMatrix(const QString &path)
     log(LogLevel::Debug, QString("Unsubscribed from matrix: %1").arg(path));
     
     delete root;
-}
-
-void EmberConnection::unsubscribeAll()
-{
-    if (!m_socket || !m_connected) {
-        return;
-    }
-    
-    QStringList paths = m_subscriptions.keys();
-    for (const QString &path : paths) {
-        // Determine type and call appropriate unsubscribe
-        // For now, just try unsubscribing as parameter (most common)
-        unsubscribeFromParameter(path);
-    }
 }
 
 bool EmberConnection::isSubscribed(const QString &path) const

@@ -74,7 +74,6 @@ public:
     
     // Log level control
     void setLogLevel(LogLevel level);
-    LogLevel getLogLevel() const { return m_logLevel; }
     
     // Send parameter value update to device
     void sendParameterValue(const QString &path, const QString &value, int type);
@@ -146,7 +145,6 @@ private:
     
     // Device name detection helper
     bool isGenericNodeName(const QString &name);
-    void checkAndUpdateDeviceName(const QString &nodePath, const QString &paramPath, const QString &value);
 
     QTcpSocket *m_socket;
     
@@ -203,7 +201,6 @@ public:
     void unsubscribeFromParameter(const QString &path);
     void unsubscribeFromNode(const QString &path);
     void unsubscribeFromMatrix(const QString &path);
-    void unsubscribeAll();
     bool isSubscribed(const QString &path) const;
     
     // Constants
