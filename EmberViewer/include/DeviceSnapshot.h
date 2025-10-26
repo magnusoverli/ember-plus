@@ -50,6 +50,8 @@ struct MatrixData {
     int type;
     int targetCount;
     int sourceCount;
+    QList<int> targetNumbers;  // Actual target indices (e.g., [0,1,2,8,9,10])
+    QList<int> sourceNumbers;  // Actual source indices
     QMap<int, QString> targetLabels;
     QMap<int, QString> sourceLabels;
     QMap<QPair<int,int>, bool> connections; // (target,source) -> connected
@@ -83,6 +85,7 @@ public:
     int formatVersion;
     
     // Device structure
+    QStringList rootPaths;  // Ordered list of root element paths
     QMap<QString, NodeData> nodes;
     QMap<QString, ParameterData> parameters;
     QMap<QString, MatrixData> matrices;

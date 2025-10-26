@@ -119,6 +119,20 @@ QJsonObject MatrixData::toJson() const {
     obj["targetCount"] = targetCount;
     obj["sourceCount"] = sourceCount;
     
+    // Target numbers (actual indices)
+    QJsonArray targetNumbersArray;
+    for (int num : targetNumbers) {
+        targetNumbersArray.append(num);
+    }
+    obj["targetNumbers"] = targetNumbersArray;
+    
+    // Source numbers (actual indices)
+    QJsonArray sourceNumbersArray;
+    for (int num : sourceNumbers) {
+        sourceNumbersArray.append(num);
+    }
+    obj["sourceNumbers"] = sourceNumbersArray;
+    
     // Target labels
     QJsonObject targetLabelsObj;
     for (auto it = targetLabels.begin(); it != targetLabels.end(); ++it) {
@@ -156,6 +170,22 @@ MatrixData MatrixData::fromJson(const QJsonObject& json) {
     data.type = json["type"].toInt();
     data.targetCount = json["targetCount"].toInt();
     data.sourceCount = json["sourceCount"].toInt();
+    
+    // Target numbers (actual indices)
+    if (json.contains("targetNumbers")) {
+        QJsonArray targetNumbersArray = json["targetNumbers"].toArray();
+        for (const QJsonValue& val : targetNumbersArray) {
+            data.targetNumbers.append(val.toInt());
+        }
+    }
+    
+    // Source numbers (actual indices)
+    if (json.contains("sourceNumbers")) {
+        QJsonArray sourceNumbersArray = json["sourceNumbers"].toArray();
+        for (const QJsonValue& val : sourceNumbersArray) {
+            data.sourceNumbers.append(val.toInt());
+        }
+    }
     
     // Target labels
     QJsonObject targetLabelsObj = json["targetLabels"].toObject();
@@ -270,6 +300,13 @@ QJsonDocument DeviceSnapshot::toJson() const {
     stats["functions"] = functionCount();
     root["statistics"] = stats;
     
+    // Root paths order
+    QJsonArray rootPathsArray;
+    for (const QString& path : rootPaths) {
+        rootPathsArray.append(path);
+    }
+    root["rootPaths"] = rootPathsArray;
+    
     // Nodes
     QJsonArray nodesArray;
     for (auto it = nodes.begin(); it != nodes.end(); ++it) {
@@ -325,6 +362,14 @@ DeviceSnapshot DeviceSnapshot::fromJson(const QJsonDocument& doc) {
     snapshot.captureTime = QDateTime::fromString(root["captureTime"].toString(), Qt::ISODate);
     snapshot.hostAddress = root["hostAddress"].toString();
     snapshot.port = root["port"].toInt();
+    
+    // Root paths order
+    if (root.contains("rootPaths")) {
+        QJsonArray rootPathsArray = root["rootPaths"].toArray();
+        for (const QJsonValue& val : rootPathsArray) {
+            snapshot.rootPaths.append(val.toString());
+        }
+    }
     
     // Nodes
     QJsonArray nodesArray = root["nodes"].toArray();
