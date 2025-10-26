@@ -47,7 +47,46 @@ set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 project(EmberViewer VERSION ${PROJECT_VERSION} LANGUAGES CXX)
 
-# Generate version header
+# Create a script that will regenerate version.h at build time
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/update_version.cmake "
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND \${GIT_EXECUTABLE} describe --tags --match \"v*\" --abbrev=7 --dirty
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_RESULT
+    )
+    
+    if(GIT_RESULT EQUAL 0 AND GIT_VERSION MATCHES \"^v([0-9]+)\\\\.([0-9]+)\\\\.([0-9]+)\")
+        set(VERSION_MAJOR \${CMAKE_MATCH_1})
+        set(VERSION_MINOR \${CMAKE_MATCH_2})
+        set(VERSION_PATCH \${CMAKE_MATCH_3})
+    else()
+        set(VERSION_MAJOR 0)
+        set(VERSION_MINOR 0)
+        set(VERSION_PATCH 0)
+        set(GIT_VERSION \"0.0.0-unknown\")
+    endif()
+else()
+    set(VERSION_MAJOR 0)
+    set(VERSION_MINOR 0)
+    set(VERSION_PATCH 0)
+    set(GIT_VERSION \"0.0.0-unknown\")
+endif()
+
+set(PROJECT_VERSION \"\${VERSION_MAJOR}.\${VERSION_MINOR}.\${VERSION_PATCH}\")
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/include/version.h
+    @ONLY
+)
+")
+
+# Generate initial version header at configure time
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/version.h.in
     ${CMAKE_CURRENT_BINARY_DIR}/include/version.h
@@ -109,6 +148,14 @@ file(GLOB RESOURCE_FILES
     resources/*.qrc
 )
 
+# Add custom target to update version at build time
+add_custom_target(update_version
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/update_version.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Updating version information from git"
+    VERBATIM
+)
+
 # Create a library for shared code (for testing)
 add_library(EmberViewerLib STATIC
     src/MatrixWidget.cpp
@@ -118,6 +165,9 @@ add_library(EmberViewerLib STATIC
     include/ParameterDelegate.h
     include/DeviceSnapshot.h
 )
+
+# Make sure version is updated before building library
+add_dependencies(EmberViewerLib update_version)
 
 # Collect source files (excluding those in EmberViewerLib to avoid duplicate compilation)
 file(GLOB_RECURSE SOURCE_FILES
@@ -166,6 +216,9 @@ add_executable(${PROJECT_NAME}
     ${UI_FILES}
     ${RESOURCE_FILES}
 )
+
+# Make sure version is updated before building
+add_dependencies(${PROJECT_NAME} update_version)
 
 target_compile_features(${PROJECT_NAME}
     PRIVATE
