@@ -162,6 +162,27 @@ void EmulatorWindow::setupMenu()
     closeAction->setShortcut(QKeySequence("Ctrl+W"));
     connect(closeAction, &QAction::triggered, this, &QWidget::close);
     
+    // Server menu
+    QMenu *serverMenu = menuBar->addMenu("&Server");
+    
+    QAction *startServerAction = serverMenu->addAction("&Start Server");
+    startServerAction->setShortcut(QKeySequence("Ctrl+S"));
+    connect(startServerAction, &QAction::triggered, this, &EmulatorWindow::onStartServer);
+    
+    QAction *stopServerAction = serverMenu->addAction("S&top Server");
+    stopServerAction->setShortcut(QKeySequence("Ctrl+T"));
+    connect(stopServerAction, &QAction::triggered, this, &EmulatorWindow::onStopServer);
+    
+    // View menu
+    QMenu *viewMenu = menuBar->addMenu("&View");
+    
+    QAction *clearLogAction = viewMenu->addAction("&Clear Activity Log");
+    clearLogAction->setShortcut(QKeySequence("Ctrl+L"));
+    connect(clearLogAction, &QAction::triggered, this, [this]() {
+        m_activityLog->clear();
+        logActivity("Activity log cleared");
+    });
+    
     // Help menu
     QMenu *helpMenu = menuBar->addMenu("&Help");
     
