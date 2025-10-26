@@ -43,9 +43,53 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
         stream.flush();
     }
     
-    // Only show INFO and above (ERROR, CRITICAL, WARNING, INFO) in the GUI console
-    // DEBUG and lower are only written to the log file
-    if (globalMainWindow && type != QtDebugMsg) {
+    // Determine if this is an Ember+ application message or a Qt system message
+    bool isEmberMessage = false;
+    QString category = context.category ? QString(context.category) : QString();
+    
+    // Qt system messages typically have categories starting with "qt." (e.g., "qt.qpa.wayland", "qt.network")
+    // EmberViewer application messages come from "default" category or have no category
+    if (category.startsWith("qt.")) {
+        // This is a Qt internal message - don't show in console
+        isEmberMessage = false;
+    } else if (category == "default" || category.isEmpty()) {
+        // For default/empty category, check if it's from our source files
+        QString file = context.file ? QString(context.file) : QString();
+        
+        // If we have file context and it's from our code, it's an Ember message
+        if (!file.isEmpty()) {
+            isEmberMessage = file.contains("EmberViewer") || 
+                            file.contains("MainWindow") || 
+                            file.contains("EmberConnection") ||
+                            file.contains("EmberProvider") ||
+                            file.contains("MatrixWidget") ||
+                            file.contains("DeviceSnapshot") ||
+                            file.contains("ParameterDelegate") ||
+                            file.contains("EmulatorWindow") ||
+                            file.contains("FunctionInvocationDialog");
+        } else {
+            // No file context - check if message looks like a Qt warning
+            // Common Qt warnings contain these patterns
+            if (msg.contains("QWindow::") || 
+                msg.contains("QPlatform") ||
+                msg.contains("Wayland") ||
+                msg.contains("QWidget::") ||
+                msg.contains("QObject::") ||
+                msg.toLower().contains("does not support")) {
+                isEmberMessage = false;
+            } else {
+                // Assume it's our message if we can't determine otherwise
+                isEmberMessage = true;
+            }
+        }
+    } else {
+        // Unknown category - assume it's an Ember message
+        isEmberMessage = true;
+    }
+    
+    // Only show Ember+ messages in the GUI console
+    // Filter out Qt system warnings (like Wayland warnings)
+    if (globalMainWindow && type != QtDebugMsg && isEmberMessage) {
         QString guiMessage = QString("[%1] %2").arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz")).arg(msg);
         QMetaObject::invokeMethod(globalMainWindow, "appendToConsole", Qt::QueuedConnection, Q_ARG(QString, guiMessage));
     }
