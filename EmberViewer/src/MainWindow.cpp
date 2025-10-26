@@ -13,6 +13,7 @@
 #include "MatrixWidget.h"
 #include "FunctionInvocationDialog.h"
 #include "DeviceSnapshot.h"
+#include "EmulatorWindow.h"
 #include "version.h"
 #include <QMenuBar>
 #include <QToolBar>
@@ -55,6 +56,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_tickTimer(nullptr)
     , m_activityTimeRemaining(0)
     , m_crosspointsStatusLabel(nullptr)
+    , m_emulatorWindow(nullptr)
     , m_isConnected(false)
     , m_showOidPath(false)
     , m_crosspointsEnabled(false)
@@ -305,6 +307,12 @@ void MainWindow::setupMenu()
     QAction *saveDeviceAction = fileMenu->addAction("&Save Ember Device...");
     saveDeviceAction->setShortcut(QKeySequence("Ctrl+S"));
     connect(saveDeviceAction, &QAction::triggered, this, &MainWindow::onSaveEmberDevice);
+    
+    fileMenu->addSeparator();
+    
+    QAction *emulatorAction = fileMenu->addAction("Open &Emulator");
+    emulatorAction->setShortcut(QKeySequence("Ctrl+Shift+E"));
+    connect(emulatorAction, &QAction::triggered, this, &MainWindow::onOpenEmulator);
     
     fileMenu->addSeparator();
     
@@ -1405,9 +1413,30 @@ void MainWindow::onSaveEmberDevice()
         return;
     }
     
-    // Generate default filename with timestamp
-    QString defaultName = QString("ember_device_%1.json")
-        .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+    // Generate default filename using actual device name from tree
+    QString deviceName;
+    
+    // Try to get device name from first root node in tree
+    if (m_treeWidget->topLevelItemCount() > 0) {
+        QTreeWidgetItem* firstRoot = m_treeWidget->topLevelItem(0);
+        deviceName = firstRoot->text(0);
+    }
+    
+    // If no tree items or empty name, fall back to hostname
+    if (deviceName.isEmpty()) {
+        deviceName = m_hostEdit->text();
+    }
+    
+    // Sanitize device name for filename (remove invalid chars)
+    deviceName = deviceName.replace(QRegExp("[^a-zA-Z0-9_.-]"), "_");
+    
+    // If still empty after sanitization, use generic name
+    if (deviceName.isEmpty()) {
+        deviceName = "ember_device";
+    }
+    
+    QString timestamp = QDateTime::currentDateTime().toString("ddMMyyyy");
+    QString defaultName = QString("%1_%2.json").arg(deviceName).arg(timestamp);
     
     QString fileName = QFileDialog::getSaveFileName(
         this,
@@ -1447,7 +1476,16 @@ DeviceSnapshot MainWindow::captureSnapshot()
     DeviceSnapshot snapshot;
     
     // Set metadata
-    snapshot.deviceName = m_hostEdit->text();
+    // Try to get actual device name from first root node
+    if (m_treeWidget->topLevelItemCount() > 0) {
+        QTreeWidgetItem* firstRoot = m_treeWidget->topLevelItem(0);
+        snapshot.deviceName = firstRoot->text(0);
+    }
+    // Fall back to hostname if no tree items
+    if (snapshot.deviceName.isEmpty()) {
+        snapshot.deviceName = m_hostEdit->text();
+    }
+    
     snapshot.hostAddress = m_hostEdit->text();
     snapshot.port = m_portSpin->value();
     snapshot.captureTime = QDateTime::currentDateTime();
@@ -1520,23 +1558,33 @@ DeviceSnapshot MainWindow::captureSnapshot()
                 
                 matrixData.type = matrixWidget->getMatrixType();
                 
+                // Get actual target and source indices (not just counts!)
+                matrixData.targetNumbers = matrixWidget->getTargetNumbers();
+                matrixData.sourceNumbers = matrixWidget->getSourceNumbers();
+                
                 // Extract labels and connections from MatrixWidget
-                for (int target = 0; target < matrixData.targetCount; ++target) {
-                    QString label = matrixWidget->getTargetLabel(target);
-                    if (!label.isEmpty()) {
-                        matrixData.targetLabels[target] = label;
+                // Use actual indices, not 0 to count-1
+                for (int targetIdx : matrixData.targetNumbers) {
+                    QString label = matrixWidget->getTargetLabel(targetIdx);
+                    // Only save custom labels (not default "Target N" format)
+                    if (!label.isEmpty() && label != QString("Target %1").arg(targetIdx)) {
+                        matrixData.targetLabels[targetIdx] = label;
                     }
-                    
-                    for (int source = 0; source < matrixData.sourceCount; ++source) {
-                        if (target == 0) {
-                            QString srcLabel = matrixWidget->getSourceLabel(source);
-                            if (!srcLabel.isEmpty()) {
-                                matrixData.sourceLabels[source] = srcLabel;
-                            }
-                        }
-                        
-                        bool connected = matrixWidget->isConnected(target, source);
-                        matrixData.connections[QPair<int,int>(target, source)] = connected;
+                }
+                
+                for (int sourceIdx : matrixData.sourceNumbers) {
+                    QString srcLabel = matrixWidget->getSourceLabel(sourceIdx);
+                    // Only save custom labels (not default "Source N" format)
+                    if (!srcLabel.isEmpty() && srcLabel != QString("Source %1").arg(sourceIdx)) {
+                        matrixData.sourceLabels[sourceIdx] = srcLabel;
+                    }
+                }
+                
+                // Extract connections for all valid crosspoints
+                for (int targetIdx : matrixData.targetNumbers) {
+                    for (int sourceIdx : matrixData.sourceNumbers) {
+                        bool connected = matrixWidget->isConnected(targetIdx, sourceIdx);
+                        matrixData.connections[QPair<int,int>(targetIdx, sourceIdx)] = connected;
                     }
                 }
                 
@@ -1563,6 +1611,15 @@ DeviceSnapshot MainWindow::captureSnapshot()
         ++it;
     }
     
+    // Collect root paths in order (top-level items from tree widget)
+    for (int i = 0; i < m_treeWidget->topLevelItemCount(); ++i) {
+        QTreeWidgetItem* item = m_treeWidget->topLevelItem(i);
+        QString path = item->data(0, Qt::UserRole).toString();
+        if (!path.isEmpty()) {
+            snapshot.rootPaths.append(path);
+        }
+    }
+    
     qInfo().noquote() << QString("Captured snapshot: %1 nodes, %2 parameters, %3 matrices, %4 functions")
         .arg(snapshot.nodeCount())
         .arg(snapshot.parameterCount())
@@ -1570,4 +1627,20 @@ DeviceSnapshot MainWindow::captureSnapshot()
         .arg(snapshot.functionCount());
     
     return snapshot;
+}
+
+void MainWindow::onOpenEmulator()
+{
+    if (!m_emulatorWindow) {
+        // Create as independent window (no parent) so it doesn't stay on top
+        m_emulatorWindow = new EmulatorWindow(nullptr);
+        
+        // Connect destroyed signal to clean up pointer
+        connect(m_emulatorWindow, &QObject::destroyed, this, [this]() {
+            m_emulatorWindow = nullptr;
+        });
+    }
+    m_emulatorWindow->show();
+    m_emulatorWindow->raise();
+    m_emulatorWindow->activateWindow();
 }

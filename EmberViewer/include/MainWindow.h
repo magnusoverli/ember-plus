@@ -29,6 +29,7 @@
 class EmberConnection;
 class MatrixWidget;
 class DeviceSnapshot;
+class EmulatorWindow;
 
 class MainWindow : public QMainWindow
 {
@@ -69,6 +70,7 @@ private slots:
     void onActivityTimeout();
     void onActivityTimerTick();
     void onSaveEmberDevice();
+    void onOpenEmulator();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -147,6 +149,9 @@ private:
     QTimer *m_tickTimer;
     int m_activityTimeRemaining;
     QLabel *m_crosspointsStatusLabel;
+    
+    // Emulator window
+    EmulatorWindow *m_emulatorWindow;
 
 public:
     // Constants
