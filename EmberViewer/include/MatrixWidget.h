@@ -81,6 +81,8 @@ public:
     int getMatrixType() const { return m_matrixType; }
     QString getTargetLabel(int targetNumber) const;
     QString getSourceLabel(int sourceNumber) const;
+    QList<int> getTargetNumbers() const { return m_targetNumbers; }
+    QList<int> getSourceNumbers() const { return m_sourceNumbers; }
     
     // Crosspoint editing control
     void setCrosspointsEnabled(bool enabled);
