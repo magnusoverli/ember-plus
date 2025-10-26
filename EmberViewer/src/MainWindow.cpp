@@ -12,6 +12,7 @@
 #include "PathColumnDelegate.h"
 #include "MatrixWidget.h"
 #include "FunctionInvocationDialog.h"
+#include "DeviceSnapshot.h"
 #include "version.h"
 #include <QMenuBar>
 #include <QToolBar>
@@ -31,6 +32,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QStandardPaths>
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -297,6 +299,12 @@ void MainWindow::setupMenu()
     QAction *disconnectAction = fileMenu->addAction("&Disconnect");
     disconnectAction->setShortcut(QKeySequence("Ctrl+D"));
     connect(disconnectAction, &QAction::triggered, this, &MainWindow::onDisconnectClicked);
+    
+    fileMenu->addSeparator();
+    
+    QAction *saveDeviceAction = fileMenu->addAction("&Save Ember Device...");
+    saveDeviceAction->setShortcut(QKeySequence("Ctrl+S"));
+    connect(saveDeviceAction, &QAction::triggered, this, &MainWindow::onSaveEmberDevice);
     
     fileMenu->addSeparator();
     
@@ -1387,4 +1395,179 @@ void MainWindow::subscribeToExpandedItems()
         }
         ++it;
     }
+}
+
+void MainWindow::onSaveEmberDevice()
+{
+    if (!m_isConnected) {
+        QMessageBox::warning(this, "Not Connected", 
+            "Cannot save device: not connected to an Ember+ provider.");
+        return;
+    }
+    
+    // Generate default filename with timestamp
+    QString defaultName = QString("ember_device_%1.json")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+    
+    QString fileName = QFileDialog::getSaveFileName(
+        this,
+        "Save Ember Device",
+        defaultName,
+        "Ember Device Files (*.json);;All Files (*)"
+    );
+    
+    if (fileName.isEmpty()) {
+        return;  // User cancelled
+    }
+    
+    // Capture the snapshot
+    DeviceSnapshot snapshot = captureSnapshot();
+    
+    // Save to file
+    if (snapshot.saveToFile(fileName)) {
+        QString stats = QString("Device saved: %1 nodes, %2 parameters, %3 matrices, %4 functions")
+            .arg(snapshot.nodeCount())
+            .arg(snapshot.parameterCount())
+            .arg(snapshot.matrixCount())
+            .arg(snapshot.functionCount());
+        
+        qInfo().noquote() << stats;
+        QMessageBox::information(this, "Device Saved", 
+            QString("Ember device saved successfully to:\n%1\n\n%2")
+                .arg(fileName)
+                .arg(stats));
+    } else {
+        QMessageBox::critical(this, "Save Failed", 
+            QString("Failed to save device to:\n%1").arg(fileName));
+    }
+}
+
+DeviceSnapshot MainWindow::captureSnapshot()
+{
+    DeviceSnapshot snapshot;
+    
+    // Set metadata
+    snapshot.deviceName = m_hostEdit->text();
+    snapshot.hostAddress = m_hostEdit->text();
+    snapshot.port = m_portSpin->value();
+    snapshot.captureTime = QDateTime::currentDateTime();
+    
+    // Iterate through tree and capture all elements
+    QTreeWidgetItemIterator it(m_treeWidget);
+    while (*it) {
+        QString path = (*it)->data(0, Qt::UserRole).toString();
+        QString type = (*it)->text(1);
+        
+        if (path.isEmpty()) {
+            ++it;
+            continue;
+        }
+        
+        if (type == "Node") {
+            NodeData nodeData;
+            nodeData.path = path;
+            nodeData.identifier = (*it)->text(0);
+            nodeData.description = "";  // Description not stored separately in tree
+            nodeData.isOnline = (*it)->data(0, Qt::UserRole + 4).toBool();
+            
+            // Collect child paths
+            for (int i = 0; i < (*it)->childCount(); ++i) {
+                QString childPath = (*it)->child(i)->data(0, Qt::UserRole).toString();
+                if (!childPath.isEmpty()) {
+                    nodeData.childPaths.append(childPath);
+                }
+            }
+            
+            snapshot.nodes[path] = nodeData;
+            
+        } else if (type == "Parameter") {
+            ParameterData paramData;
+            paramData.path = path;
+            paramData.identifier = (*it)->text(0);
+            paramData.value = (*it)->text(2);
+            paramData.type = (*it)->data(0, Qt::UserRole + 1).toInt();
+            paramData.access = (*it)->data(0, Qt::UserRole + 2).toInt();
+            paramData.minimum = (*it)->data(0, Qt::UserRole + 3);
+            paramData.maximum = (*it)->data(0, Qt::UserRole + 4);
+            paramData.enumOptions = (*it)->data(0, Qt::UserRole + 5).toStringList();
+            
+            // Convert QList<QVariant> to QList<int>
+            QList<QVariant> enumVarList = (*it)->data(0, Qt::UserRole + 6).toList();
+            for (const QVariant& var : enumVarList) {
+                paramData.enumValues.append(var.toInt());
+            }
+            
+            paramData.isOnline = (*it)->data(0, Qt::UserRole + 8).toBool();
+            
+            snapshot.parameters[path] = paramData;
+            
+        } else if (type == "Matrix") {
+            // Get matrix widget to extract connection data
+            MatrixWidget* matrixWidget = m_matrixWidgets.value(path, nullptr);
+            if (matrixWidget) {
+                MatrixData matrixData;
+                matrixData.path = path;
+                matrixData.identifier = (*it)->text(0);
+                matrixData.description = "";
+                
+                // Parse size from text (e.g., "8x16" or "8×16")
+                QString sizeText = (*it)->text(2);
+                QStringList sizeParts = sizeText.split(QChar(0x00D7));  // Unicode multiplication sign
+                if (sizeParts.size() == 2) {
+                    matrixData.sourceCount = sizeParts[0].toInt();
+                    matrixData.targetCount = sizeParts[1].toInt();
+                }
+                
+                matrixData.type = matrixWidget->getMatrixType();
+                
+                // Extract labels and connections from MatrixWidget
+                for (int target = 0; target < matrixData.targetCount; ++target) {
+                    QString label = matrixWidget->getTargetLabel(target);
+                    if (!label.isEmpty()) {
+                        matrixData.targetLabels[target] = label;
+                    }
+                    
+                    for (int source = 0; source < matrixData.sourceCount; ++source) {
+                        if (target == 0) {
+                            QString srcLabel = matrixWidget->getSourceLabel(source);
+                            if (!srcLabel.isEmpty()) {
+                                matrixData.sourceLabels[source] = srcLabel;
+                            }
+                        }
+                        
+                        bool connected = matrixWidget->isConnected(target, source);
+                        matrixData.connections[QPair<int,int>(target, source)] = connected;
+                    }
+                }
+                
+                snapshot.matrices[path] = matrixData;
+            }
+            
+        } else if (type == "Function") {
+            if (m_functions.contains(path)) {
+                FunctionInfo funcInfo = m_functions[path];
+                
+                FunctionData funcData;
+                funcData.path = path;
+                funcData.identifier = funcInfo.identifier;
+                funcData.description = funcInfo.description;
+                funcData.argNames = funcInfo.argNames;
+                funcData.argTypes = funcInfo.argTypes;
+                funcData.resultNames = funcInfo.resultNames;
+                funcData.resultTypes = funcInfo.resultTypes;
+                
+                snapshot.functions[path] = funcData;
+            }
+        }
+        
+        ++it;
+    }
+    
+    qInfo().noquote() << QString("Captured snapshot: %1 nodes, %2 parameters, %3 matrices, %4 functions")
+        .arg(snapshot.nodeCount())
+        .arg(snapshot.parameterCount())
+        .arg(snapshot.matrixCount())
+        .arg(snapshot.functionCount());
+    
+    return snapshot;
 }

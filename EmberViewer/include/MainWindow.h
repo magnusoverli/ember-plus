@@ -28,6 +28,7 @@
 
 class EmberConnection;
 class MatrixWidget;
+class DeviceSnapshot;
 
 class MainWindow : public QMainWindow
 {
@@ -67,6 +68,7 @@ private slots:
     void onEnableCrosspointsToggled(bool enabled);
     void onActivityTimeout();
     void onActivityTimerTick();
+    void onSaveEmberDevice();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -86,6 +88,7 @@ private:
     void resetActivityTimer();
     void updateCrosspointsStatusBar();
     void subscribeToExpandedItems();
+    DeviceSnapshot captureSnapshot();
     
     // Widgets
     QTreeWidget *m_treeWidget;

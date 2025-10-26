@@ -18,11 +18,12 @@ make EmberViewer
 - Browse tree structure
 - View/edit parameter properties
 - Matrix crosspoint visualization
+- Save complete device snapshots (JSON)
 - Console logging
 
 ## Status
 
-**v1.2 - Matrix Support Complete**
+**v1.3 - Device Snapshot Feature**
 
 Working:
 - TCP connection
@@ -31,13 +32,15 @@ Working:
 - Tree view population (nodes & parameters)
 - Parameter value display (Integer, Real, String, Boolean, Enum, Trigger)
 - Parameter editing (inline editing with delegates, dropdowns, buttons)
-- Matrix support (read-only display with connection states)
+- Matrix support (full connection state visualization and editing)
+- Device snapshot (save complete device structure to JSON)
+- Function invocation
 - Keep-alive message handling
 - GUI with tree/properties/console
 
 Todo:
-- Matrix connection editing (Phase 2)
-- Function invocation
+- Load/view saved snapshots
+- Compare snapshots (diff view)
 - Stream support
 
 ## Development

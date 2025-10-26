@@ -113,8 +113,10 @@ file(GLOB RESOURCE_FILES
 add_library(EmberViewerLib STATIC
     src/MatrixWidget.cpp
     src/ParameterDelegate.cpp
+    src/DeviceSnapshot.cpp
     include/MatrixWidget.h
     include/ParameterDelegate.h
+    include/DeviceSnapshot.h
 )
 
 # Collect source files (excluding those in EmberViewerLib to avoid duplicate compilation)
@@ -126,6 +128,7 @@ file(GLOB_RECURSE SOURCE_FILES
 list(REMOVE_ITEM SOURCE_FILES 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ParameterDelegate.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/DeviceSnapshot.cpp
 )
 
 target_compile_features(EmberViewerLib
