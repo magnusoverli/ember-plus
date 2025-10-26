@@ -73,6 +73,7 @@ public:
     void setSourceLabel(int sourceNumber, const QString &label);
     void setConnection(int targetNumber, int sourceNumber, bool connected, int disposition);
     void clearConnections();
+    void clearTargetConnections(int targetNumber);
     void rebuild();
     
     // Query connection state
@@ -104,6 +105,12 @@ private:
     void connectScrollSync();
     void clearLayoutAndWidgets(QLayout *layout);
     void enforceStaticHandlePositions();
+    
+    // Style calculation helpers
+    bool isButtonHovered(int targetNumber, int sourceNumber) const;
+    QString getButtonStyleSheet(int targetNumber, int sourceNumber) const;
+    QString getButtonText(int targetNumber, int sourceNumber) const;
+    QString getButtonTooltip(int targetNumber, int sourceNumber) const;
     
     // Matrix metadata
     QString m_identifier;

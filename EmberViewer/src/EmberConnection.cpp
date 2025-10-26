@@ -1239,30 +1239,43 @@ void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix
     
     int number = path.back();
     
-    QString identifier = matrix->contains(libember::glow::MatrixProperty::Identifier)
-        ? QString::fromStdString(matrix->identifier())
-        : QString("Matrix %1").arg(number);
+    // Check if this message contains matrix metadata (not just connection updates)
+    // Per Ember+ spec, connection updates send only the connections collection
+    bool hasMetadata = matrix->contains(libember::glow::MatrixProperty::Identifier) ||
+                       matrix->contains(libember::glow::MatrixProperty::Description) ||
+                       matrix->contains(libember::glow::MatrixProperty::Type) ||
+                       matrix->contains(libember::glow::MatrixProperty::TargetCount) ||
+                       matrix->contains(libember::glow::MatrixProperty::SourceCount);
     
-    QString description = matrix->contains(libember::glow::MatrixProperty::Description)
-        ? QString::fromStdString(matrix->description())
-        : "";
-    
-    int type = matrix->contains(libember::glow::MatrixProperty::Type)
-        ? matrix->type().value()
-        : 2;  // Default to NToN
-    
-    int targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
-        ? matrix->targetCount()
-        : 0;
-    
-    int sourceCount = matrix->contains(libember::glow::MatrixProperty::SourceCount)
-        ? matrix->sourceCount()
-        : 0;
-    
-    log(LogLevel::Debug, QString("Matrix: %1 [%2] - Type:%3, %4×%5")
-                    .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
-    
-    emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
+    // Only extract and emit metadata if this is a full matrix message (not just a connection update)
+    if (hasMetadata) {
+        QString identifier = matrix->contains(libember::glow::MatrixProperty::Identifier)
+            ? QString::fromStdString(matrix->identifier())
+            : QString("Matrix %1").arg(number);
+        
+        QString description = matrix->contains(libember::glow::MatrixProperty::Description)
+            ? QString::fromStdString(matrix->description())
+            : "";
+        
+        int type = matrix->contains(libember::glow::MatrixProperty::Type)
+            ? matrix->type().value()
+            : 2;  // Default to NToN
+        
+        int targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
+            ? matrix->targetCount()
+            : 0;
+        
+        int sourceCount = matrix->contains(libember::glow::MatrixProperty::SourceCount)
+            ? matrix->sourceCount()
+            : 0;
+        
+        log(LogLevel::Debug, QString("QualifiedMatrix: %1 [%2] - Type:%3, %4×%5 (full metadata)")
+                        .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
+        
+        emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
+    } else {
+        log(LogLevel::Debug, QString("QualifiedMatrix [%1] - connection update only (no metadata)").arg(pathStr));
+    }
     
     // Process targets
     if (matrix->targets()) {
@@ -1294,14 +1307,17 @@ void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix
     if (matrix->connections()) {
         log(LogLevel::Debug, QString(" Qualified Matrix [%1] has connections collection").arg(pathStr));
         
-        // Clear existing connections in the UI before sending new ones
-        emit matrixConnectionsCleared(pathStr);
-        log(LogLevel::Debug, QString(" Cleared all existing connections for matrix %1").arg(pathStr));
-        
         int connectionCount = 0;
+        int targetCount = 0;
         for (auto it = matrix->connections()->begin(); it != matrix->connections()->end(); ++it) {
             if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*it))) {
                 int targetNumber = connection->target();
+                targetCount++;
+                
+                // Per Ember+ spec: Each Connection object represents the complete state for that target
+                // Clear this target's connections first, then add the new ones
+                emit matrixTargetConnectionsCleared(pathStr, targetNumber);
+                log(LogLevel::Debug, QString(" Cleared connections for Target %1 in matrix %2").arg(targetNumber).arg(pathStr));
                 
                 // Get all sources for this connection (sources() returns ObjectIdentifier)
                 libember::ber::ObjectIdentifier sources = connection->sources();
@@ -1319,10 +1335,13 @@ void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix
                         emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true, disposition);
                         connectionCount++;
                     }
+                } else {
+                    // Target with empty sources = disconnected target (per Ember+ spec)
+                    log(LogLevel::Debug, QString(" Target %1 has no sources (disconnected)").arg(targetNumber));
                 }
             }
         }
-        log(LogLevel::Debug, QString(" Total connections emitted: %1").arg(connectionCount));
+        log(LogLevel::Debug, QString(" Processed %1 targets, %2 total connections").arg(targetCount).arg(connectionCount));
         
         // If connections collection is empty, request the connection state
         if (connectionCount == 0) {
@@ -1348,30 +1367,43 @@ void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QS
         ? QString::number(number) 
         : QString("%1.%2").arg(parentPath).arg(number);
     
-    QString identifier = matrix->contains(libember::glow::MatrixProperty::Identifier)
-        ? QString::fromStdString(matrix->identifier())
-        : QString("Matrix %1").arg(number);
+    // Check if this message contains matrix metadata (not just connection updates)
+    // Per Ember+ spec, connection updates send only the connections collection
+    bool hasMetadata = matrix->contains(libember::glow::MatrixProperty::Identifier) ||
+                       matrix->contains(libember::glow::MatrixProperty::Description) ||
+                       matrix->contains(libember::glow::MatrixProperty::Type) ||
+                       matrix->contains(libember::glow::MatrixProperty::TargetCount) ||
+                       matrix->contains(libember::glow::MatrixProperty::SourceCount);
     
-    QString description = matrix->contains(libember::glow::MatrixProperty::Description)
-        ? QString::fromStdString(matrix->description())
-        : "";
-    
-    int type = matrix->contains(libember::glow::MatrixProperty::Type)
-        ? matrix->type().value()
-        : 2;  // Default to NToN
-    
-    int targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
-        ? matrix->targetCount()
-        : 0;
-    
-    int sourceCount = matrix->contains(libember::glow::MatrixProperty::SourceCount)
-        ? matrix->sourceCount()
-        : 0;
-    
-    log(LogLevel::Debug, QString("Matrix: %1 [%2] - Type:%3, %4×%5")
-                    .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
-    
-    emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
+    // Only extract and emit metadata if this is a full matrix message (not just a connection update)
+    if (hasMetadata) {
+        QString identifier = matrix->contains(libember::glow::MatrixProperty::Identifier)
+            ? QString::fromStdString(matrix->identifier())
+            : QString("Matrix %1").arg(number);
+        
+        QString description = matrix->contains(libember::glow::MatrixProperty::Description)
+            ? QString::fromStdString(matrix->description())
+            : "";
+        
+        int type = matrix->contains(libember::glow::MatrixProperty::Type)
+            ? matrix->type().value()
+            : 2;  // Default to NToN
+        
+        int targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
+            ? matrix->targetCount()
+            : 0;
+        
+        int sourceCount = matrix->contains(libember::glow::MatrixProperty::SourceCount)
+            ? matrix->sourceCount()
+            : 0;
+        
+        log(LogLevel::Debug, QString("Matrix: %1 [%2] - Type:%3, %4×%5 (full metadata)")
+                        .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
+        
+        emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
+    } else {
+        log(LogLevel::Debug, QString("Matrix [%1] - connection update only (no metadata)").arg(pathStr));
+    }
     
     // Process targets
     if (matrix->targets()) {
@@ -1399,14 +1431,17 @@ void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QS
     if (matrix->connections()) {
         log(LogLevel::Debug, QString(" NonQual Matrix [%1] has connections collection").arg(pathStr));
         
-        // Clear existing connections in the UI before sending new ones
-        emit matrixConnectionsCleared(pathStr);
-        log(LogLevel::Debug, QString(" Cleared all existing connections for matrix %1").arg(pathStr));
-        
         int connectionCount = 0;
+        int targetCount = 0;
         for (auto it = matrix->connections()->begin(); it != matrix->connections()->end(); ++it) {
             if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*it))) {
                 int targetNumber = connection->target();
+                targetCount++;
+                
+                // Per Ember+ spec: Each Connection object represents the complete state for that target
+                // Clear this target's connections first, then add the new ones
+                emit matrixTargetConnectionsCleared(pathStr, targetNumber);
+                log(LogLevel::Debug, QString(" Cleared connections for Target %1 in matrix %2").arg(targetNumber).arg(pathStr));
                 
                 // Get all sources for this connection (sources() returns ObjectIdentifier)
                 libember::ber::ObjectIdentifier sources = connection->sources();
@@ -1424,10 +1459,13 @@ void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QS
                         emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true, disposition);
                         connectionCount++;
                     }
+                } else {
+                    // Target with empty sources = disconnected target (per Ember+ spec)
+                    log(LogLevel::Debug, QString(" Target %1 has no sources (disconnected)").arg(targetNumber));
                 }
             }
         }
-        log(LogLevel::Debug, QString(" Total connections emitted: %1").arg(connectionCount));
+        log(LogLevel::Debug, QString(" Processed %1 targets, %2 total connections").arg(targetCount).arg(connectionCount));
         
         // If connections collection is empty, request the connection state
         if (connectionCount == 0) {

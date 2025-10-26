@@ -55,6 +55,7 @@ private slots:
     void onMatrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label);
     void onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void onMatrixConnectionsCleared(const QString &matrixPath);
+    void onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber);
     void onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
                            const QStringList &argNames, const QList<int> &argTypes,
                            const QStringList &resultNames, const QList<int> &resultTypes);

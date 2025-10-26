@@ -535,6 +535,26 @@ void MatrixWidget::clearConnections()
     m_connections.clear();
 }
 
+void MatrixWidget::clearTargetConnections(int targetNumber)
+{
+    // Remove all connections for this specific target
+    QList<QPair<int, int>> keysToRemove;
+    for (auto it = m_connections.begin(); it != m_connections.end(); ++it) {
+        if (it.key().first == targetNumber) {
+            keysToRemove.append(it.key());
+        }
+    }
+    
+    for (const auto &key : keysToRemove) {
+        m_connections.remove(key);
+    }
+    
+    // Update all buttons for this target to show disconnected state
+    for (int sourceNumber : m_sourceNumbers) {
+        updateConnectionButton(targetNumber, sourceNumber);
+    }
+}
+
 void MatrixWidget::rebuild()
 {
     buildGrid();
@@ -634,90 +654,163 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
     
     QPushButton *btn = m_buttons[key];
     
+    // Use helper functions to get correct style, text, and tooltip
+    // These helpers consider BOTH connection state AND hover state
+    btn->setStyleSheet(getButtonStyleSheet(targetNumber, sourceNumber));
+    btn->setText(getButtonText(targetNumber, sourceNumber));
+    btn->setToolTip(getButtonTooltip(targetNumber, sourceNumber));
+    
+    // Handle locked state (disposition 3)
+    if (m_connections.contains(key) && m_connections[key].disposition == 3) {
+        btn->setEnabled(false);
+    } else {
+        btn->setEnabled(m_crosspointsEnabled);
+    }
+}
+
+// Helper: Check if a button is currently in the hover-highlighted area
+bool MatrixWidget::isButtonHovered(int targetNumber, int sourceNumber) const
+{
+    if (m_hoverTargetNumber == -1 || m_hoverSourceNumber == -1) {
+        return false;
+    }
+    
+    // Check if button is in the highlighted row (to the left of and including hover position)
+    int colIdx = m_targetNumbers.indexOf(targetNumber);
+    int hoverColIdx = m_targetNumbers.indexOf(m_hoverTargetNumber);
+    if (sourceNumber == m_hoverSourceNumber && colIdx != -1 && hoverColIdx != -1 && colIdx <= hoverColIdx) {
+        return true;
+    }
+    
+    // Check if button is in the highlighted column (above and including hover position)
+    int rowIdx = m_sourceNumbers.indexOf(sourceNumber);
+    int hoverRowIdx = m_sourceNumbers.indexOf(m_hoverSourceNumber);
+    if (targetNumber == m_hoverTargetNumber && rowIdx != -1 && hoverRowIdx != -1 && rowIdx <= hoverRowIdx) {
+        return true;
+    }
+    
+    return false;
+}
+
+// Helper: Get the appropriate stylesheet for a button based on connection AND hover state
+QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) const
+{
+    QPair<int, int> key(targetNumber, sourceNumber);
+    bool isConnected = m_connections.contains(key);
+    bool isHovered = isButtonHovered(targetNumber, sourceNumber);
+    
+    // If not connected and not hovered - default disconnected style
+    if (!isConnected && !isHovered) {
+        return "QPushButton { "
+               "  background-color: #f5f5f5; "
+               "  border: 1px solid #ccc; "
+               "}";
+    }
+    
+    // If not connected but hovered - hover disconnected style
+    if (!isConnected && isHovered) {
+        return "QPushButton { "
+               "  background-color: #e0e0e0; "  // Darker gray for hover
+               "  border: 2px solid #999; "
+               "}";
+    }
+    
+    // Connected - check disposition
+    const ConnectionState &state = m_connections[key];
+    
+    // If connected and hovered - lighter/highlighted version of connection color
+    if (isHovered) {
+        return "QPushButton { "
+               "  background-color: #66BB6A; "  // Lighter green for hover
+               "  border: 2px solid #2E7D32; "
+               "  font-weight: bold; "
+               "  color: white; "
+               "  font-size: 8pt; "
+               "}";
+    }
+    
+    // Connected and not hovered - normal connection style based on disposition
+    switch (state.disposition) {
+        case 0:  // Tally
+            return "QPushButton { "
+                   "  background-color: #4CAF50; "
+                   "  border: 1px solid #45a049; "
+                   "  font-weight: bold; "
+                   "  color: white; "
+                   "  font-size: 8pt; "
+                   "}";
+        
+        case 1:  // Modified
+            return "QPushButton { "
+                   "  background-color: #FF9800; "
+                   "  border: 1px solid #F57C00; "
+                   "  font-weight: bold; "
+                   "  color: white; "
+                   "  font-size: 8pt; "
+                   "}";
+        
+        case 2:  // Pending
+            return "QPushButton { "
+                   "  background-color: #FFC107; "
+                   "  border: 1px solid #FFA000; "
+                   "  font-weight: bold; "
+                   "  color: #333; "
+                   "  font-size: 8pt; "
+                   "}";
+        
+        case 3:  // Locked
+            return "QPushButton { "
+                   "  background-color: #4CAF50; "
+                   "  border: 2px solid #F44336; "
+                   "  font-weight: bold; "
+                   "  color: white; "
+                   "  font-size: 8pt; "
+                   "}";
+        
+        default:  // Unknown disposition
+            return "QPushButton { "
+                   "  background-color: #4CAF50; "
+                   "  border: 1px solid #45a049; "
+                   "  font-weight: bold; "
+                   "  color: white; "
+                   "  font-size: 8pt; "
+                   "}";
+    }
+}
+
+// Helper: Get the appropriate button text based on connection state
+QString MatrixWidget::getButtonText(int targetNumber, int sourceNumber) const
+{
+    QPair<int, int> key(targetNumber, sourceNumber);
     if (!m_connections.contains(key)) {
-        btn->setStyleSheet(
-            "QPushButton { "
-            "  background-color: #f5f5f5; "
-            "  border: 1px solid #ccc; "
-            "}"
-        );
-        btn->setText("");
-        return;
+        return "";
     }
     
     const ConnectionState &state = m_connections[key];
-    
     switch (state.disposition) {
-        case 0:
-            btn->setStyleSheet(
-                "QPushButton { "
-                "  background-color: #4CAF50; "
-                "  border: 1px solid #45a049; "
-                "  font-weight: bold; "
-                "  color: white; "
-                "  font-size: 8pt; "
-                "}"
-            );
-            btn->setText("✓");
-            btn->setToolTip("Connected (Tally)");
-            break;
-        
-        case 1:
-            btn->setStyleSheet(
-                "QPushButton { "
-                "  background-color: #FF9800; "
-                "  border: 1px solid #F57C00; "
-                "  font-weight: bold; "
-                "  color: white; "
-                "  font-size: 8pt; "
-                "}"
-            );
-            btn->setText("~");
-            btn->setToolTip("Modified - Change pending confirmation");
-            break;
-        
-        case 2:
-            btn->setStyleSheet(
-                "QPushButton { "
-                "  background-color: #FFC107; "
-                "  border: 1px solid #FFA000; "
-                "  font-weight: bold; "
-                "  color: #333; "
-                "  font-size: 8pt; "
-                "}"
-            );
-            btn->setText("⏳");
-            btn->setToolTip("Pending - Waiting for device");
-            break;
-        
-        case 3:
-            btn->setStyleSheet(
-                "QPushButton { "
-                "  background-color: #4CAF50; "
-                "  border: 2px solid #F44336; "
-                "  font-weight: bold; "
-                "  color: white; "
-                "  font-size: 8pt; "
-                "}"
-            );
-            btn->setText("🔒");
-            btn->setToolTip("Locked - Cannot be changed");
-            btn->setEnabled(false);
-            break;
-        
-        default:
-            btn->setStyleSheet(
-                "QPushButton { "
-                "  background-color: #4CAF50; "
-                "  border: 1px solid #45a049; "
-                "  font-weight: bold; "
-                "  color: white; "
-                "  font-size: 8pt; "
-                "}"
-            );
-            btn->setText("✓");
-            btn->setToolTip(QString("Connected (Unknown disposition: %1)").arg(state.disposition));
-            break;
+        case 0: return "✓";      // Tally
+        case 1: return "~";      // Modified
+        case 2: return "⏳";     // Pending
+        case 3: return "🔒";     // Locked
+        default: return "✓";     // Unknown
+    }
+}
+
+// Helper: Get the appropriate tooltip based on connection state
+QString MatrixWidget::getButtonTooltip(int targetNumber, int sourceNumber) const
+{
+    QPair<int, int> key(targetNumber, sourceNumber);
+    if (!m_connections.contains(key)) {
+        return "";
+    }
+    
+    const ConnectionState &state = m_connections[key];
+    switch (state.disposition) {
+        case 0: return "Connected (Tally)";
+        case 1: return "Modified - Change pending confirmation";
+        case 2: return "Pending - Waiting for device";
+        case 3: return "Locked - Cannot be changed";
+        default: return QString("Connected (Unknown disposition: %1)").arg(state.disposition);
     }
 }
 
@@ -754,69 +847,57 @@ bool MatrixWidget::eventFilter(QObject *watched, QEvent *event)
 
 void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
 {
-    // Clear previous highlight
-    if (m_hoverTargetNumber != -1 && m_hoverSourceNumber != -1) {
+    // Save previous hover position for clearing
+    int prevHoverTargetNumber = m_hoverTargetNumber;
+    int prevHoverSourceNumber = m_hoverSourceNumber;
+    
+    // Clear previous highlight by setting hover state to "none" FIRST
+    // This ensures isButtonHovered() returns false for all buttons during clearing
+    m_hoverTargetNumber = -1;
+    m_hoverSourceNumber = -1;
+    
+    // Now update all previously hovered buttons (they'll get normal, non-hover styling)
+    if (prevHoverTargetNumber != -1 && prevHoverSourceNumber != -1) {
         // Find the column index of the previously hovered target
-        int prevColIdx = m_targetNumbers.indexOf(m_hoverTargetNumber);
+        int prevColIdx = m_targetNumbers.indexOf(prevHoverTargetNumber);
         if (prevColIdx != -1) {
             // Update all buttons to the LEFT of and including the previous column (same row)
             for (int col = 0; col <= prevColIdx; col++) {
                 int tgtNum = m_targetNumbers[col];
-                QPair<int, int> key(tgtNum, m_hoverSourceNumber);
-                if (m_buttons.contains(key)) {
-                    updateConnectionButton(tgtNum, m_hoverSourceNumber);
+                if (m_buttons.contains(QPair<int, int>(tgtNum, prevHoverSourceNumber))) {
+                    updateConnectionButton(tgtNum, prevHoverSourceNumber);
                 }
             }
         }
         
         // Find the row index of the previously hovered source
-        int prevRowIdx = m_sourceNumbers.indexOf(m_hoverSourceNumber);
+        int prevRowIdx = m_sourceNumbers.indexOf(prevHoverSourceNumber);
         if (prevRowIdx != -1) {
             // Update all buttons ABOVE and including the previous row (same column)
             for (int row = 0; row <= prevRowIdx; row++) {
                 int srcNum = m_sourceNumbers[row];
-                QPair<int, int> key(m_hoverTargetNumber, srcNum);
-                if (m_buttons.contains(key)) {
-                    updateConnectionButton(m_hoverTargetNumber, srcNum);
+                if (m_buttons.contains(QPair<int, int>(prevHoverTargetNumber, srcNum))) {
+                    updateConnectionButton(prevHoverTargetNumber, srcNum);
                 }
             }
         }
     }
     
-    // Set new hover position
+    // Set new hover position BEFORE applying highlight
+    // This is critical - the helpers check m_hoverTargetNumber/m_hoverSourceNumber
     m_hoverTargetNumber = targetNumber;
     m_hoverSourceNumber = sourceNumber;
     
-    // Apply new highlight
+    // Apply new highlight by updating all newly hovered buttons
     if (m_hoverTargetNumber != -1 && m_hoverSourceNumber != -1) {
         // Find the column index of the current hovered target
         int colIdx = m_targetNumbers.indexOf(m_hoverTargetNumber);
         if (colIdx != -1) {
-            // Highlight all buttons to the LEFT of and including this column (same row)
+            // Update all buttons to the LEFT of and including this column (same row)
             for (int col = 0; col <= colIdx; col++) {
                 int tgtNum = m_targetNumbers[col];
-                QPair<int, int> key(tgtNum, m_hoverSourceNumber);
-                QPushButton *btn = m_buttons.value(key, nullptr);
-                if (btn) {
-                    bool connected = m_connections.contains(key);
-                    if (connected) {
-                        btn->setStyleSheet(
-                            "QPushButton { "
-                            "  background-color: #66BB6A; "  // Lighter green for hover
-                            "  border: 2px solid #2E7D32; "
-                            "  font-weight: bold; "
-                            "  color: white; "
-                            "  font-size: 8pt; "
-                            "}"
-                        );
-                    } else {
-                        btn->setStyleSheet(
-                            "QPushButton { "
-                            "  background-color: #e0e0e0; "  // Darker gray for hover
-                            "  border: 2px solid #999; "
-                            "}"
-                        );
-                    }
+                if (m_buttons.contains(QPair<int, int>(tgtNum, m_hoverSourceNumber))) {
+                    updateConnectionButton(tgtNum, m_hoverSourceNumber);
                 }
             }
         }
@@ -824,31 +905,11 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
         // Find the row index of the current hovered source
         int rowIdx = m_sourceNumbers.indexOf(m_hoverSourceNumber);
         if (rowIdx != -1) {
-            // Highlight all buttons ABOVE and including this row (same column)
+            // Update all buttons ABOVE and including this row (same column)
             for (int row = 0; row <= rowIdx; row++) {
                 int srcNum = m_sourceNumbers[row];
-                QPair<int, int> key(m_hoverTargetNumber, srcNum);
-                QPushButton *btn = m_buttons.value(key, nullptr);
-                if (btn) {
-                    bool connected = m_connections.contains(key);
-                    if (connected) {
-                        btn->setStyleSheet(
-                            "QPushButton { "
-                            "  background-color: #66BB6A; "  // Lighter green for hover
-                            "  border: 2px solid #2E7D32; "
-                            "  font-weight: bold; "
-                            "  color: white; "
-                            "  font-size: 8pt; "
-                            "}"
-                        );
-                    } else {
-                        btn->setStyleSheet(
-                            "QPushButton { "
-                            "  background-color: #e0e0e0; "  // Darker gray for hover
-                            "  border: 2px solid #999; "
-                            "}"
-                        );
-                    }
+                if (m_buttons.contains(QPair<int, int>(m_hoverTargetNumber, srcNum))) {
+                    updateConnectionButton(m_hoverTargetNumber, srcNum);
                 }
             }
         }

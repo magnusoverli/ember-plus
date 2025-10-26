@@ -96,6 +96,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
     connect(m_connection, &EmberConnection::matrixConnectionReceived, this, &MainWindow::onMatrixConnectionReceived);
     connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
+    connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared);
     connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
     connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
     
@@ -889,6 +890,17 @@ void MainWindow::onMatrixConnectionsCleared(const QString &matrixPath)
     if (matrixWidget) {
         matrixWidget->clearConnections();
         qDebug().noquote() << QString("Connections cleared for matrix %1").arg(matrixPath);
+    }
+}
+
+void MainWindow::onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber)
+{
+    qDebug().noquote() << QString("Clearing connections for target %1 in matrix %2").arg(targetNumber).arg(matrixPath);
+    
+    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
+    if (matrixWidget) {
+        matrixWidget->clearTargetConnections(targetNumber);
+        qDebug().noquote() << QString("Target %1 connections cleared for matrix %2").arg(targetNumber).arg(matrixPath);
     }
 }
 

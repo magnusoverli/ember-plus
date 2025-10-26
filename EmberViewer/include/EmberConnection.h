@@ -103,6 +103,7 @@ signals:
     void matrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label);
     void matrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void matrixConnectionsCleared(const QString &matrixPath);
+    void matrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber);
     void functionReceived(const QString &path, const QString &identifier, const QString &description,
                          const QStringList &argNames, const QList<int> &argTypes,
                          const QStringList &resultNames, const QList<int> &resultTypes);
