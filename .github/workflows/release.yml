@@ -39,6 +39,20 @@ jobs:
           cd deploy
           windeployqt.exe --release --no-translations EmberViewer.exe
       
+      - name: Download and deploy OpenSSL DLLs
+        shell: powershell
+        run: |
+          # Download OpenSSL 1.1.1 DLLs (compatible with Qt 5.15.2)
+          $openssl_url = "https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-1.1.1w.zip"
+          Invoke-WebRequest -Uri $openssl_url -OutFile openssl.zip
+          Expand-Archive -Path openssl.zip -DestinationPath openssl_temp
+          
+          # Copy the x64 DLLs to deploy directory
+          Copy-Item "openssl_temp\openssl-1.1\x64\bin\libssl-1_1-x64.dll" "deploy\"
+          Copy-Item "openssl_temp\openssl-1.1\x64\bin\libcrypto-1_1-x64.dll" "deploy\"
+          
+          Write-Host "OpenSSL DLLs deployed successfully"
+      
       - name: Verify deployed files
         shell: cmd
         run: |
