@@ -208,6 +208,9 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h
 )
 
 target_compile_features(EmberViewerLib
