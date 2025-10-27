@@ -17,6 +17,7 @@
 #include <QProcess>
 #include <QCoreApplication>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QDebug>
 
 LinuxUpdateManager::LinuxUpdateManager(QObject *parent)
