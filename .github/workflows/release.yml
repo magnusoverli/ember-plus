@@ -118,10 +118,15 @@ jobs:
         env:
           EMBERVIEWER_UPDATE_SECRET: ${{ secrets.EMBERVIEWER_UPDATE_SECRET }}
         run: |
+          echo "🚀 Building with $(nproc) CPU cores"
           mkdir build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
-          cmake --build . --config Release
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_CXX_FLAGS="-O3 -march=native -pipe" \
+            -DCMAKE_C_FLAGS="-O3 -march=native -pipe"
+          cmake --build . --config Release -- -j$(nproc)
       
       - name: Install to AppDir
         run: |
