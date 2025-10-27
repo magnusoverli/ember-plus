@@ -162,12 +162,26 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
 {
     qInfo() << "Executing installer:" << installerPath;
 
+    // Verify the installer file exists and is readable
+    QFile installerFile(installerPath);
+    if (!installerFile.exists()) {
+        qWarning() << "Installer file does not exist:" << installerPath;
+        emit installationFinished(false, "Installer file not found.");
+        return;
+    }
+
     // Run installer with /S flag for silent installation
     // Note: NSIS installer will handle the update process
-    bool success = QProcess::startDetached(installerPath, QStringList() << "/S");
+    QProcess process;
+    process.setProgram(installerPath);
+    process.setArguments(QStringList() << "/S");
+    
+    // Start the process detached so it continues after this app exits
+    qint64 pid;
+    bool success = process.startDetached(&pid);
 
     if (success) {
-        qInfo() << "Installer started successfully - exiting application";
+        qInfo() << "Installer started successfully with PID" << pid << "- exiting application";
         emit installationFinished(true, "Installer started. The application will now close.");
         
         // Give the installer a moment to start, then quit
@@ -175,8 +189,8 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
             QCoreApplication::quit();
         });
     } else {
-        qWarning() << "Failed to start installer";
-        emit installationFinished(false, "Failed to start installer.");
+        qWarning() << "Failed to start installer. Error:" << process.errorString();
+        emit installationFinished(false, QString("Failed to start installer: %1").arg(process.errorString()));
     }
 
     // Cleanup will happen when app quits
