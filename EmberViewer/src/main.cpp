@@ -14,6 +14,7 @@
 #include <QStandardPaths>
 #include <QMutex>
 #include <QDebug>
+#include <QIcon>
 #include "MainWindow.h"
 #include "version.h"
 
@@ -104,10 +105,33 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     
+    // Set application metadata
     QApplication::setApplicationName("EmberViewer");
     QApplication::setApplicationVersion(EMBERVIEWER_VERSION_STRING);
     QApplication::setOrganizationName("Magnus Overli");
     QApplication::setOrganizationDomain("github.com/magnusoverli");
+    
+    // Set desktop file name for Wayland (helps window managers find the correct icon)
+    // Must match the desktop file name (without .desktop extension)
+    QApplication::setDesktopFileName("EmberViewer.desktop");
+    
+    // Set application icon (used for window decorations and taskbar)
+    // Try to load from Qt resources first (embedded in binary)
+    QIcon appIcon(":/icon.png");
+    if (!appIcon.isNull() && !appIcon.availableSizes().isEmpty()) {
+        QApplication::setWindowIcon(appIcon);
+        fprintf(stderr, "DEBUG: Application icon loaded from resources. Sizes: %d available\n", appIcon.availableSizes().size());
+    } else {
+        fprintf(stderr, "WARNING: Failed to load application icon from resources (:/icon.png)\n");
+        // Fallback: try to load from system theme (for installed applications)
+        appIcon = QIcon::fromTheme("emberviewer");
+        if (!appIcon.isNull()) {
+            QApplication::setWindowIcon(appIcon);
+            fprintf(stderr, "DEBUG: Application icon loaded from system theme\n");
+        } else {
+            fprintf(stderr, "WARNING: Failed to load application icon from system theme\n");
+        }
+    }
     
     QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
     QDir().mkpath(logDir);

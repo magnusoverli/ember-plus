@@ -49,6 +49,7 @@
 #include <QStandardPaths>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QIcon>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -130,6 +131,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
+    
+    // Explicitly set window icon (especially important for Wayland)
+    // This reinforces the application-level icon for this specific window
+    QIcon windowIcon = QIcon::fromTheme("emberviewer", QIcon(":/icon.png"));
+    setWindowIcon(windowIcon);
     
     // Initialize update manager (platform-specific)
 #ifdef Q_OS_LINUX
