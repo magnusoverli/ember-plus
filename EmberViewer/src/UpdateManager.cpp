@@ -28,6 +28,16 @@ UpdateManager::~UpdateManager()
 
 void UpdateManager::checkForUpdates()
 {
+    // Check if enough time has passed since last check (throttling)
+    if (!canCheckForUpdates()) {
+        qInfo() << "Update check throttled. Please wait before checking again.";
+        emit updateCheckFailed("Please wait a few minutes before checking for updates again.");
+        return;
+    }
+    
+    // Update last check time
+    m_lastCheckTime = QDateTime::currentDateTime();
+    
     // Build GitHub API URL for latest release
     QString apiUrl = QString("%1/repos/%2/%3/releases/latest")
         .arg(GITHUB_API_BASE)
@@ -57,8 +67,17 @@ void UpdateManager::onUpdateCheckFinished()
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
-        QString errorMsg = QString("Network error: %1").arg(reply->errorString());
-        qWarning() << "Update check failed:" << errorMsg;
+        QString errorMsg;
+        
+        // Check for rate limiting
+        if (reply->errorString().contains("rate limit", Qt::CaseInsensitive)) {
+            errorMsg = "GitHub API rate limit exceeded. Please try again later (limit resets hourly).";
+            qWarning() << "Update check failed: GitHub API rate limit exceeded";
+        } else {
+            errorMsg = QString("Network error: %1").arg(reply->errorString());
+            qWarning() << "Update check failed:" << errorMsg;
+        }
+        
         emit updateCheckFailed(errorMsg);
         return;
     }
@@ -169,6 +188,17 @@ void UpdateManager::skipVersion(const QString &version)
 
 void UpdateManager::clearSkippedVersion()
 {
-    m_settings->remove("skippedVersion");
-    m_settings->sync();
+    m_settings->remove("skipped_version");
+}
+
+bool UpdateManager::canCheckForUpdates() const
+{
+    // Allow first check (lastCheckTime will be null/invalid)
+    if (!m_lastCheckTime.isValid()) {
+        return true;
+    }
+    
+    // Check if enough time has passed
+    qint64 secondsSinceLastCheck = m_lastCheckTime.secsTo(QDateTime::currentDateTime());
+    return secondsSinceLastCheck >= MIN_CHECK_INTERVAL_SECONDS;
 }
