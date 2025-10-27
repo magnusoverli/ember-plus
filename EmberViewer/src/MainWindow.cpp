@@ -16,6 +16,9 @@
 #include "EmulatorWindow.h"
 #include "UpdateManager.h"
 #include "UpdateDialog.h"
+#include "ConnectionManager.h"
+#include "ConnectionsTreeWidget.h"
+#include "ImportExportDialog.h"
 #include "version.h"
 
 // Platform-specific update managers
@@ -45,6 +48,7 @@
 #include <QUrl>
 #include <QStandardPaths>
 #include <QFileDialog>
+#include <QInputDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -71,10 +75,17 @@ MainWindow::MainWindow(QWidget *parent)
     , m_updateManager(nullptr)
     , m_updateDialog(nullptr)
     , m_updateStatusLabel(nullptr)
+    , m_connectionManager(nullptr)
+    , m_connectionsTree(nullptr)
     , m_isConnected(false)
     , m_showOidPath(false)
     , m_crosspointsEnabled(false)
 {
+    // Initialize connection manager and load saved connections early
+    // (needed before createDockWindows to integrate into layout properly)
+    m_connectionManager = new ConnectionManager(this);
+    m_connectionManager->loadFromDefaultLocation();
+    
     setupUi();
     setupMenu();
     setupStatusBar();
@@ -349,7 +360,19 @@ void MainWindow::setupMenu()
     
     fileMenu->addSeparator();
     
-    QAction *saveDeviceAction = fileMenu->addAction("&Save Device Snapshot...");
+    QAction *saveConnectionAction = fileMenu->addAction("Save Current &Connection...");
+    saveConnectionAction->setShortcut(QKeySequence("Ctrl+Shift+S"));
+    connect(saveConnectionAction, &QAction::triggered, this, &MainWindow::onSaveCurrentConnection);
+    
+    QAction *importConnectionsAction = fileMenu->addAction("&Import Connections...");
+    connect(importConnectionsAction, &QAction::triggered, this, &MainWindow::onImportConnections);
+    
+    QAction *exportConnectionsAction = fileMenu->addAction("&Export Connections...");
+    connect(exportConnectionsAction, &QAction::triggered, this, &MainWindow::onExportConnections);
+    
+    fileMenu->addSeparator();
+    
+    QAction *saveDeviceAction = fileMenu->addAction("Save &Device Snapshot...");
     saveDeviceAction->setShortcut(QKeySequence("Ctrl+S"));
     connect(saveDeviceAction, &QAction::triggered, this, &MainWindow::onSaveEmberDevice);
     
@@ -476,8 +499,25 @@ void MainWindow::createDockWindows()
     m_mainSplitter->addWidget(m_verticalSplitter);
     m_mainSplitter->addWidget(m_propertyGroup);
     
-    // Set the main splitter as central widget
-    setCentralWidget(m_mainSplitter);
+    // Create connections tree widget (if connection manager is initialized)
+    if (m_connectionManager) {
+        m_connectionsTree = new ConnectionsTreeWidget(m_connectionManager, this);
+        m_connectionsTree->setMinimumWidth(200);
+        m_connectionsTree->setMaximumWidth(300);
+        connect(m_connectionsTree, &ConnectionsTreeWidget::connectionDoubleClicked,
+                this, &MainWindow::onSavedConnectionDoubleClicked);
+        
+        // Create outer splitter with connections tree on the left
+        QSplitter *outerSplitter = new QSplitter(Qt::Horizontal, this);
+        outerSplitter->addWidget(m_connectionsTree);
+        outerSplitter->addWidget(m_mainSplitter);
+        
+        // Set the outer splitter as central widget (only one setCentralWidget call)
+        setCentralWidget(outerSplitter);
+    } else {
+        // Fallback: just use main splitter if connection manager not initialized
+        setCentralWidget(m_mainSplitter);
+    }
 }
 
 void MainWindow::onConnectClicked()
@@ -1782,4 +1822,135 @@ void MainWindow::onUpdateCheckFailed(const QString &errorMessage)
     qWarning() << "Update check failed:" << errorMessage;
     statusBar()->showMessage("Update check failed", 3000);
     m_updateStatusLabel->setVisible(false);
+}
+
+void MainWindow::onSaveCurrentConnection()
+{
+    if (!m_isConnected) {
+        QMessageBox::information(this, "Not Connected", 
+            "Please connect to a device before saving the connection.");
+        return;
+    }
+
+    // Get device name from first root node
+    QString deviceName;
+    if (m_treeWidget->topLevelItemCount() > 0) {
+        QTreeWidgetItem* firstRoot = m_treeWidget->topLevelItem(0);
+        deviceName = firstRoot->text(0);
+    }
+
+    // Fall back to hostname if no device name
+    if (deviceName.isEmpty()) {
+        deviceName = m_hostEdit->text();
+    }
+
+    QString host = m_hostEdit->text();
+    int port = m_portSpin->value();
+
+    // Ask where to save it (which folder)
+    QStringList folderNames;
+    folderNames.append("(Root Level)");  // Option for root
+    
+    QList<ConnectionManager::Folder> folders = m_connectionManager->getAllFolders();
+    QMap<QString, QString> folderNameToId;  // name -> id
+    folderNameToId["(Root Level)"] = QString();  // Empty string = root
+    
+    for (const ConnectionManager::Folder &folder : folders) {
+        folderNames.append(folder.name);
+        folderNameToId[folder.name] = folder.id;
+    }
+
+    bool ok;
+    QString selectedFolder = QInputDialog::getItem(this, "Save Connection", 
+        "Choose folder to save connection in:", folderNames, 0, false, &ok);
+
+    if (ok) {
+        QString folderId = folderNameToId[selectedFolder];
+        m_connectionManager->addConnection(deviceName, host, port, folderId);
+        m_connectionManager->saveToDefaultLocation();
+        
+        qInfo() << "Saved connection:" << deviceName << "(" << host << ":" << port << ")";
+        QMessageBox::information(this, "Connection Saved", 
+            QString("Connection '%1' saved successfully.").arg(deviceName));
+    }
+}
+
+void MainWindow::onImportConnections()
+{
+    QString fileName = QFileDialog::getOpenFileName(
+        this,
+        "Import Connections",
+        QString(),
+        "JSON Files (*.json);;All Files (*)"
+    );
+
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    // Ask merge or replace
+    ImportExportDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        bool merge = dialog.shouldMerge();
+        
+        if (m_connectionManager->importConnections(fileName, merge)) {
+            m_connectionManager->saveToDefaultLocation();
+            QMessageBox::information(this, "Import Successful", 
+                QString("Connections imported successfully (%1).").arg(merge ? "merged" : "replaced"));
+        } else {
+            QMessageBox::critical(this, "Import Failed", 
+                "Failed to import connections. Please check the file format.");
+        }
+    }
+}
+
+void MainWindow::onExportConnections()
+{
+    QString fileName = QFileDialog::getSaveFileName(
+        this,
+        "Export Connections",
+        "connections.json",
+        "JSON Files (*.json);;All Files (*)"
+    );
+
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    if (m_connectionManager->exportConnections(fileName)) {
+        QMessageBox::information(this, "Export Successful", 
+            QString("Connections exported successfully to:\n%1").arg(fileName));
+    } else {
+        QMessageBox::critical(this, "Export Failed", 
+            "Failed to export connections.");
+    }
+}
+
+void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QString &host, int port)
+{
+    // Check if already connected
+    if (m_isConnected) {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, 
+            "Already Connected",
+            QString("You are currently connected to %1:%2.\n\nDo you want to disconnect and connect to '%3'?")
+                .arg(m_hostEdit->text())
+                .arg(m_portSpin->value())
+                .arg(name),
+            QMessageBox::Yes | QMessageBox::No);
+        
+        if (reply == QMessageBox::No) {
+            return;
+        }
+        
+        // Disconnect first
+        m_connection->disconnect();
+    }
+
+    // Set connection parameters
+    m_hostEdit->setText(host);
+    m_portSpin->setValue(port);
+
+    // Connect
+    qInfo() << "Connecting to saved connection:" << name << "(" << host << ":" << port << ")";
+    onConnectClicked();
 }

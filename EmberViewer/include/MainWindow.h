@@ -33,6 +33,8 @@ class MatrixWidget;
 class DeviceSnapshot;
 class EmulatorWindow;
 class UpdateDialog;
+class ConnectionManager;
+class ConnectionsTreeWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -78,6 +80,10 @@ private slots:
     void onUpdateAvailable(const UpdateManager::UpdateInfo &updateInfo);
     void onNoUpdateAvailable();
     void onUpdateCheckFailed(const QString &errorMessage);
+    void onSaveCurrentConnection();
+    void onImportConnections();
+    void onExportConnections();
+    void onSavedConnectionDoubleClicked(const QString &name, const QString &host, int port);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -164,6 +170,10 @@ private:
     UpdateManager *m_updateManager;
     UpdateDialog *m_updateDialog;
     QLabel *m_updateStatusLabel;
+    
+    // Saved connections
+    ConnectionManager *m_connectionManager;
+    ConnectionsTreeWidget *m_connectionsTree;
 
 public:
     // Constants
