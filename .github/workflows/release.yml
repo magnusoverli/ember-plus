@@ -142,18 +142,36 @@ jobs:
             exit 1
           fi
       
+      - name: Generate zsync file for AppImage updates
+        run: |
+          sudo apt-get install -y zsync
+          cd build
+          APPIMAGE_FILE="EmberViewer-${{ github.ref_name }}-x86_64.AppImage"
+          if [ -f "$APPIMAGE_FILE" ]; then
+            echo "Generating zsync file for $APPIMAGE_FILE"
+            zsyncmake "$APPIMAGE_FILE" -o "${APPIMAGE_FILE}.zsync"
+            ls -lh "${APPIMAGE_FILE}.zsync"
+          else
+            echo "ERROR: AppImage not found for zsync generation"
+            exit 1
+          fi
+      
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: EmberViewer-Linux-AppImage
-          path: build/EmberViewer-*.AppImage
+          path: |
+            build/EmberViewer-*.AppImage
+            build/EmberViewer-*.AppImage.zsync
           retention-days: 30
       
       - name: Add AppImage to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: build/EmberViewer-*.AppImage
+          files: |
+            build/EmberViewer-*.AppImage
+            build/EmberViewer-*.AppImage.zsync
           draft: false
           prerelease: false
         env:
