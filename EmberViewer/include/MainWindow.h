@@ -30,6 +30,8 @@ class EmberConnection;
 class MatrixWidget;
 class DeviceSnapshot;
 class EmulatorWindow;
+class UpdateManager;
+class UpdateDialog;
 
 class MainWindow : public QMainWindow
 {
@@ -71,6 +73,10 @@ private slots:
     void onActivityTimerTick();
     void onSaveEmberDevice();
     void onOpenEmulator();
+    void onCheckForUpdates();
+    void onUpdateAvailable(const UpdateManager::UpdateInfo &updateInfo);
+    void onNoUpdateAvailable();
+    void onUpdateCheckFailed(const QString &errorMessage);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -152,6 +158,11 @@ private:
     
     // Emulator window
     EmulatorWindow *m_emulatorWindow;
+    
+    // Update system
+    UpdateManager *m_updateManager;
+    UpdateDialog *m_updateDialog;
+    QLabel *m_updateStatusLabel;
 
 public:
     // Constants

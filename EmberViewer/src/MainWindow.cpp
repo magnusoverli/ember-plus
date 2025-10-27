@@ -14,7 +14,18 @@
 #include "FunctionInvocationDialog.h"
 #include "DeviceSnapshot.h"
 #include "EmulatorWindow.h"
+#include "UpdateManager.h"
+#include "UpdateDialog.h"
 #include "version.h"
+
+// Platform-specific update managers
+#ifdef Q_OS_LINUX
+#include "LinuxUpdateManager.h"
+#elif defined(Q_OS_WIN)
+#include "WindowsUpdateManager.h"
+#elif defined(Q_OS_MACOS)
+#include "MacUpdateManager.h"
+#endif
 #include <QMenuBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -57,6 +68,9 @@ MainWindow::MainWindow(QWidget *parent)
     , m_activityTimeRemaining(0)
     , m_crosspointsStatusLabel(nullptr)
     , m_emulatorWindow(nullptr)
+    , m_updateManager(nullptr)
+    , m_updateDialog(nullptr)
+    , m_updateStatusLabel(nullptr)
     , m_isConnected(false)
     , m_showOidPath(false)
     , m_crosspointsEnabled(false)
@@ -105,6 +119,27 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
+    
+    // Initialize update manager (platform-specific)
+#ifdef Q_OS_LINUX
+    m_updateManager = new LinuxUpdateManager(this);
+#elif defined(Q_OS_WIN)
+    m_updateManager = new WindowsUpdateManager(this);
+#elif defined(Q_OS_MACOS)
+    m_updateManager = new MacUpdateManager(this);
+#endif
+
+    if (m_updateManager) {
+        connect(m_updateManager, &UpdateManager::updateAvailable, 
+                this, &MainWindow::onUpdateAvailable);
+        connect(m_updateManager, &UpdateManager::noUpdateAvailable, 
+                this, &MainWindow::onNoUpdateAvailable);
+        connect(m_updateManager, &UpdateManager::updateCheckFailed, 
+                this, &MainWindow::onUpdateCheckFailed);
+        
+        // Auto-check for updates on launch (2 second delay)
+        QTimer::singleShot(2000, this, &MainWindow::onCheckForUpdates);
+    }
     
     // Set default window size (1300x700) - will be overridden by saved settings if they exist
     resize(1300, 700);
@@ -158,6 +193,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             type == QEvent::Wheel) {
             resetActivityTimer();
         }
+    }
+    
+    // Handle click on update status label
+    if (watched == m_updateStatusLabel && event->type() == QEvent::MouseButtonPress) {
+        if (m_updateDialog) {
+            m_updateDialog->show();
+            m_updateDialog->raise();
+            m_updateDialog->activateWindow();
+        }
+        return true;
     }
     
     return QMainWindow::eventFilter(watched, event);
@@ -341,6 +386,11 @@ void MainWindow::setupMenu()
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
     
+    QAction *checkUpdatesAction = helpMenu->addAction("Check for &Updates...");
+    connect(checkUpdatesAction, &QAction::triggered, this, &MainWindow::onCheckForUpdates);
+    
+    helpMenu->addSeparator();
+    
     QAction *aboutAction = helpMenu->addAction("&About");
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, "About EmberViewer",
@@ -372,6 +422,14 @@ void MainWindow::setupStatusBar()
     m_crosspointsStatusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #c62828; font-weight: bold; }");
     m_crosspointsStatusLabel->setVisible(false);
     statusBar()->addPermanentWidget(m_crosspointsStatusLabel);
+    
+    // Add update status label (initially hidden)
+    m_updateStatusLabel = new QLabel("");
+    m_updateStatusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #1976d2; cursor: pointer; }");
+    m_updateStatusLabel->setVisible(false);
+    m_updateStatusLabel->setCursor(Qt::PointingHandCursor);
+    m_updateStatusLabel->installEventFilter(this);
+    statusBar()->addPermanentWidget(m_updateStatusLabel);
     
     // Add toggle checkbox for path display mode
     QCheckBox *pathToggle = new QCheckBox("Show OID Path");
@@ -1644,4 +1702,84 @@ void MainWindow::onOpenEmulator()
     m_emulatorWindow->show();
     m_emulatorWindow->raise();
     m_emulatorWindow->activateWindow();
+}
+
+void MainWindow::onCheckForUpdates()
+{
+    if (!m_updateManager) {
+        qWarning() << "Update manager not available on this platform";
+        QMessageBox::information(this, "Updates Not Available",
+            "Automatic updates are not available on this platform.\n"
+            "Please check for updates manually on GitHub.");
+        return;
+    }
+
+    qInfo() << "Checking for updates...";
+    statusBar()->showMessage("Checking for updates...", 3000);
+    m_updateManager->checkForUpdates();
+}
+
+void MainWindow::onUpdateAvailable(const UpdateManager::UpdateInfo &updateInfo)
+{
+    qInfo() << "Update available:" << updateInfo.version;
+    
+    // Show notification in status bar
+    m_updateStatusLabel->setText(QString("⬇ Update to v%1 available - Click to install").arg(updateInfo.version));
+    m_updateStatusLabel->setVisible(true);
+    
+    // Create update dialog (don't show immediately, user can click status bar)
+    if (m_updateDialog) {
+        delete m_updateDialog;
+    }
+    
+    m_updateDialog = new UpdateDialog(updateInfo, this);
+    
+    // Connect update dialog signals
+    connect(m_updateDialog, &UpdateDialog::updateNowClicked, this, [this, updateInfo]() {
+        qInfo() << "User chose to update now";
+        m_updateManager->installUpdate(updateInfo);
+    });
+    
+    connect(m_updateDialog, &UpdateDialog::remindLaterClicked, this, [this]() {
+        qInfo() << "User chose to be reminded later";
+        m_updateStatusLabel->setVisible(true);
+    });
+    
+    connect(m_updateDialog, &UpdateDialog::skipVersionClicked, this, [this, updateInfo]() {
+        qInfo() << "User chose to skip version:" << updateInfo.version;
+        m_updateManager->skipVersion(updateInfo.version);
+        m_updateStatusLabel->setVisible(false);
+    });
+    
+    // Connect installation progress signals
+    connect(m_updateManager, &UpdateManager::downloadProgress, m_updateDialog, &UpdateDialog::setDownloadProgress);
+    connect(m_updateManager, &UpdateManager::installationStarted, this, [this]() {
+        qInfo() << "Installation started";
+    });
+    connect(m_updateManager, &UpdateManager::installationFinished, this, [this](bool success, const QString &message) {
+        if (m_updateDialog) {
+            m_updateDialog->setInstallationStatus(message);
+        }
+        
+        if (!success) {
+            QMessageBox::warning(this, "Update Failed", message);
+        }
+    });
+    
+    // Show dialog immediately (auto-check scenario)
+    m_updateDialog->show();
+}
+
+void MainWindow::onNoUpdateAvailable()
+{
+    qInfo() << "No update available";
+    statusBar()->showMessage("You are running the latest version", 3000);
+    m_updateStatusLabel->setVisible(false);
+}
+
+void MainWindow::onUpdateCheckFailed(const QString &errorMessage)
+{
+    qWarning() << "Update check failed:" << errorMessage;
+    statusBar()->showMessage("Update check failed", 3000);
+    m_updateStatusLabel->setVisible(false);
 }
