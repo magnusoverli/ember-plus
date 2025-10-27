@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QCoreApplication>
+#include <QTimer>
 #include <QDebug>
 
 WindowsUpdateManager::WindowsUpdateManager(QObject *parent)

@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QCoreApplication>
+#include <QTimer>
 #include <QDebug>
 #include <QDir>
 
