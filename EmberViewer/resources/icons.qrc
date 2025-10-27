@@ -5,6 +5,6 @@
         <file>lock-open.png</file>
         <file>lock-closed.svg</file>
         <file>lock-open.svg</file>
-        <file>icon.svg</file>
+        <file>icon.png</file>
     </qresource>
 </RCC>
