@@ -1,6 +1,6 @@
 
 ################################### Metadata ###################################
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 
 # Detect if we are invoked as the top level

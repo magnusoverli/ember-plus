@@ -3,7 +3,7 @@ project(ember_slim)
 
 
 ################################### Metadata ###################################
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 # Enable sane rpath handling on macOS
 cmake_policy(SET CMP0042 NEW)
