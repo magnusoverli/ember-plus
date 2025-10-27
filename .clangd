@@ -1,0 +1,11 @@
+CompileFlags:
+  Add:
+    - -ferror-limit=0
+  CompilationDatabase: build
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  
+Index:
+  Background: Build
