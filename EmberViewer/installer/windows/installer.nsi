@@ -21,6 +21,12 @@ RequestExecutionLevel admin
 ; Insert macros
 !insertmacro GetSize
 
+; Icon settings
+!define MUI_ICON "..\..\resources\icon.ico"
+!define MUI_UNICON "..\..\resources\icon.ico"
+Icon "..\..\resources\icon.ico"
+UninstallIcon "..\..\resources\icon.ico"
+
 ; MUI Settings
 !define MUI_ABORTWARNING
 
@@ -57,9 +63,9 @@ Section "Install"
     
     ; Create shortcuts
     CreateDirectory "$SMPROGRAMS\${APPNAME}"
-    CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\EmberViewer.exe"
-    CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
-    CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\EmberViewer.exe"
+    CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\EmberViewer.exe" "" "$INSTDIR\EmberViewer.exe" 0
+    CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
+    CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\EmberViewer.exe" "" "$INSTDIR\EmberViewer.exe" 0
     
     ; Write uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -70,6 +76,7 @@ Section "Install"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "${COMPANYNAME}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${VERSIONMAJOR}.${VERSIONMINOR}.${VERSIONBUILD}"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\EmberViewer.exe"
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoModify" 1
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoRepair" 1
     
