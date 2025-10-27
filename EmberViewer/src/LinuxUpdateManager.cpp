@@ -224,48 +224,54 @@ bool LinuxUpdateManager::replaceAppImage(const QString &newAppImagePath)
 
     QFileInfo currentInfo(m_currentAppImagePath);
     QString backupPath = m_currentAppImagePath + ".backup";
+    QString tempPath = m_currentAppImagePath + ".new";
 
-    // Create backup of current AppImage
+    // Remove any existing backup
     if (QFile::exists(backupPath)) {
         QFile::remove(backupPath);
     }
 
-    if (!QFile::copy(m_currentAppImagePath, backupPath)) {
-        qWarning() << "Failed to create backup of current AppImage";
+    // Remove any existing .new file
+    if (QFile::exists(tempPath)) {
+        QFile::remove(tempPath);
+    }
+
+    // Copy new AppImage to temporary location first
+    qInfo() << "Copying new AppImage to temporary location:" << tempPath;
+    if (!QFile::copy(newAppImagePath, tempPath)) {
+        qWarning() << "Failed to copy new AppImage to temporary location";
+        return false;
+    }
+
+    // Ensure new AppImage has executable permissions
+    QFile::setPermissions(tempPath,
+        QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
+        QFile::ReadGroup | QFile::ExeGroup |
+        QFile::ReadOther | QFile::ExeOther);
+
+    // Rename current AppImage to backup (atomic operation, works even if file is running)
+    qInfo() << "Creating backup by renaming current AppImage";
+    if (!QFile::rename(m_currentAppImagePath, backupPath)) {
+        qWarning() << "Failed to rename current AppImage to backup";
+        QFile::remove(tempPath);
         return false;
     }
 
     qInfo() << "Created backup:" << backupPath;
 
-    // Remove current AppImage
-    if (!QFile::remove(m_currentAppImagePath)) {
-        qWarning() << "Failed to remove current AppImage";
+    // Rename new AppImage to current location (atomic operation)
+    qInfo() << "Installing new AppImage";
+    if (!QFile::rename(tempPath, m_currentAppImagePath)) {
+        qWarning() << "Failed to rename new AppImage to current location";
         // Restore from backup
-        QFile::copy(backupPath, m_currentAppImagePath);
-        QFile::remove(backupPath);
+        QFile::rename(backupPath, m_currentAppImagePath);
+        QFile::remove(tempPath);
         return false;
     }
-
-    // Copy new AppImage to current location
-    if (!QFile::copy(newAppImagePath, m_currentAppImagePath)) {
-        qWarning() << "Failed to copy new AppImage";
-        // Restore from backup
-        QFile::copy(backupPath, m_currentAppImagePath);
-        QFile::remove(backupPath);
-        return false;
-    }
-
-    // Ensure executable permissions
-    QFile::setPermissions(m_currentAppImagePath,
-        QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
-        QFile::ReadGroup | QFile::ExeGroup |
-        QFile::ReadOther | QFile::ExeOther);
 
     qInfo() << "Successfully replaced AppImage";
 
-    // Remove backup (keep it for now in case restart fails)
-    // QFile::remove(backupPath);
-
+    // Keep backup in case restart fails
     return true;
 }
 
