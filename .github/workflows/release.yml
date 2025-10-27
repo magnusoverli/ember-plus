@@ -96,7 +96,7 @@ jobs:
 
   release-linux:
     name: Linux AppImage
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     
     steps:
       - name: Checkout code
