@@ -272,9 +272,36 @@ void LinuxUpdateManager::restartApplication()
 {
     qInfo() << "Restarting application from:" << m_currentAppImagePath;
 
-    // Start new instance
-    QProcess::startDetached(m_currentAppImagePath, QStringList());
+    // Verify the AppImage still exists and is executable
+    QFileInfo appImageInfo(m_currentAppImagePath);
+    if (!appImageInfo.exists()) {
+        qCritical() << "AppImage does not exist:" << m_currentAppImagePath;
+        emit installationFinished(false, 
+            "Failed to restart: Updated AppImage not found.\n"
+            "Please launch the application manually from:\n" + m_currentAppImagePath);
+        return;
+    }
 
-    // Exit current instance
-    QCoreApplication::quit();
+    if (!appImageInfo.isExecutable()) {
+        qCritical() << "AppImage is not executable:" << m_currentAppImagePath;
+        emit installationFinished(false, 
+            "Failed to restart: Updated AppImage is not executable.\n"
+            "Please check file permissions and launch manually.");
+        return;
+    }
+
+    // Start new instance
+    qInfo() << "Launching new instance...";
+    bool success = QProcess::startDetached(m_currentAppImagePath, QStringList());
+
+    if (success) {
+        qInfo() << "Successfully launched new instance - exiting current instance";
+        // Exit current instance
+        QCoreApplication::quit();
+    } else {
+        qCritical() << "Failed to launch new instance with QProcess::startDetached()";
+        emit installationFinished(false, 
+            "Update installed successfully, but failed to restart automatically.\n"
+            "Please close this window and launch the application manually from:\n" + m_currentAppImagePath);
+    }
 }

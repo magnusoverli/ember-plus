@@ -300,9 +300,27 @@ void MacUpdateManager::restartApplication()
     // Get path to the new app bundle
     QString appPath = "/Applications/EmberViewer.app";
 
-    // Start new instance using open command
-    QProcess::startDetached("open", QStringList() << appPath);
+    // Verify the app bundle exists
+    if (!QDir(appPath).exists()) {
+        qCritical() << "Application bundle does not exist:" << appPath;
+        emit installationFinished(false, 
+            "Failed to restart: Application bundle not found.\n"
+            "Please launch EmberViewer manually from Applications folder.");
+        return;
+    }
 
-    // Exit current instance
-    QCoreApplication::quit();
+    // Start new instance using open command
+    qInfo() << "Launching new instance...";
+    bool success = QProcess::startDetached("open", QStringList() << appPath);
+
+    if (success) {
+        qInfo() << "Successfully launched new instance - exiting current instance";
+        // Exit current instance
+        QCoreApplication::quit();
+    } else {
+        qCritical() << "Failed to launch new instance with open command";
+        emit installationFinished(false, 
+            "Update installed successfully, but failed to restart automatically.\n"
+            "Please close this window and launch EmberViewer from Applications folder.");
+    }
 }
