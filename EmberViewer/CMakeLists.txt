@@ -1,5 +1,5 @@
 ################################### Metadata ###################################
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 # Enable sane rpath handling on macOS
 cmake_policy(SET CMP0042 NEW)
@@ -301,7 +301,9 @@ target_link_libraries(${PROJECT_NAME}
 # Platform-specific settings
 if(WIN32)
     # Windows: Add application icon
-    # target_sources(${PROJECT_NAME} PRIVATE resources/app.rc)
+    target_sources(${PROJECT_NAME} PRIVATE resources/app.rc)
+    # Ensure RC file can find the icon
+    set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I${CMAKE_CURRENT_SOURCE_DIR}/resources")
 endif()
 
 if(APPLE)
@@ -358,6 +360,31 @@ if(WIN32)
             COMMAND ${WINDEPLOYQT_EXECUTABLE} $<TARGET_FILE:${PROJECT_NAME}>
         )
     endif()
+    
+    # Install icon for Windows
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+# Linux: Install desktop file and icon
+if(UNIX AND NOT APPLE)
+    # Install desktop file
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/EmberViewer.desktop
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications
+    )
+    
+    # Install icon in standard location
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps
+        RENAME emberviewer.png
+    )
+    
+    # Also install to pixmaps for older systems
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pixmaps
+        RENAME emberviewer.png
+    )
 endif()
 
 
