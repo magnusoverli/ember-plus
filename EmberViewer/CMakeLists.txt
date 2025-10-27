@@ -183,6 +183,11 @@ add_library(EmberViewerLib STATIC
     src/UpdateManager.cpp
     src/UpdateDialog.cpp
     ${PLATFORM_UPDATE_SOURCES}
+    include/MatrixWidget.h
+    include/ParameterDelegate.h
+    include/DeviceSnapshot.h
+    include/UpdateManager.h
+    include/UpdateDialog.h
 )
 
 # Make sure version is updated before building library
@@ -203,6 +208,11 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/MatrixWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/ParameterDelegate.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/DeviceSnapshot.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateDialog.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h
