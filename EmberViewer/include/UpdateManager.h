@@ -48,6 +48,9 @@ public:
     // Get current application version
     static QString getCurrentVersion();
 
+    // Skip a specific version (user doesn't want to be notified about it)
+    void skipVersion(const QString &version);
+
 signals:
     // Emitted when update check completes
     void updateAvailable(const UpdateInfo &updateInfo);
@@ -76,7 +79,6 @@ protected:
 
     // Check if a version should be skipped
     bool isVersionSkipped(const QString &version) const;
-    void skipVersion(const QString &version);
     void clearSkippedVersion();
 
 private slots:
