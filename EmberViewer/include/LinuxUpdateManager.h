@@ -38,13 +38,14 @@ private slots:
 private:
     bool isRunningFromAppImage() const;
     QString getCurrentAppImagePath() const;
-    bool replaceAppImage(const QString &newAppImagePath);
+    bool installAppImage(const QString &newAppImagePath);
     void restartApplication();
 
     QTemporaryDir *m_tempDir;
     QFile *m_downloadFile;
     QNetworkReply *m_downloadReply;
     QString m_currentAppImagePath;
+    QString m_newAppImagePath;  // Path to newly installed AppImage
 };
 
 #endif // LINUXUPDATEMANAGER_H

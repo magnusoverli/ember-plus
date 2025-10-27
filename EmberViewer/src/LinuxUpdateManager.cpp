@@ -26,6 +26,7 @@ LinuxUpdateManager::LinuxUpdateManager(QObject *parent)
     , m_tempDir(nullptr)
     , m_downloadFile(nullptr)
     , m_downloadReply(nullptr)
+    , m_newAppImagePath("")
 {
     m_currentAppImagePath = getCurrentAppImagePath();
 }
@@ -168,8 +169,8 @@ void LinuxUpdateManager::onDownloadFinished()
         QFile::ReadGroup | QFile::ExeGroup |
         QFile::ReadOther | QFile::ExeOther);
 
-    // Replace the current AppImage
-    bool success = replaceAppImage(downloadPath);
+    // Install the new AppImage (in same directory as current, with new version name)
+    bool success = installAppImage(downloadPath);
 
     m_downloadReply->deleteLater();
     m_downloadReply = nullptr;
@@ -183,7 +184,7 @@ void LinuxUpdateManager::onDownloadFinished()
         // Restart the application with a small delay
         QTimer::singleShot(1000, this, &LinuxUpdateManager::restartApplication);
     } else {
-        qWarning() << "Failed to replace AppImage";
+        qWarning() << "Failed to install AppImage";
         emit installationFinished(false, "Failed to install update.");
         delete m_tempDir;
         m_tempDir = nullptr;
@@ -215,129 +216,86 @@ QString LinuxUpdateManager::getCurrentAppImagePath() const
     return appImagePath;
 }
 
-bool LinuxUpdateManager::replaceAppImage(const QString &newAppImagePath)
+bool LinuxUpdateManager::installAppImage(const QString &newAppImagePath)
 {
     if (m_currentAppImagePath.isEmpty()) {
         qWarning() << "Current AppImage path is empty";
         return false;
     }
 
+    // Get directory of current AppImage
     QFileInfo currentInfo(m_currentAppImagePath);
-    QString backupPath = m_currentAppImagePath + ".backup";
-    QString tempPath = m_currentAppImagePath + ".new";
-
-    // Remove any existing backup
-    if (QFile::exists(backupPath)) {
-        QFile::remove(backupPath);
+    QString targetDir = currentInfo.absolutePath();
+    
+    // Get the new AppImage filename from the download (e.g., "EmberViewer-v0.3.13-x86_64.AppImage")
+    QFileInfo newInfo(newAppImagePath);
+    QString newFileName = newInfo.fileName();
+    
+    // Full path to install new AppImage in same directory
+    m_newAppImagePath = targetDir + "/" + newFileName;
+    
+    qInfo() << "Installing new AppImage to:" << m_newAppImagePath;
+    
+    // Remove any existing file with the same name
+    if (QFile::exists(m_newAppImagePath)) {
+        qInfo() << "Removing existing AppImage:" << m_newAppImagePath;
+        if (!QFile::remove(m_newAppImagePath)) {
+            qWarning() << "Failed to remove existing AppImage";
+            return false;
+        }
     }
-
-    // Remove any existing .new file
-    if (QFile::exists(tempPath)) {
-        QFile::remove(tempPath);
-    }
-
-    // Copy new AppImage to temporary location first
-    qInfo() << "Copying new AppImage to temporary location:" << tempPath;
-    if (!QFile::copy(newAppImagePath, tempPath)) {
-        qWarning() << "Failed to copy new AppImage to temporary location";
+    
+    // Copy new AppImage to target location
+    if (!QFile::copy(newAppImagePath, m_newAppImagePath)) {
+        qWarning() << "Failed to copy new AppImage to" << m_newAppImagePath;
         return false;
     }
-
+    
     // Ensure new AppImage has executable permissions
-    QFile::setPermissions(tempPath,
+    QFile::setPermissions(m_newAppImagePath,
         QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
         QFile::ReadGroup | QFile::ExeGroup |
         QFile::ReadOther | QFile::ExeOther);
-
-    // Rename current AppImage to backup (atomic operation, works even if file is running)
-    qInfo() << "Creating backup by renaming current AppImage";
-    if (!QFile::rename(m_currentAppImagePath, backupPath)) {
-        qWarning() << "Failed to rename current AppImage to backup";
-        QFile::remove(tempPath);
-        return false;
-    }
-
-    qInfo() << "Created backup:" << backupPath;
-
-    // Rename new AppImage to current location (atomic operation)
-    qInfo() << "Installing new AppImage";
-    if (!QFile::rename(tempPath, m_currentAppImagePath)) {
-        qWarning() << "Failed to rename new AppImage to current location";
-        // Restore from backup
-        QFile::rename(backupPath, m_currentAppImagePath);
-        QFile::remove(tempPath);
-        return false;
-    }
-
-    qInfo() << "Successfully replaced AppImage";
-
-    // Keep backup in case restart fails
+    
+    qInfo() << "Successfully installed new AppImage";
+    
     return true;
 }
 
 void LinuxUpdateManager::restartApplication()
 {
-    qInfo() << "Restarting application from:" << m_currentAppImagePath;
+    qInfo() << "Restarting application from:" << m_newAppImagePath;
 
-    // Verify the AppImage still exists and is executable
-    QFileInfo appImageInfo(m_currentAppImagePath);
+    // Verify the new AppImage exists and is executable
+    QFileInfo appImageInfo(m_newAppImagePath);
     if (!appImageInfo.exists()) {
-        qCritical() << "AppImage does not exist:" << m_currentAppImagePath;
+        qCritical() << "New AppImage does not exist:" << m_newAppImagePath;
         emit installationFinished(false, 
             "Failed to restart: Updated AppImage not found.\n"
-            "Please launch the application manually from:\n" + m_currentAppImagePath);
+            "Please launch the application manually from:\n" + m_newAppImagePath);
         return;
     }
 
     if (!appImageInfo.isExecutable()) {
-        qCritical() << "AppImage is not executable:" << m_currentAppImagePath;
+        qCritical() << "New AppImage is not executable:" << m_newAppImagePath;
         emit installationFinished(false, 
             "Failed to restart: Updated AppImage is not executable.\n"
             "Please check file permissions and launch manually.");
         return;
     }
 
-    // Create a helper script to wait for this process to exit, then launch the new AppImage
-    // This is necessary because on Linux you cannot execute a file that's being replaced
-    QString scriptPath = "/tmp/emberviewer-restart-" + QString::number(QCoreApplication::applicationPid()) + ".sh";
-    QFile scriptFile(scriptPath);
-    
-    if (!scriptFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qCritical() << "Failed to create restart helper script:" << scriptPath;
-        emit installationFinished(false, 
-            "Update installed successfully, but failed to create restart script.\n"
-            "Please close this window and launch the application manually from:\n" + m_currentAppImagePath);
-        return;
-    }
-
-    // Write script that waits for current process to exit, then launches new AppImage
-    QTextStream out(&scriptFile);
-    out << "#!/bin/bash\n";
-    out << "# Auto-generated restart helper script\n";
-    out << "sleep 1\n";  // Give the old process time to fully exit
-    out << "\"" << m_currentAppImagePath << "\" &\n";  // Launch new AppImage in background
-    out << "rm -f \"$0\"\n";  // Remove this script after execution
-    scriptFile.close();
-
-    // Make script executable
-    QFile::setPermissions(scriptPath, 
-        QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
-
-    qInfo() << "Created restart helper script:" << scriptPath;
-
-    // Start the helper script in detached mode
-    qInfo() << "Launching restart helper script...";
-    bool success = QProcess::startDetached("/bin/bash", QStringList() << scriptPath);
+    // Launch the new AppImage directly (no helper script needed!)
+    qInfo() << "Launching new AppImage...";
+    bool success = QProcess::startDetached(m_newAppImagePath, QStringList());
 
     if (success) {
-        qInfo() << "Successfully launched restart helper - exiting current instance";
-        // Exit current instance - the script will launch the new one
+        qInfo() << "Successfully launched new AppImage - exiting current instance";
+        // Exit current instance - the new version is now running
         QCoreApplication::quit();
     } else {
-        qCritical() << "Failed to launch restart helper script";
-        QFile::remove(scriptPath);
+        qCritical() << "Failed to launch new AppImage";
         emit installationFinished(false, 
             "Update installed successfully, but failed to restart automatically.\n"
-            "Please close this window and launch the application manually from:\n" + m_currentAppImagePath);
+            "Please close this window and launch the application manually from:\n" + m_newAppImagePath);
     }
 }
