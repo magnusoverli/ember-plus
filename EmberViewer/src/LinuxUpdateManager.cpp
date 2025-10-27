@@ -19,6 +19,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QDebug>
+#include <QTextStream>
 
 LinuxUpdateManager::LinuxUpdateManager(QObject *parent)
     : UpdateManager(parent)
@@ -290,16 +291,45 @@ void LinuxUpdateManager::restartApplication()
         return;
     }
 
-    // Start new instance
-    qInfo() << "Launching new instance...";
-    bool success = QProcess::startDetached(m_currentAppImagePath, QStringList());
+    // Create a helper script to wait for this process to exit, then launch the new AppImage
+    // This is necessary because on Linux you cannot execute a file that's being replaced
+    QString scriptPath = "/tmp/emberviewer-restart-" + QString::number(QCoreApplication::applicationPid()) + ".sh";
+    QFile scriptFile(scriptPath);
+    
+    if (!scriptFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qCritical() << "Failed to create restart helper script:" << scriptPath;
+        emit installationFinished(false, 
+            "Update installed successfully, but failed to create restart script.\n"
+            "Please close this window and launch the application manually from:\n" + m_currentAppImagePath);
+        return;
+    }
+
+    // Write script that waits for current process to exit, then launches new AppImage
+    QTextStream out(&scriptFile);
+    out << "#!/bin/bash\n";
+    out << "# Auto-generated restart helper script\n";
+    out << "sleep 1\n";  // Give the old process time to fully exit
+    out << "\"" << m_currentAppImagePath << "\" &\n";  // Launch new AppImage in background
+    out << "rm -f \"$0\"\n";  // Remove this script after execution
+    scriptFile.close();
+
+    // Make script executable
+    QFile::setPermissions(scriptPath, 
+        QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+
+    qInfo() << "Created restart helper script:" << scriptPath;
+
+    // Start the helper script in detached mode
+    qInfo() << "Launching restart helper script...";
+    bool success = QProcess::startDetached("/bin/bash", QStringList() << scriptPath);
 
     if (success) {
-        qInfo() << "Successfully launched new instance - exiting current instance";
-        // Exit current instance
+        qInfo() << "Successfully launched restart helper - exiting current instance";
+        // Exit current instance - the script will launch the new one
         QCoreApplication::quit();
     } else {
-        qCritical() << "Failed to launch new instance with QProcess::startDetached()";
+        qCritical() << "Failed to launch restart helper script";
+        QFile::remove(scriptPath);
         emit installationFinished(false, 
             "Update installed successfully, but failed to restart automatically.\n"
             "Please close this window and launch the application manually from:\n" + m_currentAppImagePath);
