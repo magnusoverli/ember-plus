@@ -119,6 +119,16 @@ void UpdateManager::onUpdateCheckFinished()
     // Compare versions
     QString currentVersion = getCurrentVersion();
     if (isNewerVersion(updateInfo.version, currentVersion)) {
+        // Check if assets are ready for download
+        if (updateInfo.downloadUrl.isEmpty()) {
+            qInfo() << "Update" << updateInfo.version << "found but assets not ready yet";
+            QString message = QString("Version %1 is available but the download files are still being prepared.\n"
+                                    "Please check again in a few minutes.")
+                .arg(updateInfo.version);
+            emit updateCheckFailed(message);
+            return;
+        }
+        
         qInfo() << "Update available:" << updateInfo.version << "(current:" << currentVersion << ")";
         emit updateAvailable(updateInfo);
     } else {
