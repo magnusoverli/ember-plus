@@ -156,14 +156,38 @@ add_custom_target(update_version
     VERBATIM
 )
 
+# Platform-specific update manager sources
+if(WIN32)
+    set(PLATFORM_UPDATE_SOURCES
+        src/WindowsUpdateManager.cpp
+        include/WindowsUpdateManager.h
+    )
+elseif(APPLE)
+    set(PLATFORM_UPDATE_SOURCES
+        src/MacUpdateManager.cpp
+        include/MacUpdateManager.h
+    )
+else()
+    # Linux
+    set(PLATFORM_UPDATE_SOURCES
+        src/LinuxUpdateManager.cpp
+        include/LinuxUpdateManager.h
+    )
+endif()
+
 # Create a library for shared code (for testing)
 add_library(EmberViewerLib STATIC
     src/MatrixWidget.cpp
     src/ParameterDelegate.cpp
     src/DeviceSnapshot.cpp
+    src/UpdateManager.cpp
+    src/UpdateDialog.cpp
+    ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
     include/ParameterDelegate.h
     include/DeviceSnapshot.h
+    include/UpdateManager.h
+    include/UpdateDialog.h
 )
 
 # Make sure version is updated before building library
@@ -179,6 +203,11 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ParameterDelegate.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/DeviceSnapshot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
 )
 
 target_compile_features(EmberViewerLib
