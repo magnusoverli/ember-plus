@@ -19,6 +19,27 @@ Starting with version 2.0.0 this project adheres to [Semantic Versioning](https:
 ### Fixed
 
 
+## [0.4.1] - 2025-10-27
+
+### Overview
+Version 0.4.1 improves cross-platform icon support and updates build system requirements.
+
+### Added
+- PNG and ICO icon formats for better platform compatibility
+- Windows resource file (app.rc) for executable icon embedding
+- Comprehensive icon installation for Linux desktop integration
+- Wayland-specific icon loading support in application code
+
+### Changed
+- Bump CMake minimum version from 3.9 to 3.20 across all projects
+- Replace SVG icon with PNG (256x256) and ICO (multi-resolution) formats
+- Update Linux desktop file to use standard icon naming (emberviewer)
+- Improve Windows installer with proper icon display in Add/Remove Programs
+
+### Removed
+- SVG icon file (replaced with PNG/ICO formats)
+
+
 ## [1.8.2] - 2019-11-14
 
 ### Overview
