@@ -26,11 +26,12 @@
 #include <QDateTime>
 #include <QSet>
 
+#include "UpdateManager.h"
+
 class EmberConnection;
 class MatrixWidget;
 class DeviceSnapshot;
 class EmulatorWindow;
-class UpdateManager;
 class UpdateDialog;
 
 class MainWindow : public QMainWindow
