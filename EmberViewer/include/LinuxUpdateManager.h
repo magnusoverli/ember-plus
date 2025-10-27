@@ -14,7 +14,6 @@
 #include "UpdateManager.h"
 #include <QFile>
 #include <QNetworkReply>
-#include <QTemporaryDir>
 
 class LinuxUpdateManager : public UpdateManager
 {
@@ -38,10 +37,8 @@ private slots:
 private:
     bool isRunningFromAppImage() const;
     QString getCurrentAppImagePath() const;
-    bool installAppImage(const QString &newAppImagePath);
     void restartApplication();
 
-    QTemporaryDir *m_tempDir;
     QFile *m_downloadFile;
     QNetworkReply *m_downloadReply;
     QString m_currentAppImagePath;

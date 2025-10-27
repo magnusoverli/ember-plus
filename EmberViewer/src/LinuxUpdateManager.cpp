@@ -19,11 +19,9 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QDebug>
-#include <QTextStream>
 
 LinuxUpdateManager::LinuxUpdateManager(QObject *parent)
     : UpdateManager(parent)
-    , m_tempDir(nullptr)
     , m_downloadFile(nullptr)
     , m_downloadReply(nullptr)
     , m_newAppImagePath("")
@@ -42,8 +40,6 @@ LinuxUpdateManager::~LinuxUpdateManager()
         m_downloadFile->close();
         delete m_downloadFile;
     }
-
-    delete m_tempDir;
 }
 
 QString LinuxUpdateManager::selectAssetForPlatform(const QJsonObject &release)
@@ -86,31 +82,34 @@ void LinuxUpdateManager::installUpdate(const UpdateInfo &updateInfo)
         return;
     }
 
-    // Create temporary directory for download
-    m_tempDir = new QTemporaryDir();
-    if (!m_tempDir->isValid()) {
-        qWarning() << "Failed to create temporary directory";
-        emit installationFinished(false, "Failed to create temporary directory.");
-        delete m_tempDir;
-        m_tempDir = nullptr;
-        return;
+    // Get directory of current AppImage
+    QFileInfo currentInfo(m_currentAppImagePath);
+    QString targetDir = currentInfo.absolutePath();
+    
+    // Download directly to target directory with new version filename
+    m_newAppImagePath = targetDir + "/" + updateInfo.assetName;
+    
+    qInfo() << "Downloading AppImage directly to:" << m_newAppImagePath;
+    
+    // Remove any existing file with the same name
+    if (QFile::exists(m_newAppImagePath)) {
+        qInfo() << "Removing existing AppImage:" << m_newAppImagePath;
+        if (!QFile::remove(m_newAppImagePath)) {
+            qWarning() << "Failed to remove existing AppImage:" << m_newAppImagePath;
+            emit installationFinished(false, "Failed to remove existing file. Please check file permissions.");
+            return;
+        }
     }
 
-    // Download the new AppImage
-    QString downloadPath = m_tempDir->path() + "/" + updateInfo.assetName;
-    m_downloadFile = new QFile(downloadPath);
-
+    // Open file for writing
+    m_downloadFile = new QFile(m_newAppImagePath);
     if (!m_downloadFile->open(QIODevice::WriteOnly)) {
-        qWarning() << "Failed to open download file:" << downloadPath;
+        qWarning() << "Failed to open download file:" << m_newAppImagePath;
         emit installationFinished(false, "Failed to create download file.");
         delete m_downloadFile;
         m_downloadFile = nullptr;
-        delete m_tempDir;
-        m_tempDir = nullptr;
         return;
     }
-
-    qInfo() << "Downloading AppImage to:" << downloadPath;
 
     QNetworkRequest request;
     request.setUrl(QUrl(updateInfo.downloadUrl));
@@ -145,50 +144,42 @@ void LinuxUpdateManager::onDownloadFinished()
     m_downloadFile->write(m_downloadReply->readAll());
     m_downloadFile->close();
 
-    QString downloadPath = m_downloadFile->fileName();
-
     if (m_downloadReply->error() != QNetworkReply::NoError) {
         qWarning() << "Download failed:" << m_downloadReply->errorString();
         emit installationFinished(false, 
             QString("Download failed: %1").arg(m_downloadReply->errorString()));
         
-        m_downloadReply->deleteLater();
-        m_downloadReply = nullptr;
+        // Clean up failed download
         delete m_downloadFile;
         m_downloadFile = nullptr;
-        delete m_tempDir;
-        m_tempDir = nullptr;
+        QFile::remove(m_newAppImagePath);
+        
+        m_downloadReply->deleteLater();
+        m_downloadReply = nullptr;
         return;
     }
 
-    qInfo() << "Download completed:" << downloadPath;
+    qInfo() << "Download completed:" << m_newAppImagePath;
 
     // Make the new AppImage executable
-    QFile::setPermissions(downloadPath, 
+    QFile::setPermissions(m_newAppImagePath, 
         QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
         QFile::ReadGroup | QFile::ExeGroup |
         QFile::ReadOther | QFile::ExeOther);
 
-    // Install the new AppImage (in same directory as current, with new version name)
-    bool success = installAppImage(downloadPath);
+    qInfo() << "Successfully installed new AppImage";
 
-    m_downloadReply->deleteLater();
-    m_downloadReply = nullptr;
+    // Clean up download objects
     delete m_downloadFile;
     m_downloadFile = nullptr;
+    m_downloadReply->deleteLater();
+    m_downloadReply = nullptr;
 
-    if (success) {
-        qInfo() << "Update installed successfully - restarting application";
-        emit installationFinished(true, "Update installed successfully. Restarting...");
-        
-        // Restart the application with a small delay
-        QTimer::singleShot(1000, this, &LinuxUpdateManager::restartApplication);
-    } else {
-        qWarning() << "Failed to install AppImage";
-        emit installationFinished(false, "Failed to install update.");
-        delete m_tempDir;
-        m_tempDir = nullptr;
-    }
+    qInfo() << "Update installed successfully - restarting application";
+    emit installationFinished(true, "Update installed successfully. Restarting...");
+    
+    // Restart the application with a small delay
+    QTimer::singleShot(1000, this, &LinuxUpdateManager::restartApplication);
 }
 
 bool LinuxUpdateManager::isRunningFromAppImage() const
@@ -216,52 +207,6 @@ QString LinuxUpdateManager::getCurrentAppImagePath() const
     return appImagePath;
 }
 
-bool LinuxUpdateManager::installAppImage(const QString &newAppImagePath)
-{
-    if (m_currentAppImagePath.isEmpty()) {
-        qWarning() << "Current AppImage path is empty";
-        return false;
-    }
-
-    // Get directory of current AppImage
-    QFileInfo currentInfo(m_currentAppImagePath);
-    QString targetDir = currentInfo.absolutePath();
-    
-    // Get the new AppImage filename from the download (e.g., "EmberViewer-v0.3.13-x86_64.AppImage")
-    QFileInfo newInfo(newAppImagePath);
-    QString newFileName = newInfo.fileName();
-    
-    // Full path to install new AppImage in same directory
-    m_newAppImagePath = targetDir + "/" + newFileName;
-    
-    qInfo() << "Installing new AppImage to:" << m_newAppImagePath;
-    
-    // Remove any existing file with the same name
-    if (QFile::exists(m_newAppImagePath)) {
-        qInfo() << "Removing existing AppImage:" << m_newAppImagePath;
-        if (!QFile::remove(m_newAppImagePath)) {
-            qWarning() << "Failed to remove existing AppImage";
-            return false;
-        }
-    }
-    
-    // Copy new AppImage to target location
-    if (!QFile::copy(newAppImagePath, m_newAppImagePath)) {
-        qWarning() << "Failed to copy new AppImage to" << m_newAppImagePath;
-        return false;
-    }
-    
-    // Ensure new AppImage has executable permissions
-    QFile::setPermissions(m_newAppImagePath,
-        QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
-        QFile::ReadGroup | QFile::ExeGroup |
-        QFile::ReadOther | QFile::ExeOther);
-    
-    qInfo() << "Successfully installed new AppImage";
-    
-    return true;
-}
-
 void LinuxUpdateManager::restartApplication()
 {
     qInfo() << "Restarting application from:" << m_newAppImagePath;
@@ -283,6 +228,19 @@ void LinuxUpdateManager::restartApplication()
             "Please check file permissions and launch manually.");
         return;
     }
+
+    // Verify file size is reasonable (not empty or corrupted)
+    qint64 fileSize = appImageInfo.size();
+    if (fileSize < 1000000) {  // Less than 1MB is definitely wrong
+        qCritical() << "New AppImage file size is suspiciously small:" << fileSize << "bytes";
+        emit installationFinished(false, 
+            "Failed to restart: Downloaded file appears to be corrupted.\n"
+            "File size: " + QString::number(fileSize) + " bytes\n"
+            "Please check your network connection and try again.");
+        return;
+    }
+
+    qInfo() << "New AppImage verified: size =" << fileSize << "bytes";
 
     // Launch the new AppImage directly (no helper script needed!)
     qInfo() << "Launching new AppImage...";
