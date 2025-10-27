@@ -18,7 +18,6 @@
 #include <QNetworkReply>
 #include <QSettings>
 #include <QJsonObject>
-#include <QDateTime>
 
 class UpdateManager : public QObject
 {
@@ -77,17 +76,10 @@ protected:
 
     // Settings for skipped versions
     QSettings *m_settings;
-    
-    // Last check time for throttling
-    QDateTime m_lastCheckTime;
-    static constexpr int MIN_CHECK_INTERVAL_SECONDS = 300; // 5 minutes
 
     // Check if a version should be skipped
     bool isVersionSkipped(const QString &version) const;
     void clearSkippedVersion();
-    
-    // Check if enough time has passed since last check
-    bool canCheckForUpdates() const;
 
 private slots:
     void onUpdateCheckFinished();

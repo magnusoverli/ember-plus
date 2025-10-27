@@ -28,16 +28,6 @@ UpdateManager::~UpdateManager()
 
 void UpdateManager::checkForUpdates()
 {
-    // Check if enough time has passed since last check (throttling)
-    if (!canCheckForUpdates()) {
-        qInfo() << "Update check throttled. Please wait before checking again.";
-        emit updateCheckFailed("Please wait a few minutes before checking for updates again.");
-        return;
-    }
-    
-    // Update last check time
-    m_lastCheckTime = QDateTime::currentDateTime();
-    
     // Build GitHub API URL for latest release
     QString apiUrl = QString("%1/repos/%2/%3/releases/latest")
         .arg(GITHUB_API_BASE)
@@ -205,16 +195,4 @@ void UpdateManager::skipVersion(const QString &version)
 void UpdateManager::clearSkippedVersion()
 {
     m_settings->remove("skipped_version");
-}
-
-bool UpdateManager::canCheckForUpdates() const
-{
-    // Allow first check (lastCheckTime will be null/invalid)
-    if (!m_lastCheckTime.isValid()) {
-        return true;
-    }
-    
-    // Check if enough time has passed
-    qint64 secondsSinceLastCheck = m_lastCheckTime.secsTo(QDateTime::currentDateTime());
-    return secondsSinceLastCheck >= MIN_CHECK_INTERVAL_SECONDS;
 }
