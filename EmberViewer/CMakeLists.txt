@@ -47,6 +47,12 @@ set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 project(EmberViewer VERSION ${PROJECT_VERSION} LANGUAGES CXX)
 
+# Get GitHub API token from environment variable (for CI/CD builds)
+if(DEFINED ENV{GITHUB_API_TOKEN})
+    set(GITHUB_API_TOKEN $ENV{GITHUB_API_TOKEN})
+    message(STATUS "GitHub API token loaded from environment")
+endif()
+
 # Create a script that will regenerate version.h at build time
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/update_version.cmake "
 find_package(Git QUIET)

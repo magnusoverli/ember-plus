@@ -25,6 +25,8 @@ jobs:
       
       - name: Build EmberViewer
         shell: cmd
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_API_TOKEN }}
         run: |
           mkdir build
           cd build
@@ -113,6 +115,8 @@ jobs:
           sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-dev
       
       - name: Build EmberViewer
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_API_TOKEN }}
         run: |
           mkdir build
           cd build

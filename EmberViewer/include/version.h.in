@@ -10,4 +10,7 @@
 #define EMBERVIEWER_VERSION_STRING "@PROJECT_VERSION@"
 #define EMBERVIEWER_VERSION_FULL "@GIT_VERSION@"
 
+// GitHub API token for update checks (injected at build time)
+#cmakedefine GITHUB_API_TOKEN "@GITHUB_API_TOKEN@"
+
 #endif // EMBERVIEWER_VERSION_H

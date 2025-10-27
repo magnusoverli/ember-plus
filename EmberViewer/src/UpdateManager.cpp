@@ -50,6 +50,12 @@ void UpdateManager::checkForUpdates()
     request.setUrl(QUrl(apiUrl));
     request.setRawHeader("Accept", "application/vnd.github.v3+json");
     request.setRawHeader("User-Agent", QString("EmberViewer/%1").arg(getCurrentVersion()).toUtf8());
+    
+    // Add GitHub API token if available (increases rate limit from 60 to 5000 req/hour)
+#ifdef GITHUB_API_TOKEN
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(GITHUB_API_TOKEN).toUtf8());
+    qDebug() << "Using authenticated GitHub API requests";
+#endif
 
     QNetworkReply *reply = m_networkManager->get(request);
     connect(reply, &QNetworkReply::finished, this, &UpdateManager::onUpdateCheckFinished);
