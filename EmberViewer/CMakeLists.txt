@@ -48,8 +48,8 @@ set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 project(EmberViewer VERSION ${PROJECT_VERSION} LANGUAGES CXX)
 
 # Get GitHub API token from environment variable (for CI/CD builds)
-if(DEFINED ENV{GITHUB_API_TOKEN})
-    set(GITHUB_API_TOKEN $ENV{GITHUB_API_TOKEN})
+if(DEFINED ENV{EMBERVIEWER_UPDATE_SECRET})
+    set(GITHUB_API_TOKEN $ENV{EMBERVIEWER_UPDATE_SECRET})
     message(STATUS "GitHub API token loaded from environment")
 endif()
 

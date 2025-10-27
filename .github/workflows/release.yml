@@ -26,7 +26,7 @@ jobs:
       - name: Build EmberViewer
         shell: cmd
         env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_API_TOKEN }}
+          EMBERVIEWER_UPDATE_SECRET: ${{ secrets.EMBERVIEWER_UPDATE_SECRET }}
         run: |
           mkdir build
           cd build
@@ -116,7 +116,7 @@ jobs:
       
       - name: Build EmberViewer
         env:
-          GITHUB_API_TOKEN: ${{ secrets.GITHUB_API_TOKEN }}
+          EMBERVIEWER_UPDATE_SECRET: ${{ secrets.EMBERVIEWER_UPDATE_SECRET }}
         run: |
           mkdir build
           cd build
