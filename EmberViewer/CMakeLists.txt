@@ -183,11 +183,6 @@ add_library(EmberViewerLib STATIC
     src/UpdateManager.cpp
     src/UpdateDialog.cpp
     ${PLATFORM_UPDATE_SOURCES}
-    include/MatrixWidget.h
-    include/ParameterDelegate.h
-    include/DeviceSnapshot.h
-    include/UpdateManager.h
-    include/UpdateDialog.h
 )
 
 # Make sure version is updated before building library
