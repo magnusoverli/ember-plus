@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
+#include <QRegularExpression>
 #include <QFont>
 
 UpdateDialog::UpdateDialog(const UpdateManager::UpdateInfo &updateInfo, QWidget *parent)
@@ -181,18 +182,18 @@ QString UpdateDialog::formatReleaseNotes(const QString &markdown) const
     QString html = markdown;
 
     // Convert headers (## Header -> <h3>Header</h3>)
-    html.replace(QRegExp("## (.+)"), "<h3>\\1</h3>");
-    html.replace(QRegExp("# (.+)"), "<h2>\\1</h2>");
+    html.replace(QRegularExpression("## (.+)"), "<h3>\\1</h3>");
+    html.replace(QRegularExpression("# (.+)"), "<h2>\\1</h2>");
 
     // Convert bold (**text** -> <b>text</b>)
-    html.replace(QRegExp("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
+    html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
 
     // Convert italic (*text* -> <i>text</i>)
-    html.replace(QRegExp("\\*(.+?)\\*"), "<i>\\1</i>");
+    html.replace(QRegularExpression("\\*(.+?)\\*"), "<i>\\1</i>");
 
     // Convert bullet points (- item -> <li>item</li>)
-    html.replace(QRegExp("^- (.+)$", Qt::CaseSensitive, QRegExp::RegExp2), "<li>\\1</li>");
-    html.replace(QRegExp("^\\* (.+)$", Qt::CaseSensitive, QRegExp::RegExp2), "<li>\\1</li>");
+    html.replace(QRegularExpression("^- (.+)$", QRegularExpression::MultilineOption), "<li>\\1</li>");
+    html.replace(QRegularExpression("^\\* (.+)$", QRegularExpression::MultilineOption), "<li>\\1</li>");
 
     // Wrap list items in <ul>
     if (html.contains("<li>")) {

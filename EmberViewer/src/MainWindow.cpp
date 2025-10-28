@@ -50,6 +50,7 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QIcon>
+#include <QRegularExpression>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -288,14 +289,11 @@ void MainWindow::setupUi()
     // Connect delegate value changes to send parameter updates
     connect(delegate, &ParameterDelegate::valueChanged, this, [this](const QString &path, const QString &newValue) {
         // Find the item to get its type
-        QTreeWidgetItemIterator it(m_treeWidget);
-        while (*it) {
-            if ((*it)->data(0, Qt::UserRole).toString() == path) {
-                int type = (*it)->data(0, Qt::UserRole + 1).toInt();  // TypeRole
-                m_connection->sendParameterValue(path, newValue, type);
-                break;
-            }
-            ++it;
+        // Use cached item lookup O(log n) instead of O(n) iteration
+        QTreeWidgetItem *item = m_pathToItem.value(path, nullptr);
+        if (item) {
+            int type = item->data(0, Qt::UserRole + 1).toInt();
+            m_connection->sendParameterValue(path, newValue, type);
         }
     });
     
@@ -1533,7 +1531,8 @@ void MainWindow::onSaveEmberDevice()
     }
     
     // Sanitize device name for filename (remove invalid chars)
-    deviceName = deviceName.replace(QRegExp("[^a-zA-Z0-9_.-]"), "_");
+    static const QRegularExpression invalidChars("[^a-zA-Z0-9_.-]");
+    deviceName = deviceName.replace(invalidChars, "_");
     
     // If still empty after sanitization, use generic name
     if (deviceName.isEmpty()) {

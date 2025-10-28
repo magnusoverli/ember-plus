@@ -484,7 +484,10 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         : "";
     
     // Track root-level nodes for smart device name detection
-    if (pathStr.split('.').size() == 1) {
+    QStringList pathParts = pathStr.split('.');
+    int pathDepth = pathParts.size();
+    
+    if (pathDepth == 1) {
         QString displayName = !description.isEmpty() ? description : identifier;
         bool isGeneric = isGenericNodeName(displayName);
         
@@ -501,8 +504,8 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         m_rootNodes[pathStr] = rootInfo;
     }
     // Track identity child nodes under root nodes
-    else if (pathStr.split('.').size() == 2) {
-        QString parentPath = pathStr.split('.')[0];
+    else if (pathDepth == 2) {
+        QString parentPath = pathParts[0];
         if (m_rootNodes.contains(parentPath)) {
             // Check if this is an identity node
             QString nodeName = identifier.toLower();
@@ -553,7 +556,11 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
         : "";
     
     // Track root-level nodes for smart device name detection
-    if (pathStr.split('.').size() == 1) {
+    QStringList pathParts = pathStr.split('.');
+    
+    int pathDepth = pathParts.size();
+    
+    if (pathDepth == 1) {
         QString displayName = !description.isEmpty() ? description : identifier;
         bool isGeneric = isGenericNodeName(displayName);
         
@@ -570,8 +577,8 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
         m_rootNodes[pathStr] = rootInfo;
     }
     // Track identity child nodes under root nodes
-    else if (pathStr.split('.').size() == 2) {
-        QString parentPath = pathStr.split('.')[0];
+    else if (pathDepth == 2) {
+        QString parentPath = pathParts[0];
         if (m_rootNodes.contains(parentPath)) {
             // Check if this is an identity node (common names: identity, _identity, deviceInfo, etc.)
             QString nodeName = identifier.toLower();
