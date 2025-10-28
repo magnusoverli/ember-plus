@@ -74,8 +74,6 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_logLevel(LogLevel::Info)
     , m_nextInvocationId(1)
 {
-    m_socket = new QTcpSocket(this);
-    
     connect(m_socket, &QTcpSocket::connected, this, &EmberConnection::onSocketConnected);
     connect(m_socket, &QTcpSocket::disconnected, this, &EmberConnection::onSocketDisconnected);
     
@@ -100,10 +98,6 @@ EmberConnection::EmberConnection(QObject *parent)
     m_protocolTimer->setSingleShot(true);
     m_protocolTimer->setInterval(PROTOCOL_TIMEOUT_MS);
     connect(m_protocolTimer, &QTimer::timeout, this, &EmberConnection::onProtocolTimeout);
-    
-    // Initialize S101 decoder and DOM reader
-    m_s101Decoder = new libs101::StreamDecoder<unsigned char>();
-    m_domReader = new DomReader(this);
 }
 
 EmberConnection::~EmberConnection()
