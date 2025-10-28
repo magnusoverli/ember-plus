@@ -181,11 +181,6 @@ void ConnectionsTreeWidget::addConnectionToTree(const QString &connectionId, QTr
     m_itemMap[connectionId] = item;
 }
 
-QTreeWidgetItem* ConnectionsTreeWidget::findItemById(const QString &id) const
-{
-    return m_itemMap.value(id, nullptr);
-}
-
 QString ConnectionsTreeWidget::getItemId(QTreeWidgetItem *item) const
 {
     if (!item) {

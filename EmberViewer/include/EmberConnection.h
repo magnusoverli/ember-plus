@@ -81,9 +81,6 @@ public:
     // Send matrix connection command
     void setMatrixConnection(const QString &matrixPath, int targetNumber, int sourceNumber, bool connect);
     
-    // Request matrix connection state (forces refresh)
-    void requestMatrixConnections(const QString &matrixPath);
-    
     // Invoke a function with arguments
     void invokeFunction(const QString &path, const QList<QVariant> &arguments);
 

@@ -125,9 +125,7 @@ private slots:
 
 private:
     void processCommand(libember::glow::GlowCommand* command, ClientConnection *client);
-    void processParameter(libember::glow::GlowParameter* param, const QString &parentPath, ClientConnection *client);
     void processQualifiedParameter(libember::glow::GlowQualifiedParameter* param, ClientConnection *client);
-    void processMatrix(libember::glow::GlowMatrix* matrix, const QString &parentPath, ClientConnection *client);
     
     void sendGetDirectoryResponse(const QString &path, ClientConnection *client);
     void sendParameterResponse(const QString &path, ClientConnection *client);
@@ -144,7 +142,6 @@ private:
     void handleUnsubscribe(const QString &path, ClientConnection *client);
     
     void sendEncodedMessage(const libember::glow::GlowContainer *container, ClientConnection *client);
-    void broadcastToSubscribers(const QString &path, const libember::glow::GlowContainer *container);
     
     QTcpServer *m_server;
     QList<ClientConnection*> m_clients;

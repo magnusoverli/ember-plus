@@ -432,7 +432,6 @@ void EmberProvider::processQualifiedParameter(libember::glow::GlowQualifiedParam
             
             // Send updated parameter to all subscribers
             sendParameterResponse(path, client);
-            broadcastToSubscribers(path, nullptr);  // TODO: implement broadcast
         }
     }
     
@@ -783,29 +782,6 @@ void EmberProvider::sendEncodedMessage(const libember::glow::GlowContainer *cont
     std::vector<unsigned char> data(encoder.begin(), encoder.end());
     QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
     client->sendData(qdata);
-}
-
-void EmberProvider::broadcastToSubscribers(const QString &path, const libember::glow::GlowContainer *container)
-{
-    // TODO: Implement broadcasting to all subscribed clients
-    Q_UNUSED(path);
-    Q_UNUSED(container);
-}
-
-void EmberProvider::processParameter(libember::glow::GlowParameter* param, const QString &parentPath, ClientConnection *client)
-{
-    // Not used in current implementation
-    Q_UNUSED(param);
-    Q_UNUSED(parentPath);
-    Q_UNUSED(client);
-}
-
-void EmberProvider::processMatrix(libember::glow::GlowMatrix* matrix, const QString &parentPath, ClientConnection *client)
-{
-    // Not used in current implementation
-    Q_UNUSED(matrix);
-    Q_UNUSED(parentPath);
-    Q_UNUSED(client);
 }
 
 void EmberProvider::sendMatrixLabelNode(const QString &matrixPath, ClientConnection *client)

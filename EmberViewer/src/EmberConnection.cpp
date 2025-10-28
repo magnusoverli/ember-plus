@@ -1175,16 +1175,6 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
     }
 }
 
-void EmberConnection::requestMatrixConnections(const QString &matrixPath)
-{
-    // Remove from requested paths to allow re-requesting after a change
-    m_requestedPaths.remove(matrixPath);
-    
-    // Request the connection state by asking for the matrix directory
-    sendGetDirectoryForPath(matrixPath);
-    log(LogLevel::Debug, QString("Requesting updated connection state for matrix %1").arg(matrixPath));
-}
-
 void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix)
 {
     auto path = matrix->path();

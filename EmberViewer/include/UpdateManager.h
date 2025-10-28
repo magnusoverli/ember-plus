@@ -79,7 +79,6 @@ protected:
 
     // Check if a version should be skipped
     bool isVersionSkipped(const QString &version) const;
-    void clearSkippedVersion();
 
 private slots:
     void onUpdateCheckFinished();

@@ -45,11 +45,9 @@ private:
     void buildTree();
     void addFolderToTree(const QString &folderId, QTreeWidgetItem *parentItem);
     void addConnectionToTree(const QString &connectionId, QTreeWidgetItem *parentItem);
-    QTreeWidgetItem* findItemById(const QString &id) const;
     QString getItemId(QTreeWidgetItem *item) const;
     bool isFolder(QTreeWidgetItem *item) const;
     bool isConnection(QTreeWidgetItem *item) const;
-    void sortFolder(QTreeWidgetItem *folder);
     
     // Context menu actions
     void showFolderContextMenu(const QPoint &pos, QTreeWidgetItem *item);

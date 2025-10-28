@@ -191,8 +191,3 @@ void UpdateManager::skipVersion(const QString &version)
     m_settings->sync();
     qInfo() << "User skipped version:" << version;
 }
-
-void UpdateManager::clearSkippedVersion()
-{
-    m_settings->remove("skipped_version");
-}
