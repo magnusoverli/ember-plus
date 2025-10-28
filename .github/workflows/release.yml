@@ -102,6 +102,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Clean old Qt installations
+        run: |
+          echo "Cleaning old Qt installations from runner..."
+          rm -rf /tmp/runner/work/ember-plus/Qt/5.* || true
+          rm -rf ~/work/ember-plus/Qt/5.* || true
+          echo "Cleanup complete"
+      
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
