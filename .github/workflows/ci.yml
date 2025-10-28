@@ -31,11 +31,13 @@ jobs:
       
       - name: Configure CMake
         run: |
+          echo "Qt6_DIR: $Qt6_DIR"
+          echo "QT_ROOT_DIR: $QT_ROOT_DIR"
           mkdir -p build
           cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${Qt6_DIR}" \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DCMAKE_WARN_DEPRECATED=OFF \
             -GNinja
       
