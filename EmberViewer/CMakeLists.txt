@@ -250,7 +250,7 @@ target_link_libraries(EmberViewerLib
         Qt5::Widgets
         Qt5::Network
         libs101::s101
-        libformula::formula
+        # libformula::formula    # Not used by EmberViewer - commented out to remove unnecessary dependency
         ${LIBEMBER_TARGET}
 )
 
@@ -294,7 +294,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt5::Widgets
         Qt5::Network
         libs101::s101
-        libformula::formula
+        # libformula::formula    # Not used by EmberViewer - commented out to remove unnecessary dependency
         ${LIBEMBER_TARGET}
 )
 
