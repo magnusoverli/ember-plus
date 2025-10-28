@@ -18,7 +18,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '5.15.2'
+          version: '6.8.1'
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
@@ -30,7 +30,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=%Qt5_DIR%
+          cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=%Qt6_DIR%
           cmake --build . --config Release
       
       - name: Deploy Qt dependencies
@@ -44,14 +44,14 @@ jobs:
       - name: Download and deploy OpenSSL DLLs
         shell: powershell
         run: |
-          # Download OpenSSL 1.1.1 DLLs (compatible with Qt 5.15.2)
-          $openssl_url = "https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-1.1.1w.zip"
+          # Download OpenSSL 3.x DLLs (compatible with Qt 6.8)
+          $openssl_url = "https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.4.0.zip"
           Invoke-WebRequest -Uri $openssl_url -OutFile openssl.zip
           Expand-Archive -Path openssl.zip -DestinationPath openssl_temp
           
           # Copy the x64 DLLs to deploy directory
-          Copy-Item "openssl_temp\openssl-1.1\x64\bin\libssl-1_1-x64.dll" "deploy\"
-          Copy-Item "openssl_temp\openssl-1.1\x64\bin\libcrypto-1_1-x64.dll" "deploy\"
+          Copy-Item "openssl_temp\openssl-3\x64\bin\libssl-3-x64.dll" "deploy\"
+          Copy-Item "openssl_temp\openssl-3\x64\bin\libcrypto-3-x64.dll" "deploy\"
           
           Write-Host "OpenSSL DLLs deployed successfully"
       
@@ -105,7 +105,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '5.15.2'
+          version: '6.8.1'
           host: 'linux'
           target: 'desktop'
       
