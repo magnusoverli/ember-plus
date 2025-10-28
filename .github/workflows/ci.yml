@@ -35,6 +35,7 @@ jobs:
           cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${Qt6_DIR}" \
             -DCMAKE_WARN_DEPRECATED=OFF \
             -GNinja
       
