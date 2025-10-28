@@ -41,19 +41,26 @@ jobs:
           cd deploy
           windeployqt.exe --release --no-translations EmberViewer.exe
       
-      - name: Download and deploy OpenSSL DLLs
+      - name: Check and deploy OpenSSL DLLs
         shell: powershell
         run: |
-          # Download OpenSSL 3.x DLLs (compatible with Qt 6.8)
-          $openssl_url = "https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.4.0.zip"
-          Invoke-WebRequest -Uri $openssl_url -OutFile openssl.zip
-          Expand-Archive -Path openssl.zip -DestinationPath openssl_temp
+          # Check if OpenSSL DLLs are already included by Qt
+          $qtDir = $env:Qt6_DIR
+          Write-Host "Qt6_DIR: $qtDir"
           
-          # Copy the x64 DLLs to deploy directory
-          Copy-Item "openssl_temp\openssl-3\x64\bin\libssl-3-x64.dll" "deploy\"
-          Copy-Item "openssl_temp\openssl-3\x64\bin\libcrypto-3-x64.dll" "deploy\"
+          # Look for OpenSSL DLLs in Qt directory
+          $qtBinDir = Join-Path $qtDir "bin"
+          $sslFiles = Get-ChildItem -Path $qtBinDir -Filter "*ssl*.dll" -ErrorAction SilentlyContinue
           
-          Write-Host "OpenSSL DLLs deployed successfully"
+          if ($sslFiles) {
+            Write-Host "OpenSSL DLLs found in Qt directory, copying to deploy..."
+            Copy-Item "$qtBinDir\*ssl*.dll" "deploy\" -ErrorAction SilentlyContinue
+            Copy-Item "$qtBinDir\*crypto*.dll" "deploy\" -ErrorAction SilentlyContinue
+            Write-Host "OpenSSL DLLs deployed from Qt"
+          } else {
+            Write-Host "No OpenSSL DLLs found in Qt directory"
+            Write-Host "Application will attempt to use system OpenSSL or may not require it"
+          }
       
       - name: Verify deployed files
         shell: cmd
