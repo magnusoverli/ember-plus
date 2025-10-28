@@ -108,6 +108,7 @@ jobs:
           version: '6.8.*'
           host: 'linux'
           target: 'desktop'
+          cache: false
       
       - name: Install dependencies
         run: |
