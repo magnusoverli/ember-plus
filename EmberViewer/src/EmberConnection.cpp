@@ -533,8 +533,12 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
     }
     
     // Request children for this node if not already provided
+    // Defer the request using QTimer to avoid blocking the UI thread during initial tree population
     if (!node->children() || node->children()->size() == 0) {
-        sendGetDirectoryForPath(pathStr);
+        QString path = pathStr;  // Capture by value for lambda
+        QTimer::singleShot(10, this, [this, path]() {
+            sendGetDirectoryForPath(path);
+        });
     }
 }
 
@@ -606,8 +610,12 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
     }
     
     // Request children for this node if not already provided
+    // Defer the request using QTimer to avoid blocking the UI thread during initial tree population
     if (!node->children() || node->children()->size() == 0) {
-        sendGetDirectoryForPath(pathStr);
+        QString path = pathStr;  // Capture by value for lambda
+        QTimer::singleShot(10, this, [this, path]() {
+            sendGetDirectoryForPath(path);
+        });
     }
 }
 
