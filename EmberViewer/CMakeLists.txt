@@ -374,9 +374,9 @@ if(UNIX AND NOT APPLE)
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications
     )
     
-    # Install icon in standard location
+    # Install icon in standard location (512x512 actual size)
     install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png
-        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps
         RENAME emberviewer.png
     )
     
