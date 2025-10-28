@@ -143,7 +143,7 @@ if(NOT TARGET ${LIBEMBER_TARGET})
 endif()
 
 # Find Qt5 - works on Linux, Windows, and macOS
-find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
+find_package(Qt6 6.8 COMPONENTS Core Gui Widgets Network REQUIRED)
 
 # Collect UI files
 file(GLOB UI_FILES
@@ -227,7 +227,7 @@ list(REMOVE_ITEM SOURCE_FILES
 
 target_compile_features(EmberViewerLib
     PRIVATE
-        cxx_std_11
+        cxx_std_17
 )
 
 set_target_properties(EmberViewerLib
@@ -246,10 +246,10 @@ target_include_directories(EmberViewerLib
 
 target_link_libraries(EmberViewerLib
     PUBLIC
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
-        Qt5::Network
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Network
         libs101::s101
         # libformula::formula    # Not used by EmberViewer - commented out to remove unnecessary dependency
         ${LIBEMBER_TARGET}
@@ -266,7 +266,7 @@ add_dependencies(${PROJECT_NAME} update_version)
 
 target_compile_features(${PROJECT_NAME}
     PRIVATE
-        cxx_std_11
+        cxx_std_17
 )
 
 set_target_properties(${PROJECT_NAME}
@@ -290,10 +290,10 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         EmberViewerLib
-        Qt5::Core
-        Qt5::Gui
-        Qt5::Widgets
-        Qt5::Network
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Network
         libs101::s101
         # libformula::formula    # Not used by EmberViewer - commented out to remove unnecessary dependency
         ${LIBEMBER_TARGET}
@@ -355,7 +355,7 @@ install(TARGETS ${PROJECT_NAME}
 # Windows: Install Qt DLLs alongside executable
 if(WIN32)
     # Add windeployqt for automatic Qt DLL deployment
-    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt5_DIR}/../../../bin")
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/../../../bin")
     if(WINDEPLOYQT_EXECUTABLE)
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${WINDEPLOYQT_EXECUTABLE} $<TARGET_FILE:${PROJECT_NAME}>

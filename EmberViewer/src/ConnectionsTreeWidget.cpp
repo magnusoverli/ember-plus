@@ -414,7 +414,7 @@ void ConnectionsTreeWidget::mouseDoubleClickEvent(QMouseEvent *event)
 void ConnectionsTreeWidget::dropEvent(QDropEvent *event)
 {
     QTreeWidgetItem *draggedItem = currentItem();
-    QTreeWidgetItem *targetItem = itemAt(event->pos());
+    QTreeWidgetItem *targetItem = itemAt(event->position().toPoint());
 
     if (!draggedItem) {
         return;

@@ -1,6 +1,6 @@
 # EmberViewer Unit Tests
 
-find_package(Qt5 COMPONENTS Test REQUIRED)
+find_package(Qt6 COMPONENTS Test REQUIRED)
 
 # Enable testing
 enable_testing()
@@ -19,7 +19,7 @@ function(add_emberviewer_test test_name)
     target_link_libraries(${test_name}
         PRIVATE
             EmberViewerLib
-            Qt5::Test
+            Qt6::Test
             libs101::s101
             # libformula::formula    # Not used by EmberViewer - commented out
             ${LIBEMBER_TARGET}
@@ -27,7 +27,7 @@ function(add_emberviewer_test test_name)
     
     target_compile_features(${test_name}
         PRIVATE
-            cxx_std_11
+            cxx_std_17
     )
     
     set_target_properties(${test_name}

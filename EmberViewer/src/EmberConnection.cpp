@@ -1606,18 +1606,18 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     if (!arguments.isEmpty()) {
         std::vector<libember::glow::Value> glowArgs;
         for (const QVariant &arg : arguments) {
-            switch (arg.type()) {
-                case QVariant::Int:
-                case QVariant::LongLong:
+            switch (arg.typeId()) {
+                case QMetaType::Int:
+                case QMetaType::LongLong:
                     glowArgs.push_back(libember::glow::Value(static_cast<long>(arg.toLongLong())));
                     break;
-                case QVariant::Double:
+                case QMetaType::Double:
                     glowArgs.push_back(libember::glow::Value(arg.toDouble()));
                     break;
-                case QVariant::String:
+                case QMetaType::QString:
                     glowArgs.push_back(libember::glow::Value(arg.toString().toStdString()));
                     break;
-                case QVariant::Bool:
+                case QMetaType::Bool:
                     glowArgs.push_back(libember::glow::Value(arg.toBool()));
                     break;
                 default:
