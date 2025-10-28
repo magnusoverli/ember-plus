@@ -155,6 +155,9 @@ private:
     bool m_isConnected;
     bool m_showOidPath;
     bool m_crosspointsEnabled;
+    
+    // Tree update batching (for progressive UI updates)
+    int m_itemsAddedSinceUpdate;
 
     // Crosspoint editing
     QAction *m_enableCrosspointsAction;
@@ -182,6 +185,7 @@ public:
     static constexpr int TICK_INTERVAL_MS = 1000;       // 1 second
     static constexpr int DEFAULT_EMBER_PORT = 9092;
     static constexpr int DEFAULT_PORT_FALLBACK = 9000;  // For settings
+    static constexpr int UPDATE_BATCH_SIZE = 100;       // Process events every N items for progressive updates
 };
 
 #endif // MAINWINDOW_H

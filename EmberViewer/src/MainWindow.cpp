@@ -82,6 +82,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_isConnected(false)
     , m_showOidPath(false)
     , m_crosspointsEnabled(false)
+    , m_itemsAddedSinceUpdate(0)
 {
     // Initialize connection manager and load saved connections early
     // (needed before createDockWindows to integrate into layout properly)
@@ -120,16 +121,19 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(m_connection, &EmberConnection::logMessage, this, &MainWindow::onLogMessage);
     connect(m_connection, &EmberConnection::treePopulated, this, &MainWindow::subscribeToExpandedItems);
-    connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
-    connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
-    connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
-    connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived);
-    connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
-    connect(m_connection, &EmberConnection::matrixConnectionReceived, this, &MainWindow::onMatrixConnectionReceived);
-    connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
-    connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared);
-    connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
-    connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
+    
+    // Use Qt::QueuedConnection for tree-building signals to prevent UI freeze on Windows
+    // This makes the signals asynchronous, allowing the event loop to process UI updates
+    connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::matrixConnectionReceived, this, &MainWindow::onMatrixConnectionReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived, Qt::QueuedConnection);
+    connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived, Qt::QueuedConnection);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
@@ -554,6 +558,13 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_statusLabel->setText("Connected");
         m_statusLabel->setStyleSheet("QLabel { color: green; font-weight: bold; }");
         logMessage("Connected successfully!");
+        
+        // Disable tree updates during initial population to prevent UI freeze
+        // Updates will be re-enabled in subscribeToExpandedItems() when tree is populated
+        m_treeWidget->setUpdatesEnabled(false);
+        
+        // Reset batch counter for new connection
+        m_itemsAddedSinceUpdate = 0;
     } else {
         m_statusLabel->setText("Not connected");
         m_statusLabel->setStyleSheet("QLabel { color: red; }");
@@ -591,6 +602,9 @@ void MainWindow::onConnectionStateChanged(bool connected)
         // Clear subscription tracking
         m_subscribedPaths.clear();
         m_subscriptionStates.clear();
+        
+        // Reset batch counter
+        m_itemsAddedSinceUpdate = 0;
         
         // Now it's safe to delete all matrix widgets
         qDeleteAll(m_matrixWidgets);
@@ -641,6 +655,15 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
         if (isNew) {
             qDebug().noquote() << QString("Node: %1 [%2] - %3")
                 .arg(displayName).arg(path).arg(isOnline ? "Online" : "Offline");
+        }
+        
+        // Batch updates for better responsiveness - process events every N items
+        m_itemsAddedSinceUpdate++;
+        if (m_itemsAddedSinceUpdate >= UPDATE_BATCH_SIZE) {
+            // Process pending events to keep UI responsive
+            // ExcludeUserInputEvents prevents user clicks during update
+            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+            m_itemsAddedSinceUpdate = 0;
         }
     }
 }
@@ -903,6 +926,13 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         if (isNew) {
             qDebug().noquote() << QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access);
         }
+        
+        // Batch updates for better responsiveness
+        m_itemsAddedSinceUpdate++;
+        if (m_itemsAddedSinceUpdate >= UPDATE_BATCH_SIZE) {
+            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+            m_itemsAddedSinceUpdate = 0;
+        }
     }
 }
 
@@ -1047,33 +1077,10 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
         }
         currentPath += pathSegments[i];
         
-        // Check cache for this intermediate path
+        // Check cache for this intermediate path (O(1) lookup)
         QTreeWidgetItem *found = m_pathToItem.value(currentPath, nullptr);
         
-        // If not in cache, search for it
-        if (!found) {
-            if (parent == nullptr) {
-                // Search in root level
-                for (int j = 0; j < m_treeWidget->topLevelItemCount(); ++j) {
-                    QTreeWidgetItem *topItem = m_treeWidget->topLevelItem(j);
-                    if (topItem->data(0, Qt::UserRole).toString() == currentPath) {
-                        found = topItem;
-                        break;
-                    }
-                }
-            } else {
-                // Search in children of parent
-                for (int j = 0; j < parent->childCount(); ++j) {
-                    QTreeWidgetItem *childItem = parent->child(j);
-                    if (childItem->data(0, Qt::UserRole).toString() == currentPath) {
-                        found = childItem;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // If not found, create it
+        // If not in cache, create it
         if (!found) {
             QStringList columns;
             columns << pathSegments[i] << "" << "";
@@ -1084,10 +1091,10 @@ QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
                 found = new QTreeWidgetItem(parent, columns);
             }
             found->setData(0, Qt::UserRole, currentPath);
+            
+            // Add to cache immediately
+            m_pathToItem[currentPath] = found;
         }
-        
-        // Cache this item
-        m_pathToItem[currentPath] = found;
         
         parent = found;
     }
@@ -1478,6 +1485,10 @@ void MainWindow::setItemDisplayName(QTreeWidgetItem *item, const QString &baseNa
 
 void MainWindow::subscribeToExpandedItems()
 {
+    // Re-enable tree updates after initial population
+    // (disabled in onConnectionStateChanged when connecting)
+    m_treeWidget->setUpdatesEnabled(true);
+    
     QTreeWidgetItemIterator it(m_treeWidget);
     while (*it) {
         if ((*it)->isExpanded()) {
@@ -1494,7 +1505,7 @@ void MainWindow::subscribeToExpandedItems()
                     m_subscribedPaths.insert(path);
                     m_subscriptionStates[path] = state;
                 } else if (type == "Parameter") {
-                    m_connection->subscribeToParameter(path, true);
+                    m_connection->subscribeToNode(path, true);
                     m_subscribedPaths.insert(path);
                     m_subscriptionStates[path] = state;
                 } else if (type == "Matrix") {
