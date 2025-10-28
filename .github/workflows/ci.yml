@@ -13,21 +13,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Cache APT packages
-        uses: actions/cache@v4
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
         with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
+          version: '6.8.*'
+          host: 'linux'
+          target: 'desktop'
+          cache: true
       
-      - name: Install Qt and dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            qt6-base-dev \
-            qt6-base-dev-tools \
-            qmake6 \
             cmake \
             build-essential \
             ninja-build
