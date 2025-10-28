@@ -123,9 +123,10 @@ endif()
 
 # If libformula is not already defined (e.g. because this is the toplevel invocation),
 # look it up via find_package.
-if(NOT TARGET libformula::formula)
-    find_package(libformula REQUIRED)
-endif()
+# Commented out - libformula not used by EmberViewer
+# if(NOT TARGET libformula::formula)
+#     find_package(libformula REQUIRED)
+# endif()
 
 # Choose whether to link against the static or the shared variant of libember
 # depending on the preference specified by the invocation.

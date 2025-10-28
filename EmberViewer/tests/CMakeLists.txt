@@ -18,12 +18,10 @@ function(add_emberviewer_test test_name)
     
     target_link_libraries(${test_name}
         PRIVATE
-            Qt5::Core
+            EmberViewerLib
             Qt5::Test
-            Qt5::Widgets
-            Qt5::Network
             libs101::s101
-            libformula::formula
+            # libformula::formula    # Not used by EmberViewer - commented out
             ${LIBEMBER_TARGET}
     )
     
