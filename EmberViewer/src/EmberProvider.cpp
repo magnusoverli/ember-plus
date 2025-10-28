@@ -315,7 +315,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                 // Add new connections
                                 for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                     int sourceNumber = *srcIt;
-                                    matrix.connections[QPair<int,int>(targetNumber, sourceNumber)] = true;
+                                    matrix.connections[{targetNumber, sourceNumber}] = true;
                                 }
                                 
                                 emit requestReceived(path, QString("Matrix Absolute: Target %1").arg(targetNumber));
@@ -357,7 +357,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                 // Add new connections
                                 for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                     int sourceNumber = *srcIt;
-                                    matrix.connections[QPair<int,int>(targetNumber, sourceNumber)] = true;
+                                    matrix.connections[{targetNumber, sourceNumber}] = true;
                                 }
                                 
                                 emit requestReceived(path, QString("Matrix Connect: Target %1").arg(targetNumber));
@@ -366,7 +366,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                 // Disconnect: Remove specified connections
                                 for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                     int sourceNumber = *srcIt;
-                                    matrix.connections.remove(QPair<int,int>(targetNumber, sourceNumber));
+                                    matrix.connections.remove({targetNumber, sourceNumber});
                                 }
                                 
                                 emit requestReceived(path, QString("Matrix Disconnect: Target %1").arg(targetNumber));

@@ -19,6 +19,7 @@
 #include <QStringList>
 #include <QMap>
 #include <QSet>
+#include <utility>
 #include <QSplitter>
 
 // Custom widget for rotated text labels (90° counter-clockwise)
@@ -134,7 +135,7 @@ private:
         bool connected;
         int disposition;  // 0=Tally, 1=Modified, 2=Pending, 3=Locked
     };
-    QMap<QPair<int, int>, ConnectionState> m_connections;
+    QMap<std::pair<int, int>, ConnectionState> m_connections;
     
     // UI components - Frozen pane structure with splitters
     QLabel *m_headerLabel;
@@ -163,7 +164,7 @@ private:
     QGridLayout *m_buttonGridLayout;
     
     // Button references: (targetNumber, sourceNumber) -> button
-    QMap<QPair<int, int>, QPushButton*> m_buttons;
+    QMap<std::pair<int, int>, QPushButton*> m_buttons;
     
     // Hover tracking
     int m_hoverTargetNumber;

@@ -1688,7 +1688,7 @@ DeviceSnapshot MainWindow::captureSnapshot()
                 for (int targetIdx : matrixData.targetNumbers) {
                     for (int sourceIdx : matrixData.sourceNumbers) {
                         bool connected = matrixWidget->isConnected(targetIdx, sourceIdx);
-                        matrixData.connections[QPair<int,int>(targetIdx, sourceIdx)] = connected;
+                        matrixData.connections[{targetIdx, sourceIdx}] = connected;
                     }
                 }
                 

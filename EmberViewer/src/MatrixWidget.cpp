@@ -11,7 +11,7 @@
 #include <QHBoxLayout>
 #include <QFont>
 #include <QFontMetrics>
-#include <QPair>
+#include <utility>
 #include <QDebug>
 #include <QEvent>
 #include <QPalette>
@@ -515,7 +515,7 @@ void MatrixWidget::setSourceLabel(int sourceNumber, const QString &label)
 
 void MatrixWidget::setConnection(int targetNumber, int sourceNumber, bool connected, int disposition)
 {
-    QPair<int, int> key(targetNumber, sourceNumber);
+    std::pair<int, int> key(targetNumber, sourceNumber);
     Q_ASSERT(targetNumber >= 0 && sourceNumber >= 0);
     
     if (connected) {
@@ -538,7 +538,7 @@ void MatrixWidget::clearConnections()
 void MatrixWidget::clearTargetConnections(int targetNumber)
 {
     // Remove all connections for this specific target
-    QList<QPair<int, int>> keysToRemove;
+    QList<std::pair<int, int>> keysToRemove;
     for (auto it = m_connections.begin(); it != m_connections.end(); ++it) {
         if (it.key().first == targetNumber) {
             keysToRemove.append(it.key());
@@ -615,7 +615,7 @@ void MatrixWidget::buildGrid()
             btn->setEnabled(m_crosspointsEnabled);
             btn->installEventFilter(this);
             
-            QPair<int, int> key(tgtNum, srcNum);
+            std::pair<int, int> key(tgtNum, srcNum);
             m_buttons[key] = btn;
             
             // Connect button click to emit signal
@@ -644,7 +644,7 @@ void MatrixWidget::buildGrid()
 
 void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
 {
-    QPair<int, int> key(targetNumber, sourceNumber);
+    std::pair<int, int> key(targetNumber, sourceNumber);
     Q_ASSERT(targetNumber >= 0 && sourceNumber >= 0);
     
     if (!m_buttons.contains(key)) {
@@ -695,7 +695,7 @@ bool MatrixWidget::isButtonHovered(int targetNumber, int sourceNumber) const
 // Helper: Get the appropriate stylesheet for a button based on connection AND hover state
 QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) const
 {
-    QPair<int, int> key(targetNumber, sourceNumber);
+    std::pair<int, int> key(targetNumber, sourceNumber);
     bool isConnected = m_connections.contains(key);
     bool isHovered = isButtonHovered(targetNumber, sourceNumber);
     
@@ -781,7 +781,7 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
 // Helper: Get the appropriate button text based on connection state
 QString MatrixWidget::getButtonText(int targetNumber, int sourceNumber) const
 {
-    QPair<int, int> key(targetNumber, sourceNumber);
+    std::pair<int, int> key(targetNumber, sourceNumber);
     if (!m_connections.contains(key)) {
         return "";
     }
@@ -799,7 +799,7 @@ QString MatrixWidget::getButtonText(int targetNumber, int sourceNumber) const
 // Helper: Get the appropriate tooltip based on connection state
 QString MatrixWidget::getButtonTooltip(int targetNumber, int sourceNumber) const
 {
-    QPair<int, int> key(targetNumber, sourceNumber);
+    std::pair<int, int> key(targetNumber, sourceNumber);
     if (!m_connections.contains(key)) {
         return "";
     }
@@ -822,7 +822,7 @@ bool MatrixWidget::eventFilter(QObject *watched, QEvent *event)
     }
     
     // Find which target/source this button belongs to
-    QPair<int, int> key(-1, -1);
+    std::pair<int, int> key(-1, -1);
     for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
         if (it.value() == btn) {
             key = it.key();
@@ -864,7 +864,7 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
             // Update all buttons to the LEFT of and including the previous column (same row)
             for (int col = 0; col <= prevColIdx; col++) {
                 int tgtNum = m_targetNumbers[col];
-                if (m_buttons.contains(QPair<int, int>(tgtNum, prevHoverSourceNumber))) {
+                if (m_buttons.contains(std::pair<int, int>(tgtNum, prevHoverSourceNumber))) {
                     updateConnectionButton(tgtNum, prevHoverSourceNumber);
                 }
             }
@@ -876,7 +876,7 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
             // Update all buttons ABOVE and including the previous row (same column)
             for (int row = 0; row <= prevRowIdx; row++) {
                 int srcNum = m_sourceNumbers[row];
-                if (m_buttons.contains(QPair<int, int>(prevHoverTargetNumber, srcNum))) {
+                if (m_buttons.contains(std::pair<int, int>(prevHoverTargetNumber, srcNum))) {
                     updateConnectionButton(prevHoverTargetNumber, srcNum);
                 }
             }
@@ -896,7 +896,7 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
             // Update all buttons to the LEFT of and including this column (same row)
             for (int col = 0; col <= colIdx; col++) {
                 int tgtNum = m_targetNumbers[col];
-                if (m_buttons.contains(QPair<int, int>(tgtNum, m_hoverSourceNumber))) {
+                if (m_buttons.contains(std::pair<int, int>(tgtNum, m_hoverSourceNumber))) {
                     updateConnectionButton(tgtNum, m_hoverSourceNumber);
                 }
             }
@@ -908,7 +908,7 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
             // Update all buttons ABOVE and including this row (same column)
             for (int row = 0; row <= rowIdx; row++) {
                 int srcNum = m_sourceNumbers[row];
-                if (m_buttons.contains(QPair<int, int>(m_hoverTargetNumber, srcNum))) {
+                if (m_buttons.contains(std::pair<int, int>(m_hoverTargetNumber, srcNum))) {
                     updateConnectionButton(m_hoverTargetNumber, srcNum);
                 }
             }
@@ -918,7 +918,7 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
 
 bool MatrixWidget::isConnected(int targetNumber, int sourceNumber) const
 {
-    QPair<int, int> key(targetNumber, sourceNumber);
+    std::pair<int, int> key(targetNumber, sourceNumber);
     Q_ASSERT(targetNumber >= 0 && sourceNumber >= 0);
     return m_connections.contains(key) && m_connections[key].connected;
 }

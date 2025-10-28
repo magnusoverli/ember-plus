@@ -205,7 +205,7 @@ MatrixData MatrixData::fromJson(const QJsonObject& json) {
         QJsonObject conn = val.toObject();
         int target = conn["target"].toInt();
         int source = conn["source"].toInt();
-        data.connections[QPair<int,int>(target, source)] = true;
+        data.connections[{target, source}] = true;
     }
     
     return data;

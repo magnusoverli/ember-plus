@@ -14,6 +14,7 @@
 #include <QMap>
 #include <QStringList>
 #include <QVariant>
+#include <utility>
 #include <QJsonDocument>
 
 struct NodeData {
@@ -54,7 +55,7 @@ struct MatrixData {
     QList<int> sourceNumbers;  // Actual source indices
     QMap<int, QString> targetLabels;
     QMap<int, QString> sourceLabels;
-    QMap<QPair<int,int>, bool> connections; // (target,source) -> connected
+    QMap<std::pair<int,int>, bool> connections; // (target,source) -> connected
     
     QJsonObject toJson() const;
     static MatrixData fromJson(const QJsonObject& json);
