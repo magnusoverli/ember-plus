@@ -118,6 +118,7 @@ jobs:
       
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
+        timeout-minutes: 15
         with:
           version: '6.8.*'
           host: 'linux'
