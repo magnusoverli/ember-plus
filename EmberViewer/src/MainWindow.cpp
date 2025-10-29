@@ -685,8 +685,9 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
             qDebug().noquote() << QString("Node: %1 [%2] - %3")
                 .arg(displayName).arg(path).arg(isOnline ? "Online" : "Offline");
             
-            // AUTO-REQUEST: Children are automatically requested when node is received
-            // No need for dummy children - real children will arrive and make node expandable
+            // LAZY LOADING: Make nodes expandable - they might have children
+            // Children will be fetched on-demand when user expands the node
+            item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
         }
         
         // Remove "Loading..." placeholder when real children arrive
@@ -771,7 +772,10 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         item->setData(0, Qt::UserRole + 6, QVariant::fromValue(enumValuesVar)); // EnumValuesRole
         item->setData(0, Qt::UserRole + 8, isOnline);   // IsOnlineRole (after Matrix's UserRole + 7)
         
-        // LAZY LOADING: Remove "Loading..." placeholder when real children arrive
+        // LAZY LOADING: Parameters are leaf elements - never expandable
+        // No need to set child indicator policy
+        
+        // Remove "Loading..." placeholder when real children arrive
         if (item->parent()) {
             QTreeWidgetItem *parent = item->parent();
             for (int i = 0; i < parent->childCount(); i++) {
@@ -1041,6 +1045,9 @@ void MainWindow::onMatrixReceived(const QString &path, int /* number */, const Q
         
         if (isNew) {
             qInfo().noquote() << QString("Matrix discovered: %1 (%2×%3)").arg(displayName).arg(sourceCount).arg(targetCount);
+            
+            // LAZY LOADING: Make matrices expandable - they can have label children
+            item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
         }
     }
 }
@@ -1448,6 +1455,9 @@ void MainWindow::onFunctionReceived(const QString &path, const QString &identifi
             }
             qDebug().noquote() << QString("Function: %1 [%2] (%3 args)")
                 .arg(displayName).arg(path).arg(argNames.size());
+            
+            // LAZY LOADING: Functions are leaf elements - never expandable
+            // No need to set child indicator policy
         }
     }
 }
