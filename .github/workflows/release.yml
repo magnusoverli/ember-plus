@@ -184,7 +184,7 @@ jobs:
 
   release-linux:
     name: Linux AppImage
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     
     steps:
       - name: Checkout code
