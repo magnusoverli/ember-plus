@@ -96,7 +96,12 @@ jobs:
       - name: Install NSIS
         shell: powershell
         run: |
-          choco install nsis -y
+          if (!(Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) {
+            Write-Host "Installing NSIS..."
+            choco install nsis -y
+          } else {
+            Write-Host "NSIS already installed"
+          }
       
       - name: Create installer
         shell: cmd
