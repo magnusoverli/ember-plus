@@ -42,8 +42,28 @@ jobs:
           arch: 'win64_msvc2022_64'
           cache: true  # Enable Qt caching for faster subsequent builds
       
-      - name: Install CMake
-        uses: lukka/get-cmake@latest
+      - name: Verify CMake and Ninja are installed
+        shell: powershell
+        run: |
+          Write-Host "Checking for CMake..."
+          $cmake = Get-Command cmake -ErrorAction SilentlyContinue
+          if ($cmake) {
+            Write-Host "✓ CMake found: $($cmake.Source)"
+            cmake --version
+          } else {
+            Write-Host "ERROR: CMake not found in PATH"
+            Write-Host "Please install CMake on the runner: choco install cmake -y"
+            exit 1
+          }
+          
+          Write-Host "`nChecking for Ninja..."
+          $ninja = Get-Command ninja -ErrorAction SilentlyContinue
+          if ($ninja) {
+            Write-Host "✓ Ninja found: $($ninja.Source)"
+            ninja --version
+          } else {
+            Write-Host "WARNING: Ninja not found (optional, using MSBuild instead)"
+          }
       
       - name: Setup Visual Studio environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -58,7 +78,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=%Qt6_DIR%
-          cmake --build . --config Release
+          cmake --build . --config Release -- /maxcpucount
       
       - name: Deploy Qt dependencies
         shell: cmd
