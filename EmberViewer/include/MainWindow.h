@@ -35,6 +35,7 @@ class EmulatorWindow;
 class UpdateDialog;
 class ConnectionManager;
 class ConnectionsTreeWidget;
+class EmberTreeWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -106,7 +107,7 @@ private:
     DeviceSnapshot captureSnapshot();
     
     // Widgets
-    QTreeWidget *m_treeWidget;
+    EmberTreeWidget *m_treeWidget;
     QWidget *m_propertyPanel;
     QTextEdit *m_consoleLog;
     QGroupBox *m_consoleGroup;

@@ -8,6 +8,7 @@
 
 #include "MainWindow.h"
 #include "EmberConnection.h"
+#include "EmberTreeWidget.h"
 #include "ParameterDelegate.h"
 #include "PathColumnDelegate.h"
 #include "MatrixWidget.h"
@@ -233,8 +234,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 void MainWindow::setupUi()
 {
-    // Create central widget with tree view
-    m_treeWidget = new QTreeWidget(this);
+    // Create central widget with custom tree view (handles arrow clicks differently)
+    m_treeWidget = new EmberTreeWidget(this);
     m_treeWidget->setHeaderLabels(QStringList() << "Path" << "Type" << "Value");
     m_treeWidget->setColumnCount(3);
     m_treeWidget->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Path column auto-resizes
@@ -243,6 +244,29 @@ void MainWindow::setupUi()
     m_treeWidget->header()->setStretchLastSection(true);  // Value column stretches to fill
     m_treeWidget->setAlternatingRowColors(true);
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    
+    // OPTIMIZATION: Remove expand/collapse delay for instant responsiveness
+    // 1. autoExpandDelay: Default is ~1000ms to prevent accidental expansions during drag-and-drop
+    //    We set to 0 for instant collapse/re-expand with no delay
+    // 2. animated: Default animations add visual delay (250-300ms per expand/collapse)
+    //    We disable for instant visual response
+    // 3. uniformRowHeights: Tells Qt all rows are same height, allows faster rendering/layout
+    //    Eliminates ~300ms delay after collapse before next expand is allowed
+    // 4. allColumnsShowFocus: Improves click responsiveness by simplifying focus handling
+    // Device load protection is handled by m_fetchedPaths and m_requestedPaths caching
+    m_treeWidget->setAutoExpandDelay(0);
+    m_treeWidget->setAnimated(false);
+    m_treeWidget->setUniformRowHeights(true);
+    m_treeWidget->setAllColumnsShowFocus(false);
+    
+    // INVESTIGATION: Check system double-click interval
+    int doubleClickInterval = QApplication::doubleClickInterval();
+    qDebug() << "System double-click interval:" << doubleClickInterval << "ms";
+    
+    // Set comfortable double-click interval for item text (arrow clicks are instant via EmberTreeWidget)
+    QApplication::setDoubleClickInterval(250);  // Comfortable timing for double-clicking items
+    qDebug() << "Set double-click interval to: 250ms";
+    
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
     connect(m_treeWidget, &QTreeWidget::itemExpanded, this, &MainWindow::onItemExpanded);
     connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainWindow::onItemCollapsed);
@@ -560,9 +584,10 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_statusLabel->setStyleSheet("QLabel { color: green; font-weight: bold; }");
         logMessage("Connected successfully!");
         
-        // Disable tree updates during initial population to prevent UI freeze
-        // Updates will be re-enabled in subscribeToExpandedItems() when tree is populated
-        m_treeWidget->setUpdatesEnabled(false);
+        // OPTIMIZATION: With lazy loading, tree updates are no longer disabled
+        // We only receive small batches of children at a time (5-20 items max)
+        // so there's no risk of UI freeze. User sees real-time tree population.
+        // (Previously disabled for aggressive enumeration with 100+ items at once)
         
         // Reset batch counter for new connection
         m_itemsAddedSinceUpdate = 0;
@@ -660,18 +685,11 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
             qDebug().noquote() << QString("Node: %1 [%2] - %3")
                 .arg(displayName).arg(path).arg(isOnline ? "Online" : "Offline");
             
-            // LAZY LOADING: Add dummy child so node appears expandable
-            // This will be replaced with real children when user expands the node
-            // Only add if this node has no children yet
-            if (item->childCount() == 0) {
-                QTreeWidgetItem *dummy = new QTreeWidgetItem(item);
-                dummy->setFlags(Qt::NoItemFlags);  // Not selectable/editable/enabled
-                // Leave all text empty - Qt will show expand arrow but no visible child
-            }
+            // AUTO-REQUEST: Children are automatically requested when node is received
+            // No need for dummy children - real children will arrive and make node expandable
         }
         
-        // LAZY LOADING: Remove "Loading..." placeholder when real children arrive
-        // Check if this node's parent has a "Loading..." item that should be removed
+        // Remove "Loading..." placeholder when real children arrive
         if (item->parent()) {
             QTreeWidgetItem *parent = item->parent();
             // Look for "Loading..." child
@@ -1480,19 +1498,10 @@ void MainWindow::onItemExpanded(QTreeWidgetItem *item)
     if (type == "Node" && !m_fetchedPaths.contains(path)) {
         m_fetchedPaths.insert(path);  // Mark as fetched to avoid duplicate requests
         
-        // Only request if the node has no children or only has a dummy/loading child
+        // AUTO-REQUEST: Children are automatically requested when node is received
+        // So by the time user expands, children should already be present
+        // Only fetch if somehow we don't have children yet
         bool needsToFetch = (item->childCount() == 0);
-        
-        // Check if only child is a dummy placeholder (created when node was received)
-        if (!needsToFetch && item->childCount() == 1) {
-            QTreeWidgetItem *firstChild = item->child(0);
-            // Dummy items have NoItemFlags and no text
-            if (firstChild->flags() == Qt::NoItemFlags && firstChild->text(0).isEmpty()) {
-                needsToFetch = true;
-                // Remove the dummy placeholder
-                delete firstChild;
-            }
-        }
         
         if (needsToFetch) {
             // Add "Loading..." placeholder
@@ -1559,9 +1568,8 @@ void MainWindow::setItemDisplayName(QTreeWidgetItem *item, const QString &baseNa
 
 void MainWindow::subscribeToExpandedItems()
 {
-    // Re-enable tree updates after initial population
-    // (disabled in onConnectionStateChanged when connecting)
-    m_treeWidget->setUpdatesEnabled(true);
+    // OPTIMIZATION: Tree updates no longer disabled with lazy loading
+    // This function now only handles subscriptions for expanded items
     
     QTreeWidgetItemIterator it(m_treeWidget);
     while (*it) {

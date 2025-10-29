@@ -189,12 +189,14 @@ add_library(EmberViewerLib STATIC
     src/DeviceSnapshot.cpp
     src/UpdateManager.cpp
     src/UpdateDialog.cpp
+    src/EmberTreeWidget.cpp
     ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
     include/ParameterDelegate.h
     include/DeviceSnapshot.h
     include/UpdateManager.h
     include/UpdateDialog.h
+    include/EmberTreeWidget.h
 )
 
 # Make sure version is updated before building library
@@ -212,6 +214,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/DeviceSnapshot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberTreeWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
@@ -220,6 +223,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/DeviceSnapshot.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateDialog.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberTreeWidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h

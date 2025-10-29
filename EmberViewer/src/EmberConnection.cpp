@@ -135,6 +135,14 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_host = host;
     m_port = port;
     
+    // OPTIMIZATION: Configure socket for low-latency real-time protocol
+    // TCP_NODELAY disables Nagle's algorithm to eliminate 40-200ms buffering delays
+    // This is critical for request/response protocols like Ember+
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    
+    // TCP_KEEPALIVE maintains connection and detects broken connections faster
+    m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
+    
     log(LogLevel::Info, QString("Connecting to %1:%2...").arg(host).arg(port));
     
     // Start connection timeout timer
@@ -551,10 +559,7 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
     }
     
     if (shouldAutoRequest && (!node->children() || node->children()->size() == 0)) {
-        QString path = pathStr;  // Capture by value for lambda
-        QTimer::singleShot(10, this, [this, path]() {
-            sendGetDirectoryForPath(path);
-        });
+        sendGetDirectoryForPath(pathStr);
     }
 }
 
@@ -644,10 +649,7 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
     }
     
     if (shouldAutoRequest && (!node->children() || node->children()->size() == 0)) {
-        QString path = pathStr;  // Capture by value for lambda
-        QTimer::singleShot(10, this, [this, path]() {
-            sendGetDirectoryForPath(path);
-        });
+        sendGetDirectoryForPath(pathStr);
     }
 }
 

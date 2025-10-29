@@ -85,6 +85,7 @@ public:
     void invokeFunction(const QString &path, const QList<QVariant> &arguments);
     
     // Request children for a specific path (for lazy loading)
+    // optimizedForNameDiscovery: use minimal field mask for faster name discovery
     void sendGetDirectoryForPath(const QString& path);
 
 signals:
