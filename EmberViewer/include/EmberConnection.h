@@ -181,6 +181,17 @@ private:
     };
     QMap<QString, RootNodeInfo> m_rootNodes;  // Track root-level nodes
     
+    // Device name caching for instant reconnection
+    struct DeviceCache {
+        QString deviceName;        // Cached device name
+        QString rootPath;          // Root node path (e.g., "1")
+        QString identityPath;      // Identity node path (e.g., "1.4")
+        QDateTime lastSeen;        // When we last connected
+        bool isValid;              // Whether cache is still valid
+    };
+    static QMap<QString, DeviceCache> s_deviceCache;  // Static cache survives connections
+    static constexpr int CACHE_EXPIRY_HOURS = 24;     // Cache expires after 24 hours
+    
     // Log level
     LogLevel m_logLevel;
     

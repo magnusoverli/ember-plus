@@ -43,6 +43,9 @@
 #include <s101/PackageFlag.hpp>
 #include <s101/StreamEncoder.hpp>
 
+// Static device cache definition
+QMap<QString, EmberConnection::DeviceCache> EmberConnection::s_deviceCache;
+
 // DomReader implementation
 EmberConnection::DomReader::DomReader(EmberConnection* connection)
     : libember::dom::AsyncDomReader(libember::glow::GlowNodeFactory::getFactory())
@@ -221,7 +224,41 @@ void EmberConnection::onSocketConnected()
     m_protocolTimer->start();
     log(LogLevel::Info, "Waiting for Ember+ response...");
     
-    // Send GetDirectory to request root tree
+    // OPTIMIZATION: Check cache for previously discovered device name
+    // Display cached name immediately for instant UI feedback on reconnection
+    QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
+    if (s_deviceCache.contains(cacheKey)) {
+        DeviceCache& cache = s_deviceCache[cacheKey];
+        
+        // Check if cache is still valid (not expired)
+        QDateTime now = QDateTime::currentDateTime();
+        int hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
+        
+        if (cache.isValid && hoursSinceLastSeen < CACHE_EXPIRY_HOURS) {
+            log(LogLevel::Info, QString("Using cached device name: '%1' (last seen %2 hours ago)")
+                .arg(cache.deviceName)
+                .arg(hoursSinceLastSeen));
+            
+            // Create/update root node with cached info
+            RootNodeInfo rootInfo;
+            rootInfo.path = cache.rootPath;
+            rootInfo.displayName = cache.deviceName;
+            rootInfo.isGeneric = false;  // We have the real name
+            rootInfo.identityPath = cache.identityPath;
+            m_rootNodes[cache.rootPath] = rootInfo;
+            
+            // Emit cached device name immediately for instant UI update
+            emit nodeReceived(cache.rootPath, cache.deviceName, cache.deviceName, true);
+            
+            log(LogLevel::Info, "Cached device name displayed instantly, will verify with device...");
+        } else {
+            log(LogLevel::Info, QString("Cache expired (last seen %1 hours ago), will rediscover device name")
+                .arg(hoursSinceLastSeen));
+            cache.isValid = false;
+        }
+    }
+    
+    // Send GetDirectory to request root tree (always validate with device)
     sendGetDirectory();
 }
 
@@ -790,6 +827,19 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
                         m_rootNodes[rootPath].displayName = value;
                         m_rootNodes[rootPath].isGeneric = false;
                         
+                        // OPTIMIZATION: Cache device name for instant reconnection
+                        QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
+                        DeviceCache cache;
+                        cache.deviceName = value;
+                        cache.rootPath = rootPath;
+                        cache.identityPath = m_rootNodes[rootPath].identityPath;
+                        cache.lastSeen = QDateTime::currentDateTime();
+                        cache.isValid = true;
+                        s_deviceCache[cacheKey] = cache;
+                        
+                        log(LogLevel::Debug, QString("Cached device name '%1' for %2")
+                            .arg(value).arg(cacheKey));
+                        
                         // Re-emit node with new name (assume online since we're getting parameter updates)
                         emit nodeReceived(rootPath, value, value, true);
                     }
@@ -928,6 +978,19 @@ void EmberConnection::processParameter(libember::glow::GlowParameter* param, con
                         // Update the display name
                         m_rootNodes[rootPath].displayName = value;
                         m_rootNodes[rootPath].isGeneric = false;
+                        
+                        // OPTIMIZATION: Cache device name for instant reconnection
+                        QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
+                        DeviceCache cache;
+                        cache.deviceName = value;
+                        cache.rootPath = rootPath;
+                        cache.identityPath = m_rootNodes[rootPath].identityPath;
+                        cache.lastSeen = QDateTime::currentDateTime();
+                        cache.isValid = true;
+                        s_deviceCache[cacheKey] = cache;
+                        
+                        log(LogLevel::Debug, QString("Cached device name '%1' for %2")
+                            .arg(value).arg(cacheKey));
                         
                         // Re-emit node with new name (assume online since we're getting parameter updates)
                         emit nodeReceived(rootPath, value, value, true);
