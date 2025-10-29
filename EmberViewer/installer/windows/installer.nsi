@@ -73,7 +73,7 @@ Section "Install"
         Goto wait_loop
     
     wait_timeout:
-        MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "EmberViewer is still running. Click OK to force close it, or Cancel to abort the update." IDOK force_close
+        MessageBox MB_OKCANCEL "EmberViewer is still running. Click OK to force close it, or Cancel to abort the update." IDOK force_close
         Abort
     
     force_close:
@@ -100,7 +100,7 @@ Section "Install"
         StrCpy $2 $1 15  ; Get first 15 characters
         StrCmp $2 "EmberViewer.exe" 0 check_done
             ; App is running in normal installation
-            MessageBox MB_OK|MB_ICONEXCLAMATION "EmberViewer is currently running. Please close it and try again."
+            MessageBox MB_OK "EmberViewer is currently running. Please close it and try again."
             Abort
     
     check_done:
@@ -113,7 +113,7 @@ Section "Install"
     IfErrors file_copy_failed file_copy_success
     
     file_copy_failed:
-        MessageBox MB_OK|MB_ICONERROR "Failed to copy application files. The installation cannot continue."
+        MessageBox MB_ICONSTOP "Failed to copy application files. The installation cannot continue."
         Abort
     
     file_copy_success:
