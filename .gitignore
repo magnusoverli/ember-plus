@@ -4,6 +4,7 @@ obj/*
 .vs
 .cache/
 *.tmp
+*.log
 documentation/~$ber+ Documentation.docx
 /libember/.idea/.name
 /libember/.idea/encodings.xml
