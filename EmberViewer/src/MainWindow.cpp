@@ -122,18 +122,19 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::logMessage, this, &MainWindow::onLogMessage);
     connect(m_connection, &EmberConnection::treePopulated, this, &MainWindow::subscribeToExpandedItems);
     
-    // Use Qt::QueuedConnection for tree-building signals to prevent UI freeze on Windows
-    // This makes the signals asynchronous, allowing the event loop to process UI updates
-    connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::matrixConnectionReceived, this, &MainWindow::onMatrixConnectionReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived, Qt::QueuedConnection);
-    connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived, Qt::QueuedConnection);
+    // LAZY LOADING OPTIMIZATION: Use direct connections for instant UI updates
+    // With lazy loading, we only receive small batches of children at a time,
+    // so there's no risk of UI freeze. Direct connections eliminate queuing latency.
+    connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
+    connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
+    connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
+    connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived);
+    connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
+    connect(m_connection, &EmberConnection::matrixConnectionReceived, this, &MainWindow::onMatrixConnectionReceived);
+    connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
+    connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared);
+    connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
+    connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
@@ -603,6 +604,9 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_subscribedPaths.clear();
         m_subscriptionStates.clear();
         
+        // Clear lazy loading tracking
+        m_fetchedPaths.clear();
+        
         // Reset batch counter
         m_itemsAddedSinceUpdate = 0;
         
@@ -655,6 +659,29 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
         if (isNew) {
             qDebug().noquote() << QString("Node: %1 [%2] - %3")
                 .arg(displayName).arg(path).arg(isOnline ? "Online" : "Offline");
+            
+            // LAZY LOADING: Add dummy child so node appears expandable
+            // This will be replaced with real children when user expands the node
+            // Only add if this node has no children yet
+            if (item->childCount() == 0) {
+                QTreeWidgetItem *dummy = new QTreeWidgetItem(item);
+                dummy->setFlags(Qt::NoItemFlags);  // Not selectable/editable/enabled
+                // Leave all text empty - Qt will show expand arrow but no visible child
+            }
+        }
+        
+        // LAZY LOADING: Remove "Loading..." placeholder when real children arrive
+        // Check if this node's parent has a "Loading..." item that should be removed
+        if (item->parent()) {
+            QTreeWidgetItem *parent = item->parent();
+            // Look for "Loading..." child
+            for (int i = 0; i < parent->childCount(); i++) {
+                QTreeWidgetItem *child = parent->child(i);
+                if (child->text(0) == "Loading..." && child->text(1).isEmpty()) {
+                    delete child;
+                    break;  // Only one loading item per parent
+                }
+            }
         }
         
         // Batch updates for better responsiveness - process events every N items
@@ -725,6 +752,18 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         }
         item->setData(0, Qt::UserRole + 6, QVariant::fromValue(enumValuesVar)); // EnumValuesRole
         item->setData(0, Qt::UserRole + 8, isOnline);   // IsOnlineRole (after Matrix's UserRole + 7)
+        
+        // LAZY LOADING: Remove "Loading..." placeholder when real children arrive
+        if (item->parent()) {
+            QTreeWidgetItem *parent = item->parent();
+            for (int i = 0; i < parent->childCount(); i++) {
+                QTreeWidgetItem *child = parent->child(i);
+                if (child->text(0) == "Loading..." && child->text(1).isEmpty()) {
+                    delete child;
+                    break;
+                }
+            }
+        }
         
         // Check if parameter is editable
         // Access: 0=None, 1=ReadOnly, 2=WriteOnly, 3=ReadWrite
@@ -1432,25 +1471,60 @@ void MainWindow::onItemExpanded(QTreeWidgetItem *item)
     QString path = item->data(0, Qt::UserRole).toString();
     QString type = item->text(1);
     
-    if (path.isEmpty() || m_subscribedPaths.contains(path)) {
-        return;  // Already subscribed or no path
+    if (path.isEmpty()) {
+        return;
     }
     
-    // Subscribe based on type
-    if (type == "Node") {
-        m_connection->subscribeToNode(path, true);
-    } else if (type == "Parameter") {
-        m_connection->subscribeToParameter(path, true);
-    } else if (type == "Matrix") {
-        m_connection->subscribeToMatrix(path, true);
+    // LAZY LOADING: Request children if not yet fetched
+    // Only for nodes that haven't been fetched and have no real children yet
+    if (type == "Node" && !m_fetchedPaths.contains(path)) {
+        m_fetchedPaths.insert(path);  // Mark as fetched to avoid duplicate requests
+        
+        // Only request if the node has no children or only has a dummy/loading child
+        bool needsToFetch = (item->childCount() == 0);
+        
+        // Check if only child is a dummy placeholder (created when node was received)
+        if (!needsToFetch && item->childCount() == 1) {
+            QTreeWidgetItem *firstChild = item->child(0);
+            // Dummy items have NoItemFlags and no text
+            if (firstChild->flags() == Qt::NoItemFlags && firstChild->text(0).isEmpty()) {
+                needsToFetch = true;
+                // Remove the dummy placeholder
+                delete firstChild;
+            }
+        }
+        
+        if (needsToFetch) {
+            // Add "Loading..." placeholder
+            QTreeWidgetItem *loadingItem = new QTreeWidgetItem(item);
+            loadingItem->setText(0, "Loading...");
+            loadingItem->setText(1, "");  // No type
+            loadingItem->setForeground(0, QBrush(QColor("#888888")));
+            loadingItem->setFlags(Qt::ItemIsEnabled);  // Not selectable
+            
+            // Request children from device
+            qDebug().noquote() << QString("Lazy loading: Requesting children for %1").arg(path);
+            m_connection->sendGetDirectoryForPath(path);
+        }
     }
     
-    if (!type.isEmpty()) {
-        m_subscribedPaths.insert(path);
-        SubscriptionState state;
-        state.subscribedAt = QDateTime::currentDateTime();
-        state.autoSubscribed = true;
-        m_subscriptionStates[path] = state;
+    // Subscription handling (existing logic)
+    if (!m_subscribedPaths.contains(path)) {
+        if (type == "Node") {
+            m_connection->subscribeToNode(path, true);
+        } else if (type == "Parameter") {
+            m_connection->subscribeToParameter(path, true);
+        } else if (type == "Matrix") {
+            m_connection->subscribeToMatrix(path, true);
+        }
+        
+        if (!type.isEmpty()) {
+            m_subscribedPaths.insert(path);
+            SubscriptionState state;
+            state.subscribedAt = QDateTime::currentDateTime();
+            state.autoSubscribed = true;
+            m_subscriptionStates[path] = state;
+        }
     }
 }
 

@@ -151,6 +151,9 @@ private:
     };
     QMap<QString, SubscriptionState> m_subscriptionStates;
     
+    // Lazy loading: track which paths have had their children fetched
+    QSet<QString> m_fetchedPaths;
+    
     // State
     bool m_isConnected;
     bool m_showOidPath;

@@ -532,9 +532,25 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         processElementCollection(node->children(), pathStr);
     }
     
-    // Request children for this node if not already provided
-    // Defer the request using QTimer to avoid blocking the UI thread during initial tree population
-    if (!node->children() || node->children()->size() == 0) {
+    // LAZY LOADING: Only auto-request children for special cases (root name discovery)
+    // Otherwise, let the UI request children when user expands the node
+    bool shouldAutoRequest = false;
+    
+    // Special case 1: Root nodes with generic names (to discover device name)
+    if (pathDepth == 1 && m_rootNodes.contains(pathStr) && m_rootNodes[pathStr].isGeneric) {
+        shouldAutoRequest = true;
+        log(LogLevel::Debug, QString("Auto-requesting children of root node %1 for name discovery").arg(pathStr));
+    }
+    // Special case 2: Identity nodes under generic root (to find name parameter)
+    else if (pathDepth == 2) {
+        QString rootPath = pathParts[0];
+        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].identityPath == pathStr) {
+            shouldAutoRequest = true;
+            log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(pathStr));
+        }
+    }
+    
+    if (shouldAutoRequest && (!node->children() || node->children()->size() == 0)) {
         QString path = pathStr;  // Capture by value for lambda
         QTimer::singleShot(10, this, [this, path]() {
             sendGetDirectoryForPath(path);
@@ -609,9 +625,25 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
         processElementCollection(node->children(), pathStr);
     }
     
-    // Request children for this node if not already provided
-    // Defer the request using QTimer to avoid blocking the UI thread during initial tree population
-    if (!node->children() || node->children()->size() == 0) {
+    // LAZY LOADING: Only auto-request children for special cases (root name discovery)
+    // Otherwise, let the UI request children when user expands the node
+    bool shouldAutoRequest = false;
+    
+    // Special case 1: Root nodes with generic names (to discover device name)
+    if (pathDepth == 1 && m_rootNodes.contains(pathStr) && m_rootNodes[pathStr].isGeneric) {
+        shouldAutoRequest = true;
+        log(LogLevel::Debug, QString("Auto-requesting children of root node %1 for name discovery").arg(pathStr));
+    }
+    // Special case 2: Identity nodes under generic root (to find name parameter)
+    else if (pathDepth == 2) {
+        QString parentPath = pathParts[0];
+        if (m_rootNodes.contains(parentPath) && m_rootNodes[parentPath].identityPath == pathStr) {
+            shouldAutoRequest = true;
+            log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(pathStr));
+        }
+    }
+    
+    if (shouldAutoRequest && (!node->children() || node->children()->size() == 0)) {
         QString path = pathStr;  // Capture by value for lambda
         QTimer::singleShot(10, this, [this, path]() {
             sendGetDirectoryForPath(path);

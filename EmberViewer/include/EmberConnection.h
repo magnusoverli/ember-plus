@@ -83,6 +83,9 @@ public:
     
     // Invoke a function with arguments
     void invokeFunction(const QString &path, const QList<QVariant> &arguments);
+    
+    // Request children for a specific path (for lazy loading)
+    void sendGetDirectoryForPath(const QString& path);
 
 signals:
     void connected();
@@ -135,7 +138,6 @@ private:
     void processFunction(libember::glow::GlowFunction* function, const QString& parentPath);
     void processInvocationResult(libember::dom::Node* result);
     void sendGetDirectory();
-    void sendGetDirectoryForPath(const QString& path);
     
     // Logging helper
     void log(LogLevel level, const QString &message);
