@@ -8,10 +8,6 @@
 !define VERSIONMINOR 0
 !define VERSIONBUILD 5
 
-; Compression settings - lzma provides good compression with faster build time than default
-SetCompressor /SOLID lzma
-SetCompressorDictSize 8
-
 ; Installer details
 Name "${APPNAME}"
 OutFile "EmberViewer-Setup.exe"
