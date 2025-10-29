@@ -10,6 +10,17 @@ cmake_policy(SET CMP0063 NEW)
 # Allow interprocedural optimization
 cmake_policy(SET CMP0069 NEW)
 
+################################ Build Optimizations ############################
+
+# Skip compiler ABI detection for known compilers (faster configure)
+if(MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    set(CMAKE_C_COMPILER_ABI_CHECKED TRUE)
+    set(CMAKE_CXX_COMPILER_ABI_CHECKED TRUE)
+endif()
+
+# Reduce unnecessary configure-time checks
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+
 ################################ Version Detection ##############################
 
 # Detect version from git tags
@@ -106,6 +117,9 @@ message(STATUS "EmberViewer version: ${PROJECT_VERSION} (${GIT_VERSION})")
 include(GNUInstallDirs)
 
 ################################### Options ####################################
+
+# Build options
+option(BUILD_TESTING "Build the testing tree" ON)
 
 # Cross-platform considerations
 if(WIN32)
@@ -259,6 +273,18 @@ target_link_libraries(EmberViewerLib
         ${LIBEMBER_TARGET}
 )
 
+# Enable precompiled headers for faster compilation
+target_precompile_headers(EmberViewerLib
+    PRIVATE
+        <QtCore/QtCore>
+        <QtGui/QtGui>
+        <QtWidgets/QtWidgets>
+        <QtNetwork/QtNetwork>
+        <memory>
+        <vector>
+        <string>
+)
+
 add_executable(${PROJECT_NAME}
     ${SOURCE_FILES}
     ${UI_FILES}
@@ -302,6 +328,9 @@ target_link_libraries(${PROJECT_NAME}
         # libformula::formula    # Not used by EmberViewer - commented out to remove unnecessary dependency
         ${LIBEMBER_TARGET}
 )
+
+# Reuse precompiled headers from EmberViewerLib
+target_precompile_headers(${PROJECT_NAME} REUSE_FROM EmberViewerLib)
 
 # Platform-specific settings
 if(WIN32)
@@ -395,7 +424,9 @@ endif()
 
 # <<<  Tests  >>>
 option(BUILD_TESTS "Build unit tests" ON)
-if(BUILD_TESTS)
+# Respect BUILD_TESTING option (standard CMake option)
+if(BUILD_TESTS AND BUILD_TESTING)
     add_subdirectory(tests)
+    message(STATUS "EmberViewer tests configured")
 endif()
 
