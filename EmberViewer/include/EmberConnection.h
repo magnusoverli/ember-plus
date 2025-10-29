@@ -85,8 +85,10 @@ public:
     void invokeFunction(const QString &path, const QList<QVariant> &arguments);
     
     // Request children for a specific path (for lazy loading)
-    // optimizedForNameDiscovery: use minimal field mask for faster name discovery
-    void sendGetDirectoryForPath(const QString& path);
+    void sendGetDirectoryForPath(const QString& path, bool optimizedForNameDiscovery = false);
+    
+    // Batch request multiple paths in a single message (for reduced round trips)
+    void sendBatchGetDirectory(const QStringList& paths, bool optimizedForNameDiscovery = false);
 
 signals:
     void connected();
