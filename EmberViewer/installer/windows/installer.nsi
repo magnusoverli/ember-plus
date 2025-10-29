@@ -24,8 +24,10 @@ RequestExecutionLevel admin
 !insertmacro GetParameters
 !insertmacro GetOptions
 
-; Windows Messages
+; Windows Messages (only define if not already defined)
+!ifndef WM_CLOSE
 !define WM_CLOSE 0x0010
+!endif
 
 ; Icon settings
 !define MUI_ICON "..\..\resources\icon.ico"
