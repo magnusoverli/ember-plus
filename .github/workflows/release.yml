@@ -23,6 +23,18 @@ jobs:
           target: 'desktop'
           arch: 'win64_msvc2022_64'
       
+      - name: Install CMake
+        shell: powershell
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          cmake --version
+      
+      - name: Setup Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      
       - name: Build EmberViewer
         shell: cmd
         env:
