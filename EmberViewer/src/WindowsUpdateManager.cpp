@@ -16,6 +16,13 @@
 #include <QCoreApplication>
 #include <QTimer>
 #include <QDebug>
+#include <QStandardPaths>
+#include <QDateTime>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 WindowsUpdateManager::WindowsUpdateManager(QObject *parent)
     : UpdateManager(parent)
@@ -170,28 +177,145 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
         return;
     }
 
-    // Run installer with /S flag for silent installation
-    // Note: NSIS installer will handle the update process
-    QProcess process;
-    process.setProgram(installerPath);
-    process.setArguments(QStringList() << "/S");
+    // Copy installer to a persistent location to avoid temp directory cleanup issues
+    QString persistentPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) 
+                           + "/EmberViewer-Update-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + ".exe";
     
-    // Start the process detached so it continues after this app exits
+    qInfo() << "Copying installer to persistent location:" << persistentPath;
+    
+    // Remove existing file if present
+    if (QFile::exists(persistentPath)) {
+        qInfo() << "Removing existing update file at persistent location";
+        QFile::remove(persistentPath);
+    }
+    
+    if (!QFile::copy(installerPath, persistentPath)) {
+        qWarning() << "Failed to copy installer to persistent location. Using original path instead.";
+        qWarning() << "Original path:" << installerPath;
+        // Fall back to original path
+        persistentPath = installerPath;
+    } else {
+        qInfo() << "Installer copied successfully to persistent location";
+        
+        // Verify the copied file
+        QFile copiedFile(persistentPath);
+        if (!copiedFile.exists()) {
+            qWarning() << "Copied installer file does not exist! Falling back to original path.";
+            persistentPath = installerPath;
+        } else {
+            qInfo() << "Verified copied installer exists, size:" << copiedFile.size() << "bytes";
+        }
+    }
+
+    // Run installer with /S (silent) and /UPDATE (auto-update mode) flags
+    // /UPDATE tells the installer to wait for the app to close gracefully
+    QStringList arguments;
+    arguments << "/S" << "/UPDATE";
+    
+    qInfo() << "Starting installer with arguments:" << arguments;
+
+#ifdef Q_OS_WIN
+    // Use Windows API for better UAC handling and process launching
+    // Convert QString to wide string for Windows API
+    std::wstring installerPathW = persistentPath.toStdWString();
+    std::wstring argumentsW = arguments.join(" ").toStdWString();
+    
+    // Use ShellExecuteEx for proper UAC elevation
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    sei.lpVerb = L"runas";  // Request elevation
+    sei.lpFile = installerPathW.c_str();
+    sei.lpParameters = argumentsW.c_str();
+    sei.nShow = SW_SHOWNORMAL;
+    
+    qInfo() << "Attempting to launch installer with UAC elevation";
+    
+    if (ShellExecuteExW(&sei)) {
+        if (sei.hProcess) {
+            DWORD pid = GetProcessId(sei.hProcess);
+            qInfo() << "Installer started successfully with PID" << pid;
+            CloseHandle(sei.hProcess);
+            
+            emit installationFinished(true, "Installer started. The application will now close.");
+            
+            // Signal success and quit the application
+            // The installer will wait for us to close (via /UPDATE flag)
+            QTimer::singleShot(500, []() {
+                qInfo() << "Closing application for update installation";
+                QCoreApplication::quit();
+            });
+        } else {
+            qWarning() << "Installer started but no process handle received";
+            emit installationFinished(false, "Failed to verify installer startup.");
+        }
+    } else {
+        DWORD error = GetLastError();
+        QString errorMsg;
+        
+        // Provide user-friendly error messages
+        switch (error) {
+            case ERROR_FILE_NOT_FOUND:
+                errorMsg = "Installer file not found.";
+                break;
+            case ERROR_ACCESS_DENIED:
+                errorMsg = "Access denied. Administrator privileges may be required.";
+                break;
+            case ERROR_CANCELLED:
+                errorMsg = "Installation cancelled by user (UAC prompt declined).";
+                break;
+            default:
+                errorMsg = QString("System error %1").arg(error);
+                break;
+        }
+        
+        qWarning() << "ShellExecuteEx failed:" << errorMsg << "(error code:" << error << ")";
+        
+        // Fall back to QProcess if ShellExecuteEx fails
+        qInfo() << "Falling back to QProcess::startDetached";
+        QProcess process;
+        process.setProgram(persistentPath);
+        process.setArguments(arguments);
+        
+        qint64 pid;
+        bool success = process.startDetached(&pid);
+        
+        if (success) {
+            qInfo() << "Installer started successfully with PID" << pid << "(fallback method)";
+            emit installationFinished(true, "Installer started. The application will now close.");
+            
+            QTimer::singleShot(500, []() {
+                QCoreApplication::quit();
+            });
+        } else {
+            qWarning() << "Failed to start installer with both methods. QProcess error:" << process.errorString();
+            emit installationFinished(false, 
+                QString("Failed to start installer.\n\nShellExecuteEx: %1\nQProcess: %2\n\nPlease try downloading and running the installer manually.")
+                    .arg(errorMsg)
+                    .arg(process.errorString()));
+        }
+    }
+#else
+    // Non-Windows platform (shouldn't happen in WindowsUpdateManager, but for safety)
+    QProcess process;
+    process.setProgram(persistentPath);
+    process.setArguments(arguments);
+    
     qint64 pid;
     bool success = process.startDetached(&pid);
-
+    
     if (success) {
-        qInfo() << "Installer started successfully with PID" << pid << "- exiting application";
+        qInfo() << "Installer started successfully with PID" << pid;
         emit installationFinished(true, "Installer started. The application will now close.");
         
-        // Give the installer a moment to start, then quit
-        QTimer::singleShot(1000, []() {
+        QTimer::singleShot(500, []() {
             QCoreApplication::quit();
         });
     } else {
         qWarning() << "Failed to start installer. Error:" << process.errorString();
         emit installationFinished(false, QString("Failed to start installer: %1").arg(process.errorString()));
     }
+#endif
 
-    // Cleanup will happen when app quits
+    // Don't cleanup temp directory here - the copied installer will remain accessible
+    // The installer will clean itself up after completion
 }

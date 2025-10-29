@@ -17,9 +17,15 @@ RequestExecutionLevel admin
 ; Include Modern UI
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
 ; Insert macros
 !insertmacro GetSize
+!insertmacro GetParameters
+!insertmacro GetOptions
+
+; Windows Messages
+!define WM_CLOSE 0x0010
 
 ; Icon settings
 !define MUI_ICON "..\..\resources\icon.ico"
@@ -47,19 +53,68 @@ Section "Install"
     ; Set output path
     SetOutPath "$INSTDIR"
     
-    ; Check if app is running
-    nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq EmberViewer.exe" /NH'
-    Pop $0  ; Return code
-    Pop $1  ; Output text
+    ; Check for /UPDATE parameter (used by auto-updater)
+    ; When /UPDATE is passed, we skip the running app check and wait for it to close
+    ${GetParameters} $R0
+    ClearErrors
+    ${GetOptions} $R0 "/UPDATE" $R1
+    IfErrors not_update_mode
     
-    ; Check if EmberViewer.exe appears in the output
-    StrCpy $2 $1 15  ; Get first 15 characters
-    StrCmp $2 "EmberViewer.exe" 0 +3  ; If it starts with EmberViewer.exe, app is running
-        MessageBox MB_OK|MB_ICONEXCLAMATION "EmberViewer is currently running. Please close it and try again."
+    ; UPDATE mode: Wait for app to close (max 10 seconds)
+    StrCpy $R2 0
+    wait_loop:
+        FindWindow $R3 "" "EmberViewer"
+        IntCmp $R3 0 app_closed
+        IntOp $R2 $R2 + 1
+        IntCmp $R2 100 wait_timeout  ; 100 * 100ms = 10 seconds
+        Sleep 100
+        Goto wait_loop
+    
+    wait_timeout:
+        MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "EmberViewer is still running. Click OK to force close it, or Cancel to abort the update." IDOK force_close
         Abort
     
+    force_close:
+        ; Try to close gracefully with WM_CLOSE
+        FindWindow $R3 "" "EmberViewer"
+        SendMessage $R3 ${WM_CLOSE} 0 0
+        Sleep 1000
+        Goto wait_loop
+    
+    app_closed:
+        Goto check_done
+    
+    not_update_mode:
+        ; Normal installation: Check if app is running
+        ; Use FindWindow for more reliable detection
+        FindWindow $R3 "" "EmberViewer"
+        IntCmp $R3 0 check_done
+        
+        ; Also check with tasklist as backup
+        nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq EmberViewer.exe" /NH'
+        Pop $0  ; Return code
+        Pop $1  ; Output text
+        
+        StrCpy $2 $1 15  ; Get first 15 characters
+        StrCmp $2 "EmberViewer.exe" 0 check_done
+            ; App is running in normal installation
+            MessageBox MB_OK|MB_ICONEXCLAMATION "EmberViewer is currently running. Please close it and try again."
+            Abort
+    
+    check_done:
+    
     ; Copy files (all files from the build directory)
+    ClearErrors
     File /r "..\..\..\deploy\*.*"
+    
+    ; Check if file copy was successful
+    IfErrors file_copy_failed file_copy_success
+    
+    file_copy_failed:
+        MessageBox MB_OK|MB_ICONERROR "Failed to copy application files. The installation cannot continue."
+        Abort
+    
+    file_copy_success:
     
     ; Create shortcuts
     CreateDirectory "$SMPROGRAMS\${APPNAME}"
@@ -84,7 +139,53 @@ Section "Install"
     ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
     IntFmt $0 "0x%08X" $0
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "EstimatedSize" "$0"
+    
+    ; Clean up the installer itself if it's in temp directory
+    ; This handles auto-update installers that were copied to temp
+    StrCpy $R0 "$EXEPATH"  ; Get installer path
+    Push $R0
+    Push "$TEMP"
+    Call IsSubPath
+    Pop $R1
+    
+    ; If installer is in temp directory, schedule it for deletion
+    IntCmp $R1 1 0 skip_cleanup skip_cleanup
+        ; Create a batch file to delete the installer after it exits
+        FileOpen $R2 "$TEMP\cleanup_installer.bat" w
+        FileWrite $R2 '@echo off$\r$\n'
+        FileWrite $R2 'timeout /t 2 /nobreak > nul$\r$\n'
+        FileWrite $R2 'del /f /q "$R0"$\r$\n'
+        FileWrite $R2 'del /f /q "%~f0"$\r$\n'  ; Delete the batch file itself
+        FileClose $R2
+        
+        ; Execute the cleanup batch file
+        Exec '"$TEMP\cleanup_installer.bat"'
+    
+    skip_cleanup:
 SectionEnd
+
+; Helper function to check if a path is a subpath of another
+Function IsSubPath
+    Exch $R0  ; Parent path
+    Exch
+    Exch $R1  ; Child path
+    Push $R2
+    Push $R3
+    
+    StrLen $R2 $R0
+    StrCpy $R3 $R1 $R2
+    
+    StrCmp $R3 $R0 0 +3
+        StrCpy $R0 1
+        Goto end
+    StrCpy $R0 0
+    
+    end:
+    Pop $R3
+    Pop $R2
+    Pop $R1
+    Exch $R0
+FunctionEnd
 
 ; Uninstaller Section
 Section "Uninstall"
