@@ -248,7 +248,7 @@ public:
     
     // Constants
     static constexpr int CONNECTION_TIMEOUT_MS = 5000;   // 5 seconds for TCP connection
-    static constexpr int PROTOCOL_TIMEOUT_MS = 3000;     // 3 seconds for Ember+ protocol response
+    static constexpr int PROTOCOL_TIMEOUT_MS = 10000;    // 10 seconds for Ember+ protocol response
 };
 
 #endif // EMBERCONNECTION_H

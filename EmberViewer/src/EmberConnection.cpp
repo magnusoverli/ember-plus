@@ -149,6 +149,9 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_host = host;
     m_port = port;
     
+    // Clear request tracking from any previous connection attempts
+    m_requestedPaths.clear();
+    
     // OPTIMIZATION 1: Configure socket for low-latency real-time protocol
     // TCP_NODELAY disables Nagle's algorithm to eliminate 40-200ms buffering delays
     // This is critical for request/response protocols like Ember+
@@ -276,7 +279,9 @@ void EmberConnection::onSocketConnected()
     }
     
     // Send GetDirectory to request root tree (always validate with device)
+    log(LogLevel::Info, "About to send GetDirectory request...");
     sendGetDirectory();
+    log(LogLevel::Info, "GetDirectory call completed");
 }
 
 void EmberConnection::onSocketDisconnected()
@@ -342,7 +347,7 @@ void EmberConnection::onConnectionTimeout()
 
 void EmberConnection::onProtocolTimeout()
 {
-    log(LogLevel::Error, QString("No Ember+ response received after 3 seconds. This port does not appear to be serving Ember+ protocol."));
+    log(LogLevel::Error, QString("No Ember+ response received after 10 seconds. This port does not appear to be serving Ember+ protocol."));
     
     // Disconnect - this port doesn't seem to be Ember+
     if (m_connected) {
@@ -359,7 +364,7 @@ void EmberConnection::onDataReceived()
         return;
     }
     
-    log(LogLevel::Trace, QString("Received %1 bytes").arg(data.size()));
+    log(LogLevel::Info, QString("*** Received %1 bytes from device ***").arg(data.size()));
     
     // Decode S101 frames
     const unsigned char *bytes = reinterpret_cast<const unsigned char*>(data.constData());
@@ -434,6 +439,10 @@ void EmberConnection::handleS101Message(
             QByteArray response(reinterpret_cast<const char*>(data.data()), data.size());
             m_socket->write(response);
             m_socket->flush();
+        }
+        else if (command == libs101::CommandType::KeepAliveResponse) {
+            log(LogLevel::Info, "Received KeepAliveResponse from device - connection is alive");
+            // Don't treat this as Ember+ data, but acknowledge the connection is working
         }
     }
 }
@@ -1123,18 +1132,23 @@ void EmberConnection::sendGetDirectory()
 
 void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimizedForNameDiscovery)
 {
+    log(LogLevel::Info, QString("sendGetDirectoryForPath called with path='%1'").arg(path));
+    log(LogLevel::Info, QString("m_requestedPaths size: %1").arg(m_requestedPaths.size()));
+    
     // Avoid infinite loops - don't request the same path twice
     if (m_requestedPaths.contains(path)) {
-        log(LogLevel::Debug, QString("Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path));
+        log(LogLevel::Info, QString("ERROR: Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path));
         return;
     }
+    log(LogLevel::Info, "Passed duplicate check, inserting path");
     m_requestedPaths.insert(path);
+    log(LogLevel::Info, "Path inserted, continuing...");
     
     try {
         if (path.isEmpty()) {
-            log(LogLevel::Debug, "Requesting root directory...");
+            log(LogLevel::Info, "Requesting root directory...");
         } else {
-            log(LogLevel::Debug, QString("Requesting children of %1%2...")
+            log(LogLevel::Info, QString("Requesting children of %1%2...")
                 .arg(path)
                 .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : ""));
         }
@@ -1148,37 +1162,25 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
                                            libember::glow::DirFieldMask::Value)
             : libember::glow::DirFieldMask::All;
         
+        log(LogLevel::Info, "Creating GlowRootElementCollection...");
         auto root = new libember::glow::GlowRootElementCollection();
         
         if (path.isEmpty()) {
-            // Request root
+            // Request root - use bare GlowCommand like working applications do
+            log(LogLevel::Info, "Creating bare GlowCommand for root...");
             auto command = new libember::glow::GlowCommand(
-                libember::glow::CommandType::GetDirectory,
-                fieldMask
+                libember::glow::CommandType::GetDirectory
             );
+            log(LogLevel::Info, "Inserting command into root...");
             root->insert(root->end(), command);
-        }
-        else {
-            // Request specific node path
-            QStringList segments = path.split('.', Qt::SkipEmptyParts);
-            libember::ber::ObjectIdentifier oid;
-            
-            for (const QString& seg : segments) {
-                oid.push_back(seg.toInt());
-            }
-            
-            auto node = new libember::glow::GlowQualifiedNode(oid);
-            new libember::glow::GlowCommand(
-                node,
-                libember::glow::CommandType::GetDirectory,
-                fieldMask
-            );
-            root->insert(root->end(), node);
+            log(LogLevel::Info, "Command inserted successfully");
         }
         
-        // Encode to EmBER  
+        // Encode to EmBER
+        log(LogLevel::Info, "Encoding to EmBER...");
         libember::util::OctetStream stream;
         root->encode(stream);
+        log(LogLevel::Info, QString("EmBER payload size: %1 bytes").arg(stream.size()));
         
         // Wrap in S101 frame
         auto encoder = libs101::StreamEncoder<unsigned char>();
@@ -1188,7 +1190,9 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
         encoder.encode(0x01);  // Version
         encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
         encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x00);  // No app bytes
+        encoder.encode(0x02);  // 2 app bytes
+        encoder.encode(0x28);  // App byte 1
+        encoder.encode(0x02);  // App byte 2
         
         // Add EmBER data
         encoder.encode(stream.begin(), stream.end());
@@ -1198,11 +1202,13 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
         std::vector<unsigned char> data(encoder.begin(), encoder.end());
         QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
         
+        log(LogLevel::Info, QString("About to write %1 bytes to socket...").arg(qdata.size()));
         if (m_socket->write(qdata) > 0) {
             m_socket->flush();
+            log(LogLevel::Info, QString("Successfully sent GetDirectory request (%1 bytes)").arg(qdata.size()));
         }
         else {
-            log(LogLevel::Warning, "Failed to send GetDirectory");
+            log(LogLevel::Error, "Failed to send GetDirectory - socket write returned 0 or error");
         }
         
         delete root;
@@ -2052,15 +2058,19 @@ void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscri
     root->encode(stream);
     
     // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);  // Slot
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);  // Version
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);  // DTD
-    encoder.encode(0x00);  // AppBytes
-    encoder.encode(stream.begin(), stream.end());
+        auto encoder = libs101::StreamEncoder<unsigned char>();
+        encoder.encode(0x00);  // Slot
+        encoder.encode(libs101::MessageType::EmBER);
+        encoder.encode(libs101::CommandType::EmBER);
+        encoder.encode(0x01);  // Version
+        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+        encoder.encode(0x01);  // DTD (Glow)
+        encoder.encode(0x02);  // 2 app bytes (required by some devices!)
+        encoder.encode(0x28);  // App byte 1
+        encoder.encode(0x02);  // App byte 2
+        
+        // Add EmBER data
+        encoder.encode(stream.begin(), stream.end());
     encoder.finish();
     
     // Send
@@ -2616,22 +2626,28 @@ void EmberConnection::processFetchQueue()
                 root->insert(root->end(), node);
             }
             
-            // Encode to EmBER  
-            libember::util::OctetStream stream;
-            root->encode(stream);
-            
-            // Wrap in S101 frame
-            auto encoder = libs101::StreamEncoder<unsigned char>();
-            encoder.encode(0x00);  // Slot
-            encoder.encode(libs101::MessageType::EmBER);
-            encoder.encode(libs101::CommandType::EmBER);
-            encoder.encode(0x01);  // Version
-            encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-            encoder.encode(0x01);  // DTD (Glow)
-            encoder.encode(0x00);  // No app bytes
-            
-            // Add EmBER data
-            encoder.encode(stream.begin(), stream.end());
+        // Encode to EmBER
+        log(LogLevel::Info, "Encoding to EmBER...");
+        libember::util::OctetStream stream;
+        root->encode(stream);
+        log(LogLevel::Info, QString("Encoded %1 bytes").arg(stream.size()));
+        
+        // Wrap in S101 frame
+        log(LogLevel::Info, "Creating S101 encoder...");
+        auto encoder = libs101::StreamEncoder<unsigned char>();
+        encoder.encode(0x00);  // Slot
+        encoder.encode(libs101::MessageType::EmBER);
+        encoder.encode(libs101::CommandType::EmBER);
+        encoder.encode(0x01);  // Version
+        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+        encoder.encode(0x01);  // DTD (Glow)
+        encoder.encode(0x02);  // 2 app bytes (CRITICAL: some devices require these!)
+        encoder.encode(0x28);  // App byte 1
+        encoder.encode(0x02);  // App byte 2
+        log(LogLevel::Info, "Added S101 app bytes: 0x28 0x02");
+        
+        // Add EmBER data
+        encoder.encode(stream.begin(), stream.end());
             encoder.finish();
             
             // Send
