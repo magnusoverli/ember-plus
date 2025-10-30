@@ -30,6 +30,7 @@
 
 class EmberConnection;
 class MatrixWidget;
+class MeterWidget;
 class DeviceSnapshot;
 class EmulatorWindow;
 class UpdateDialog;
@@ -56,7 +57,7 @@ private slots:
     void onNodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
     void onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                             int access, int type, const QVariant &minimum, const QVariant &maximum,
-                            const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline);
+                            const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier);
     void onMatrixReceived(const QString &path, int number, const QString &identifier, const QString &description,
                          int type, int targetCount, int sourceCount);
     void onMatrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label);
@@ -68,7 +69,10 @@ private slots:
                            const QStringList &argNames, const QList<int> &argTypes,
                            const QStringList &resultNames, const QList<int> &resultTypes);
     void onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
+    void onStreamValueReceived(int streamIdentifier, double value);
     void onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
+    void onTreeFetchProgress(int fetchedCount, int totalCount);
+    void onTreeFetchCompleted(bool success, const QString &message);
     void onTreeSelectionChanged();
     void onItemExpanded(QTreeWidgetItem *item);
     void onItemCollapsed(QTreeWidgetItem *item);
@@ -105,6 +109,8 @@ private:
     void updateCrosspointsStatusBar();
     void subscribeToExpandedItems();
     DeviceSnapshot captureSnapshot();
+    QStringList getAllTreeItemPaths();  // Get all tree item paths for complete tree fetch
+    void proceedWithSnapshot();  // Continue snapshot after tree fetch completes
     
     // Widgets
     EmberTreeWidget *m_treeWidget;
@@ -128,6 +134,15 @@ private:
     
     // Matrix widgets (path -> widget)
     QMap<QString, MatrixWidget*> m_matrixWidgets;
+    
+    // Meter widget (only one active at a time)
+    MeterWidget *m_activeMeter;
+    
+    // Stream identifier tracking (streamId -> parameter path)
+    QMap<int, QString> m_streamIdToPath;
+    
+    // Complete tree fetch progress tracking
+    QProgressDialog *m_treeFetchProgress;
     
     // Function metadata storage
     struct FunctionInfo {

@@ -12,6 +12,7 @@
 #include "ParameterDelegate.h"
 #include "PathColumnDelegate.h"
 #include "MatrixWidget.h"
+#include "MeterWidget.h"
 #include "FunctionInvocationDialog.h"
 #include "DeviceSnapshot.h"
 #include "EmulatorWindow.h"
@@ -36,6 +37,7 @@
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include <QDateTime>
 #include <QHeaderView>
 #include <QCloseEvent>
@@ -69,6 +71,8 @@ MainWindow::MainWindow(QWidget *parent)
     , m_statusLabel(nullptr)
     , m_pathLabel(nullptr)
     , m_connection(nullptr)
+    , m_activeMeter(nullptr)
+    , m_treeFetchProgress(nullptr)
     , m_enableCrosspointsAction(nullptr)
     , m_activityTimer(nullptr)
     , m_tickTimer(nullptr)
@@ -128,6 +132,9 @@ MainWindow::MainWindow(QWidget *parent)
     // so there's no risk of UI freeze. Direct connections eliminate queuing latency.
     connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
     connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
+    connect(m_connection, &EmberConnection::streamValueReceived, this, &MainWindow::onStreamValueReceived);
+    connect(m_connection, &EmberConnection::treeFetchProgress, this, &MainWindow::onTreeFetchProgress);
+    connect(m_connection, &EmberConnection::treeFetchCompleted, this, &MainWindow::onTreeFetchCompleted);
     connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
     connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived);
     connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
@@ -716,7 +723,7 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
 
 void MainWindow::onParameterReceived(const QString &path, int /* number */, const QString &identifier, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
-                                    const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline)
+                                    const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier)
 {
     // Check if this parameter is actually a matrix label
     // Pattern: matrixPath.666999666.1.N (targets) or matrixPath.666999666.2.N (sources)
@@ -753,9 +760,8 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         
         setItemDisplayName(item, identifier);
         item->setText(1, "Parameter");
-        item->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
         
-        // Store parameter metadata in item for delegate access
+        // Store parameter metadata in item for delegate access (do this BEFORE icon check)
         // Using custom roles (Qt::UserRole + N)
         item->setData(0, Qt::UserRole, path);          // Path (for sending updates)
         item->setData(0, Qt::UserRole + 1, type);       // TypeRole
@@ -763,6 +769,7 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         item->setData(0, Qt::UserRole + 3, minimum);    // MinimumRole
         item->setData(0, Qt::UserRole + 4, maximum);    // MaximumRole
         item->setData(0, Qt::UserRole + 5, enumOptions); // EnumOptionsRole
+        item->setData(0, Qt::UserRole + 9, streamIdentifier);  // StreamIdentifier (always store, even if -1)
         
         // Convert QList<int> to QList<QVariant> for storage
         QList<QVariant> enumValuesVar;
@@ -771,6 +778,16 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         }
         item->setData(0, Qt::UserRole + 6, QVariant::fromValue(enumValuesVar)); // EnumValuesRole
         item->setData(0, Qt::UserRole + 8, isOnline);   // IsOnlineRole (after Matrix's UserRole + 7)
+        
+        // Set icon based on whether this is an audio meter
+        // Audio meters must have: streamIdentifier > 0, AND be numeric type (Integer=1 or Real=2)
+        bool isAudioMeter = (streamIdentifier > 0) && (type == 1 || type == 2);
+        if (isAudioMeter) {
+            item->setText(0, QString("📊 %1").arg(identifier));  // Meter icon
+            m_streamIdToPath[streamIdentifier] = path;  // Track for StreamCollection routing
+        } else {
+            item->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
+        }
         
         // LAZY LOADING: Parameters are leaf elements - never expandable
         // No need to set child indicator policy
@@ -986,6 +1003,15 @@ void MainWindow::onParameterReceived(const QString &path, int /* number */, cons
         
         if (isNew) {
             qDebug().noquote() << QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access);
+        }
+        
+        // Update meter widget if this is the active meter parameter
+        if (m_activeMeter && m_activeMeter->parameterPath() == path) {
+            bool ok;
+            double numValue = value.toDouble(&ok);
+            if (ok) {
+                m_activeMeter->updateValue(numValue);
+            }
         }
         
         // Batch updates for better responsiveness
@@ -1210,7 +1236,72 @@ void MainWindow::onTreeSelectionChanged()
     }
     
     // Update property panel based on type
-    if (type == "Matrix") {
+    if (type == "Parameter") {
+        // Check if this is a meter parameter (must have streamIdentifier > 0)
+        int streamIdentifier = item->data(0, Qt::UserRole + 9).toInt();
+        int paramType = item->data(0, Qt::UserRole + 1).toInt();
+        bool isAudioMeter = (streamIdentifier > 0) && (paramType == 1 || paramType == 2);
+        
+        if (isAudioMeter) {
+            // This is an audio meter parameter - show meter widget
+            
+            // Clean up old meter
+            if (m_activeMeter) {
+                m_activeMeter = nullptr;  // Will be deleted with old panel
+            }
+            
+            // Disable crosspoints if active
+            if (m_crosspointsEnabled) {
+                m_enableCrosspointsAction->setChecked(false);
+            }
+            
+            // Remove old layout
+            QLayout *oldLayout = m_propertyGroup->layout();
+            if (oldLayout) {
+                QLayoutItem *layoutItem;
+                while ((layoutItem = oldLayout->takeAt(0)) != nullptr) {
+                    delete layoutItem;
+                }
+                delete oldLayout;
+            }
+            
+            // Create meter widget
+            m_activeMeter = new MeterWidget();
+            
+            // Get parameter info from item data
+            QString identifier = item->text(0).replace("📊 ", "");  // Remove icon
+            QVariant minVar = item->data(0, Qt::UserRole + 3);
+            QVariant maxVar = item->data(0, Qt::UserRole + 4);
+            
+            double minValue = minVar.isValid() ? minVar.toDouble() : 0.0;
+            double maxValue = maxVar.isValid() ? maxVar.toDouble() : 100.0;
+            
+            m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue);
+            m_activeMeter->setStreamIdentifier(streamIdentifier);
+            
+            // Set initial value from current parameter value
+            QString currentValue = item->text(2);
+            bool ok;
+            double val = currentValue.toDouble(&ok);
+            if (ok) {
+                m_activeMeter->updateValue(val);
+            }
+            
+            // Create layout with meter and parameter properties
+            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+            propLayout->addWidget(m_activeMeter);
+            
+            // Add parameter info section
+            QLabel *infoLabel = new QLabel(QString("Path: %1\nMin: %2\nMax: %3\nStream ID: %4")
+                .arg(oidPath).arg(minValue).arg(maxValue).arg(streamIdentifier));
+            infoLabel->setStyleSheet("padding: 10px; background-color: #f0f0f0; border-radius: 5px;");
+            propLayout->addWidget(infoLabel);
+            
+            propLayout->setContentsMargins(5, 5, 5, 5);
+            m_propertyPanel = m_activeMeter;
+        }
+    }
+    else if (type == "Matrix") {
         // Show matrix widget in property panel
         MatrixWidget *matrixWidget = m_matrixWidgets.value(oidPath, nullptr);
         if (matrixWidget) {
@@ -1494,6 +1585,23 @@ void MainWindow::onInvocationResultReceived(int invocationId, bool success, cons
         .arg(invocationId).arg(success ? "YES" : "NO").arg(results.size());
 }
 
+void MainWindow::onStreamValueReceived(int streamIdentifier, double value)
+{
+    // Handle StreamCollection updates - route to active meter if it matches
+    if (m_activeMeter && m_activeMeter->streamIdentifier() == streamIdentifier) {
+        m_activeMeter->updateValue(value);
+        
+        // Also update the tree item value for consistency
+        QString path = m_streamIdToPath.value(streamIdentifier);
+        if (!path.isEmpty()) {
+            QTreeWidgetItem *item = m_pathToItem.value(path);
+            if (item) {
+                item->setText(2, QString::number(value, 'f', 2));
+            }
+        }
+    }
+}
+
 void MainWindow::onItemExpanded(QTreeWidgetItem *item)
 {
     QString path = item->data(0, Qt::UserRole).toString();
@@ -1681,6 +1789,52 @@ void MainWindow::onSaveEmberDevice()
         return;
     }
     
+    // Ask user if they want to fetch the complete tree first
+    QMessageBox::StandardButton reply = QMessageBox::question(this, 
+        "Complete Device Tree",
+        "Do you want to fetch the complete device tree before saving?\n\n"
+        "YES: Ensures complete snapshot (recommended, may take 10-30 seconds)\n"
+        "NO: Save only currently loaded nodes (faster, may be incomplete)",
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);  // Default to Yes
+    
+    if (reply == QMessageBox::Yes) {
+        // Get all current tree items
+        QStringList allPaths = getAllTreeItemPaths();
+        
+        if (allPaths.isEmpty()) {
+            QMessageBox::warning(this, "No Data", "No device data to save.");
+            return;
+        }
+        
+        // Create and show progress dialog
+        m_treeFetchProgress = new QProgressDialog(
+            "Fetching complete device tree...",
+            "Cancel",
+            0, 100,
+            this);
+        m_treeFetchProgress->setWindowTitle("Complete Tree Fetch");
+        m_treeFetchProgress->setWindowModality(Qt::WindowModal);
+        m_treeFetchProgress->setMinimumDuration(0);  // Show immediately
+        m_treeFetchProgress->setValue(0);
+        
+        // Connect cancel button
+        connect(m_treeFetchProgress, &QProgressDialog::canceled, 
+                m_connection, &EmberConnection::cancelTreeFetch);
+        
+        // Start the fetch
+        m_connection->fetchCompleteTree(allPaths);
+        
+        // Wait for completion (handled by onTreeFetchCompleted)
+        return;  // Will continue in onTreeFetchCompleted
+    }
+    
+    // User chose NO - proceed with current tree
+    proceedWithSnapshot();
+}
+
+void MainWindow::proceedWithSnapshot()
+{
     // Generate default filename using actual device name from tree
     QString deviceName;
     
@@ -1805,6 +1959,7 @@ DeviceSnapshot MainWindow::captureSnapshot()
             }
             
             paramData.isOnline = (*it)->data(0, Qt::UserRole + 8).toBool();
+            paramData.streamIdentifier = (*it)->data(0, Qt::UserRole + 9).toInt();  // Audio meter stream ID
             
             snapshot.parameters[path] = paramData;
             
@@ -2123,4 +2278,71 @@ void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QStri
     // Connect
     qInfo() << "Connecting to saved connection:" << name << "(" << host << ":" << port << ")";
     onConnectClicked();
+}
+
+QStringList MainWindow::getAllTreeItemPaths()
+{
+    QStringList paths;
+    
+    // Iterate through all items in the tree
+    QTreeWidgetItemIterator it(m_treeWidget);
+    while (*it) {
+        QString path = (*it)->data(0, Qt::UserRole).toString();
+        QString type = (*it)->text(1);
+        
+        if (!path.isEmpty() && !type.isEmpty()) {
+            // Format: "path|type" for EmberConnection to filter nodes
+            paths.append(QString("%1|%2").arg(path).arg(type));
+        }
+        
+        ++it;
+    }
+    
+    return paths;
+}
+
+void MainWindow::onTreeFetchProgress(int fetchedCount, int totalCount)
+{
+    if (m_treeFetchProgress) {
+        // Update progress (0-100%)
+        int percent = totalCount > 0 ? (fetchedCount * 100 / totalCount) : 0;
+        m_treeFetchProgress->setValue(percent);
+        m_treeFetchProgress->setLabelText(
+            QString("Fetching complete device tree...\n%1 of %2 nodes fetched")
+                .arg(fetchedCount)
+                .arg(totalCount));
+    }
+}
+
+void MainWindow::onTreeFetchCompleted(bool success, const QString &message)
+{
+    // Close progress dialog
+    if (m_treeFetchProgress) {
+        m_treeFetchProgress->close();
+        delete m_treeFetchProgress;
+        m_treeFetchProgress = nullptr;
+    }
+    
+    if (success) {
+        qInfo() << "Tree fetch completed:" << message;
+        // Continue with snapshot
+        proceedWithSnapshot();
+    } else {
+        qWarning() << "Tree fetch failed/cancelled:" << message;
+        QMessageBox::information(this, "Tree Fetch Cancelled",
+            QString("Complete tree fetch was cancelled.\n\n%1\n\n"
+                   "You can still save the snapshot with currently loaded nodes.")
+                .arg(message));
+        
+        // Ask if user wants to proceed anyway
+        QMessageBox::StandardButton reply = QMessageBox::question(this,
+            "Save Partial Snapshot?",
+            "Do you want to save the snapshot with currently loaded nodes?\n\n"
+            "It may be incomplete.",
+            QMessageBox::Yes | QMessageBox::No);
+        
+        if (reply == QMessageBox::Yes) {
+            proceedWithSnapshot();
+        }
+    }
 }
