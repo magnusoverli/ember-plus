@@ -592,6 +592,10 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
             rootInfo.path = pathStr;
             rootInfo.displayName = displayName;
             rootInfo.isGeneric = isGeneric;
+            // Preserve identityPath if it was already discovered
+            if (m_rootNodes.contains(pathStr)) {
+                rootInfo.identityPath = m_rootNodes[pathStr].identityPath;
+            }
             m_rootNodes[pathStr] = rootInfo;
         }
     }
@@ -698,6 +702,10 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
             rootInfo.path = pathStr;
             rootInfo.displayName = displayName;
             rootInfo.isGeneric = isGeneric;
+            // Preserve identityPath if it was already discovered
+            if (m_rootNodes.contains(pathStr)) {
+                rootInfo.identityPath = m_rootNodes[pathStr].identityPath;
+            }
             m_rootNodes[pathStr] = rootInfo;
         }
     }
