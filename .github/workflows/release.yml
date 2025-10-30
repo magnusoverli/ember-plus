@@ -56,7 +56,8 @@ jobs:
             exit 1
           }
           
-          Write-Host "`nChecking for Ninja (optional)..."
+          Write-Host ""
+          Write-Host "Checking for Ninja (optional)..."
           $ninja = Get-Command ninja -ErrorAction SilentlyContinue
           if ($ninja) {
             Write-Host "✓ Ninja found: $($ninja.Source)"
