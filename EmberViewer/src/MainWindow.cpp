@@ -1521,9 +1521,38 @@ void MainWindow::onItemExpanded(QTreeWidgetItem *item)
             loadingItem->setForeground(0, QBrush(QColor("#888888")));
             loadingItem->setFlags(Qt::ItemIsEnabled);  // Not selectable
             
-            // Request children from device
-            qDebug().noquote() << QString("Lazy loading: Requesting children for %1").arg(path);
-            m_connection->sendGetDirectoryForPath(path);
+            // OPTIMIZATION 1 & 3: Batch request with smart prefetching
+            // Request the expanded node's children AND prefetch sibling nodes
+            // to reduce latency when users explore horizontally after expanding
+            QStringList pathsToPrefetch;
+            pathsToPrefetch << path;  // The expanded node itself
+            
+            // Prefetch siblings (nodes at same level) - common navigation pattern
+            if (QTreeWidgetItem* parent = item->parent()) {
+                for (int i = 0; i < parent->childCount(); i++) {
+                    QTreeWidgetItem* sibling = parent->child(i);
+                    if (sibling != item) {  // Don't re-add the current item
+                        QString siblingPath = sibling->data(0, Qt::UserRole).toString();
+                        QString siblingType = sibling->text(1);
+                        // Only prefetch Node types that haven't been fetched yet
+                        if (siblingType == "Node" && !siblingPath.isEmpty() && 
+                            !m_fetchedPaths.contains(siblingPath)) {
+                            pathsToPrefetch << siblingPath;
+                            m_fetchedPaths.insert(siblingPath);  // Mark as fetched
+                        }
+                    }
+                }
+            }
+            
+            // Request children from device using batch API for efficiency
+            if (pathsToPrefetch.size() == 1) {
+                qDebug().noquote() << QString("Lazy loading: Requesting children for %1").arg(path);
+                m_connection->sendGetDirectoryForPath(path);
+            } else {
+                qDebug().noquote() << QString("Lazy loading: Batch requesting %1 paths (expanded: %2 + %3 siblings)")
+                    .arg(pathsToPrefetch.size()).arg(path).arg(pathsToPrefetch.size() - 1);
+                m_connection->sendBatchGetDirectory(pathsToPrefetch);
+            }
         }
     }
     

@@ -138,13 +138,19 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_host = host;
     m_port = port;
     
-    // OPTIMIZATION: Configure socket for low-latency real-time protocol
+    // OPTIMIZATION 1: Configure socket for low-latency real-time protocol
     // TCP_NODELAY disables Nagle's algorithm to eliminate 40-200ms buffering delays
     // This is critical for request/response protocols like Ember+
     m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
     
     // TCP_KEEPALIVE maintains connection and detects broken connections faster
     m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
+    
+    // OPTIMIZATION 2: Increase socket buffer sizes for better throughput
+    // Larger buffers (64KB vs default 8KB) reduce latency for large tree responses
+    // and improve performance when receiving bursts of data
+    m_socket->setSocketOption(QAbstractSocket::SendBufferSizeSocketOption, 65536);
+    m_socket->setSocketOption(QAbstractSocket::ReceiveBufferSizeSocketOption, 65536);
     
     log(LogLevel::Info, QString("Connecting to %1:%2...").arg(host).arg(port));
     
