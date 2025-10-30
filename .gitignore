@@ -22,6 +22,3 @@ EmberViewer/src/*.bak*
 
 # Generated version header
 EmberViewer/build/include/version.h
-
-# Build logs and analysis (local documentation)
-EmberViewer/buildlogs/
