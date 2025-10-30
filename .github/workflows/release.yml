@@ -48,11 +48,11 @@ jobs:
           Write-Host "Checking for CMake..."
           $cmake = Get-Command cmake -ErrorAction SilentlyContinue
           if ($cmake) {
-            Write-Host "✓ CMake found: $($cmake.Source)"
+            Write-Host "CMake found: $($cmake.Source)"
             cmake --version
           } else {
             Write-Host "ERROR: CMake not found in PATH"
-            Write-Host "Please install CMake on the runner: choco install cmake -y"
+            Write-Host "Please install CMake on the runner"
             exit 1
           }
       
