@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QSet>
+#include <QProgressDialog>
 
 #include "UpdateManager.h"
 

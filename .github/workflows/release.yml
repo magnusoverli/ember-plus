@@ -42,7 +42,7 @@ jobs:
           arch: 'win64_msvc2022_64'
           cache: true  # Enable Qt caching for faster subsequent builds
       
-      - name: Verify CMake and Ninja are installed
+      - name: Verify CMake is installed
         shell: powershell
         run: |
           Write-Host "Checking for CMake..."
@@ -56,13 +56,13 @@ jobs:
             exit 1
           }
           
-          Write-Host "`nChecking for Ninja..."
+          Write-Host "`nChecking for Ninja (optional)..."
           $ninja = Get-Command ninja -ErrorAction SilentlyContinue
           if ($ninja) {
             Write-Host "✓ Ninja found: $($ninja.Source)"
             ninja --version
           } else {
-            Write-Host "WARNING: Ninja not found (optional, using MSBuild instead)"
+            Write-Host "ℹ Ninja not found - using Visual Studio generator (MSBuild) instead"
           }
       
       - name: Setup Visual Studio environment
