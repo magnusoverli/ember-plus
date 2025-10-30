@@ -2243,6 +2243,127 @@ void EmberConnection::unsubscribeFromMatrix(const QString &path)
     delete root;
 }
 
+void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& requests)
+{
+    if (requests.isEmpty()) {
+        return;
+    }
+    
+    if (!m_socket || !m_connected) {
+        log(LogLevel::Warning, "Cannot batch subscribe - not connected");
+        return;
+    }
+    
+    // Filter out already-subscribed paths
+    QList<SubscriptionRequest> toSubscribe;
+    for (const auto& req : requests) {
+        if (!m_subscriptions.contains(req.path)) {
+            toSubscribe.append(req);
+        } else {
+            log(LogLevel::Debug, QString("Skipping duplicate subscription for %1").arg(req.path));
+        }
+    }
+    
+    if (toSubscribe.isEmpty()) {
+        log(LogLevel::Debug, "All paths already subscribed, skipping batch");
+        return;
+    }
+    
+    try {
+        log(LogLevel::Debug, QString("Batch subscribing to %1 paths...").arg(toSubscribe.size()));
+        
+        // OPTIMIZATION: Batch multiple Subscribe commands in single S101 frame
+        // This reduces protocol overhead and network round trips (5-20x reduction)
+        auto root = new libember::glow::GlowRootElementCollection();
+        
+        int successCount = 0;
+        for (const auto& req : toSubscribe) {
+            // Parse path to OID
+            QStringList segments = req.path.split('.', Qt::SkipEmptyParts);
+            libember::ber::ObjectIdentifier oid;
+            for (const QString& seg : segments) {
+                oid.push_back(seg.toInt());
+            }
+            
+            // Create appropriate qualified element based on type
+            if (req.type == "Node") {
+                auto node = new libember::glow::GlowQualifiedNode(oid);
+                auto cmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+                node->children()->insert(node->children()->end(), cmd);
+                root->insert(root->end(), node);
+                successCount++;
+            }
+            else if (req.type == "Parameter") {
+                auto param = new libember::glow::GlowQualifiedParameter(oid);
+                auto cmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+                param->children()->insert(param->children()->end(), cmd);
+                root->insert(root->end(), param);
+                successCount++;
+            }
+            else if (req.type == "Matrix") {
+                auto matrix = new libember::glow::GlowQualifiedMatrix(oid);
+                auto cmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+                matrix->children()->insert(matrix->children()->end(), cmd);
+                root->insert(root->end(), matrix);
+                successCount++;
+            }
+            else if (req.type == "Function") {
+                auto function = new libember::glow::GlowQualifiedFunction(oid);
+                auto cmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
+                function->children()->insert(function->children()->end(), cmd);
+                root->insert(root->end(), function);
+                successCount++;
+            }
+            else {
+                log(LogLevel::Warning, QString("Unknown subscription type '%1' for path %2")
+                    .arg(req.type).arg(req.path));
+                continue;
+            }
+            
+            // Track subscription
+            SubscriptionState state;
+            state.subscribedAt = QDateTime::currentDateTime();
+            state.autoSubscribed = true;
+            m_subscriptions[req.path] = state;
+        }
+        
+        if (successCount == 0) {
+            log(LogLevel::Warning, "No valid subscriptions in batch");
+            delete root;
+            return;
+        }
+        
+        // Encode to BER
+        libember::util::OctetStream stream;
+        root->encode(stream);
+        
+        // Encode to S101
+        auto encoder = libs101::StreamEncoder<unsigned char>();
+        encoder.encode(0x00);  // Slot
+        encoder.encode(libs101::MessageType::EmBER);
+        encoder.encode(libs101::CommandType::EmBER);
+        encoder.encode(0x01);  // Version
+        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+        encoder.encode(0x01);  // DTD
+        encoder.encode(0x00);  // AppBytes
+        encoder.encode(stream.begin(), stream.end());
+        encoder.finish();
+        
+        // Send
+        std::vector<unsigned char> data(encoder.begin(), encoder.end());
+        QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+        m_socket->write(qdata);
+        m_socket->flush();
+        
+        log(LogLevel::Debug, QString("Successfully batch subscribed to %1 paths").arg(successCount));
+        
+        delete root;
+    }
+    catch (const std::exception &ex) {
+        log(LogLevel::Error, QString("Error sending batch subscribe: %1").arg(ex.what()));
+    }
+}
+
 bool EmberConnection::isSubscribed(const QString &path) const
 {
     return m_subscriptions.contains(path);

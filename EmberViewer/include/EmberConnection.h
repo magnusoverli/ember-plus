@@ -65,6 +65,12 @@ class EmberConnection : public QObject
     };
 
 public:
+    // Subscription request for batch operations
+    struct SubscriptionRequest {
+        QString path;
+        QString type;  // "Node", "Parameter", "Matrix", or "Function"
+    };
+
     explicit EmberConnection(QObject *parent = nullptr);
     ~EmberConnection();
 
@@ -89,6 +95,9 @@ public:
     
     // Batch request multiple paths in a single message (for reduced round trips)
     void sendBatchGetDirectory(const QStringList& paths, bool optimizedForNameDiscovery = false);
+    
+    // Batch subscribe to multiple paths in a single message (for reduced round trips)
+    void sendBatchSubscribe(const QList<SubscriptionRequest>& requests);
 
 signals:
     void connected();

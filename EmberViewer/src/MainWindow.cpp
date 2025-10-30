@@ -1556,22 +1556,56 @@ void MainWindow::onItemExpanded(QTreeWidgetItem *item)
         }
     }
     
-    // Subscription handling (existing logic)
-    if (!m_subscribedPaths.contains(path)) {
-        if (type == "Node") {
-            m_connection->subscribeToNode(path, true);
-        } else if (type == "Parameter") {
-            m_connection->subscribeToParameter(path, true);
-        } else if (type == "Matrix") {
-            m_connection->subscribeToMatrix(path, true);
-        }
+    // OPTIMIZATION: Batch subscription - collect all subscriptions needed
+    // Subscribe to the expanded item + all visible children in one network packet
+    QList<EmberConnection::SubscriptionRequest> subscriptions;
+    
+    // Subscribe to the expanded item itself
+    if (!m_subscribedPaths.contains(path) && !type.isEmpty()) {
+        subscriptions.append({path, type});
+        m_subscribedPaths.insert(path);
+        SubscriptionState state;
+        state.subscribedAt = QDateTime::currentDateTime();
+        state.autoSubscribed = true;
+        m_subscriptionStates[path] = state;
+    }
+    
+    // Subscribe to all immediate children (they're now visible)
+    for (int i = 0; i < item->childCount(); i++) {
+        QTreeWidgetItem *child = item->child(i);
+        QString childPath = child->data(0, Qt::UserRole).toString();
+        QString childType = child->text(1);
         
-        if (!type.isEmpty()) {
-            m_subscribedPaths.insert(path);
+        if (!childPath.isEmpty() && !childType.isEmpty() && 
+            !m_subscribedPaths.contains(childPath) &&
+            childType != "Loading...") {  // Skip placeholder items
+            
+            subscriptions.append({childPath, childType});
+            m_subscribedPaths.insert(childPath);
             SubscriptionState state;
             state.subscribedAt = QDateTime::currentDateTime();
             state.autoSubscribed = true;
-            m_subscriptionStates[path] = state;
+            m_subscriptionStates[childPath] = state;
+        }
+    }
+    
+    // Send all subscriptions in one batch
+    if (!subscriptions.isEmpty()) {
+        if (subscriptions.size() == 1) {
+            // Single subscription - use existing methods for code simplicity
+            const auto& req = subscriptions.first();
+            if (req.type == "Node") {
+                m_connection->subscribeToNode(req.path, true);
+            } else if (req.type == "Parameter") {
+                m_connection->subscribeToParameter(req.path, true);
+            } else if (req.type == "Matrix") {
+                m_connection->subscribeToMatrix(req.path, true);
+            }
+        } else {
+            // Multiple subscriptions - use batch API for efficiency
+            qDebug().noquote() << QString("Batch subscribing to %1 paths (expanded: %2)")
+                .arg(subscriptions.size()).arg(path);
+            m_connection->sendBatchSubscribe(subscriptions);
         }
     }
 }
@@ -1609,6 +1643,9 @@ void MainWindow::subscribeToExpandedItems()
 {
     // OPTIMIZATION: Tree updates no longer disabled with lazy loading
     // This function now only handles subscriptions for expanded items
+    // Using batch subscription for better performance
+    
+    QList<EmberConnection::SubscriptionRequest> subscriptions;
     
     QTreeWidgetItemIterator it(m_treeWidget);
     while (*it) {
@@ -1616,27 +1653,23 @@ void MainWindow::subscribeToExpandedItems()
             QString path = (*it)->data(0, Qt::UserRole).toString();
             QString type = (*it)->text(1);
             
-            if (!path.isEmpty() && !m_subscribedPaths.contains(path)) {
+            if (!path.isEmpty() && !type.isEmpty() && !m_subscribedPaths.contains(path)) {
+                subscriptions.append({path, type});
+                m_subscribedPaths.insert(path);
+                
                 SubscriptionState state;
                 state.subscribedAt = QDateTime::currentDateTime();
                 state.autoSubscribed = true;
-                
-                if (type == "Node") {
-                    m_connection->subscribeToNode(path, true);
-                    m_subscribedPaths.insert(path);
-                    m_subscriptionStates[path] = state;
-                } else if (type == "Parameter") {
-                    m_connection->subscribeToNode(path, true);
-                    m_subscribedPaths.insert(path);
-                    m_subscriptionStates[path] = state;
-                } else if (type == "Matrix") {
-                    m_connection->subscribeToMatrix(path, true);
-                    m_subscribedPaths.insert(path);
-                    m_subscriptionStates[path] = state;
-                }
+                m_subscriptionStates[path] = state;
             }
         }
         ++it;
+    }
+    
+    if (!subscriptions.isEmpty()) {
+        qDebug().noquote() << QString("Batch subscribing to %1 expanded items after tree population")
+            .arg(subscriptions.size());
+        m_connection->sendBatchSubscribe(subscriptions);
     }
 }
 
