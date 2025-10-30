@@ -62,7 +62,7 @@ jobs:
             Write-Host "✓ Ninja found: $($ninja.Source)"
             ninja --version
           } else {
-            Write-Host "ℹ Ninja not found - using Visual Studio generator (MSBuild) instead"
+            Write-Host "INFO: Ninja not found - using Visual Studio generator (MSBuild) instead"
           }
       
       - name: Setup Visual Studio environment
