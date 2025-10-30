@@ -39,6 +39,7 @@ struct ParameterData {
     QStringList enumOptions;
     QList<int> enumValues;
     bool isOnline;
+    int streamIdentifier = -1;  // Audio meter stream ID (-1 = not a meter)
     
     QJsonObject toJson() const;
     static ParameterData fromJson(const QJsonObject& json);

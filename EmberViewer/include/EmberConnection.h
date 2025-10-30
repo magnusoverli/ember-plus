@@ -98,6 +98,11 @@ public:
     
     // Batch subscribe to multiple paths in a single message (for reduced round trips)
     void sendBatchSubscribe(const QList<SubscriptionRequest>& requests);
+    
+    // Complete tree fetch for comprehensive snapshots
+    void fetchCompleteTree(const QStringList &initialNodePaths);
+    void cancelTreeFetch();
+    bool isTreeFetchActive() const { return m_treeFetchActive; }
 
 signals:
     void connected();
@@ -107,7 +112,7 @@ signals:
     void nodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
     void parameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                           int access, int type, const QVariant &minimum, const QVariant &maximum,
-                          const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline);
+                          const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier);
     void matrixReceived(const QString &path, int number, const QString &identifier, const QString &description,
                        int type, int targetCount, int sourceCount);
     void matrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label);
@@ -119,6 +124,11 @@ signals:
                          const QStringList &argNames, const QList<int> &argTypes,
                          const QStringList &resultNames, const QList<int> &resultTypes);
     void invocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
+    void streamValueReceived(int streamIdentifier, double value);  // For GlowStreamCollection updates
+    
+    // Complete tree fetch progress signals
+    void treeFetchProgress(int fetchedCount, int totalCount);
+    void treeFetchCompleted(bool success, const QString &message);
 
 private slots:
     void onSocketConnected();
@@ -149,6 +159,7 @@ private:
     void processQualifiedFunction(libember::glow::GlowQualifiedFunction* function);
     void processFunction(libember::glow::GlowFunction* function, const QString& parentPath);
     void processInvocationResult(libember::dom::Node* result);
+    void processStreamCollection(libember::glow::GlowContainer* streamCollection);
     void sendGetDirectory();
     
     // Logging helper
@@ -214,6 +225,16 @@ private:
         bool autoSubscribed;  // true if auto-subscribed on expand, false if manual
     };
     QMap<QString, SubscriptionState> m_subscriptions;  // path -> subscription info
+    
+    // Complete tree fetch state
+    bool m_treeFetchActive;
+    QSet<QString> m_pendingFetchPaths;    // Paths waiting to be requested
+    QSet<QString> m_completedFetchPaths;  // Paths that have been fetched
+    QSet<QString> m_activeFetchPaths;     // Paths currently being requested
+    int m_treeFetchTotalEstimate;         // Estimated total nodes (updated as we discover more)
+    QTimer *m_treeFetchTimer;             // Timer for processing fetch queue
+    
+    void processFetchQueue();             // Process pending fetch requests
 
 public:
     // Subscription methods

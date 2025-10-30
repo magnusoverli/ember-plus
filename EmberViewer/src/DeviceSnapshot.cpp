@@ -75,6 +75,10 @@ QJsonObject ParameterData::toJson() const {
         obj["enumValues"] = valuesArray;
     }
     
+    if (streamIdentifier != -1) {
+        obj["streamIdentifier"] = streamIdentifier;
+    }
+    
     return obj;
 }
 
@@ -104,6 +108,10 @@ ParameterData ParameterData::fromJson(const QJsonObject& json) {
         for (const QJsonValue& val : valuesArray) {
             data.enumValues.append(val.toInt());
         }
+    }
+    
+    if (json.contains("streamIdentifier")) {
+        data.streamIdentifier = json["streamIdentifier"].toInt();
     }
     
     return data;

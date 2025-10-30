@@ -28,6 +28,8 @@
 #include <ember/glow/GlowInvocation.hpp>
 #include <ember/glow/GlowInvocationResult.hpp>
 #include <ember/glow/GlowTupleItemDescription.hpp>
+#include <ember/glow/GlowStreamCollection.hpp>
+#include <ember/glow/GlowStreamEntry.hpp>
 #include <ember/glow/MatrixProperty.hpp>
 #include <ember/glow/CommandType.hpp>
 #include <ember/glow/DirFieldMask.hpp>
@@ -76,6 +78,9 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_protocolTimer(nullptr)
     , m_logLevel(LogLevel::Info)
     , m_nextInvocationId(1)
+    , m_treeFetchActive(false)
+    , m_treeFetchTotalEstimate(0)
+    , m_treeFetchTimer(nullptr)
 {
     connect(m_socket, &QTcpSocket::connected, this, &EmberConnection::onSocketConnected);
     connect(m_socket, &QTcpSocket::disconnected, this, &EmberConnection::onSocketDisconnected);
@@ -101,6 +106,12 @@ EmberConnection::EmberConnection(QObject *parent)
     m_protocolTimer->setSingleShot(true);
     m_protocolTimer->setInterval(PROTOCOL_TIMEOUT_MS);
     connect(m_protocolTimer, &QTimer::timeout, this, &EmberConnection::onProtocolTimeout);
+    
+    // Initialize tree fetch processing timer
+    m_treeFetchTimer = new QTimer(this);
+    m_treeFetchTimer->setSingleShot(false);  // Repeating timer
+    m_treeFetchTimer->setInterval(50);  // Process queue every 50ms
+    connect(m_treeFetchTimer, &QTimer::timeout, this, &EmberConnection::processFetchQueue);
 }
 
 EmberConnection::~EmberConnection()
@@ -472,6 +483,9 @@ void EmberConnection::processRoot(libember::dom::Node* root)
 
 void EmberConnection::processElementCollection(libember::glow::GlowContainer* container, const QString& parentPath)
 {
+    // Count children for tree fetch completion tracking
+    int childCount = 0;
+    
     // Iterate through all elements in the container
     for (auto it = container->begin(); it != container->end(); ++it) {
         auto element = &(*it);
@@ -479,34 +493,55 @@ void EmberConnection::processElementCollection(libember::glow::GlowContainer* co
         // Check qualified types first (they inherit from non-qualified)
         if (auto matrix = dynamic_cast<libember::glow::GlowQualifiedMatrix*>(element)) {
             processQualifiedMatrix(matrix);
+            childCount++;
         }
         else if (auto function = dynamic_cast<libember::glow::GlowQualifiedFunction*>(element)) {
             processQualifiedFunction(function);
+            childCount++;
         }
         else if (auto node = dynamic_cast<libember::glow::GlowQualifiedNode*>(element)) {
             processQualifiedNode(node);
+            childCount++;
         }
         else if (auto param = dynamic_cast<libember::glow::GlowQualifiedParameter*>(element)) {
             processQualifiedParameter(param);
+            childCount++;
         }
         else if (auto invocationResult = dynamic_cast<libember::glow::GlowInvocationResult*>(element)) {
             log(LogLevel::Info, "Received InvocationResult!");
             processInvocationResult(element);
         }
+        else if (auto streamCollection = dynamic_cast<libember::glow::GlowStreamCollection*>(element)) {
+            log(LogLevel::Debug, "Received StreamCollection (audio meters)");
+            processStreamCollection(streamCollection);
+        }
         else if (auto matrix = dynamic_cast<libember::glow::GlowMatrix*>(element)) {
             processMatrix(matrix, parentPath);
+            childCount++;
         }
         else if (auto function = dynamic_cast<libember::glow::GlowFunction*>(element)) {
             processFunction(function, parentPath);
+            childCount++;
         }
         else if (auto node = dynamic_cast<libember::glow::GlowNode*>(element)) {
             processNode(node, parentPath);
+            childCount++;
         }
         else if (auto param = dynamic_cast<libember::glow::GlowParameter*>(element)) {
             processParameter(param, parentPath);
+            childCount++;
         }
         else {
             log(LogLevel::Warning, QString("Unknown element type received (parent: %1)").arg(parentPath));
+        }
+    }
+    
+    // TREE FETCH: Mark parent as completed after processing all its children
+    if (m_treeFetchActive && !parentPath.isEmpty()) {
+        if (m_activeFetchPaths.contains(parentPath)) {
+            m_activeFetchPaths.remove(parentPath);
+            m_completedFetchPaths.insert(parentPath);
+            log(LogLevel::Trace, QString("Completed fetching node %1 (%2 children)").arg(parentPath).arg(childCount));
         }
     }
 }
@@ -547,12 +582,18 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
             .arg(description).arg(hasDescription ? "yes" : "no")
             .arg(isGeneric ? "YES" : "no"));
         
-        // Track this root node
-        RootNodeInfo rootInfo;
-        rootInfo.path = pathStr;
-        rootInfo.displayName = displayName;
-        rootInfo.isGeneric = isGeneric;
-        m_rootNodes[pathStr] = rootInfo;
+        // Track this root node - but preserve existing non-generic name during tree fetch
+        if (m_rootNodes.contains(pathStr) && !m_rootNodes[pathStr].isGeneric) {
+            // Already have a good name, keep it
+            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[pathStr].displayName));
+        } else {
+            // New node or generic name - update it
+            RootNodeInfo rootInfo;
+            rootInfo.path = pathStr;
+            rootInfo.displayName = displayName;
+            rootInfo.isGeneric = isGeneric;
+            m_rootNodes[pathStr] = rootInfo;
+        }
     }
     // Track identity child nodes under root nodes
     else if (pathDepth == 2) {
@@ -577,6 +618,17 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         .arg(pathStr).arg(isOnline ? "YES" : "NO"));
     
     emit nodeReceived(pathStr, identifier, description, isOnline);
+    
+    // TREE FETCH: If tree fetch is active, add this node to the fetch queue
+    if (m_treeFetchActive) {
+        // Add this new node to pending fetch queue (to fetch its children)
+        if (!m_completedFetchPaths.contains(pathStr) && 
+            !m_activeFetchPaths.contains(pathStr) &&
+            !m_pendingFetchPaths.contains(pathStr)) {
+            m_pendingFetchPaths.insert(pathStr);
+            m_treeFetchTotalEstimate++;
+        }
+    }
     
     // Process children if present inline
     if (node->children()) {
@@ -636,12 +688,18 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
             .arg(description).arg(hasDescription ? "yes" : "no")
             .arg(isGeneric ? "YES" : "no"));
         
-        // Track this root node
-        RootNodeInfo rootInfo;
-        rootInfo.path = pathStr;
-        rootInfo.displayName = displayName;
-        rootInfo.isGeneric = isGeneric;
-        m_rootNodes[pathStr] = rootInfo;
+        // Track this root node - but preserve existing non-generic name during tree fetch
+        if (m_rootNodes.contains(pathStr) && !m_rootNodes[pathStr].isGeneric) {
+            // Already have a good name, keep it
+            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[pathStr].displayName));
+        } else {
+            // New node or generic name - update it
+            RootNodeInfo rootInfo;
+            rootInfo.path = pathStr;
+            rootInfo.displayName = displayName;
+            rootInfo.isGeneric = isGeneric;
+            m_rootNodes[pathStr] = rootInfo;
+        }
     }
     // Track identity child nodes under root nodes
     else if (pathDepth == 2) {
@@ -666,6 +724,17 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
         .arg(pathStr).arg(isOnline ? "YES" : "NO"));
     
     emit nodeReceived(pathStr, identifier, description, isOnline);
+    
+    // TREE FETCH: If tree fetch is active, add this node to the fetch queue
+    if (m_treeFetchActive) {
+        // Add this new node to pending fetch queue (to fetch its children)
+        if (!m_completedFetchPaths.contains(pathStr) && 
+            !m_activeFetchPaths.contains(pathStr) &&
+            !m_pendingFetchPaths.contains(pathStr)) {
+            m_pendingFetchPaths.insert(pathStr);
+            m_treeFetchTotalEstimate++;
+        }
+    }
     
     // Process children if present inline
     if (node->children()) {
@@ -858,7 +927,14 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
         ? param->isOnline()
         : true;
     
-    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline);
+    // Get stream identifier for audio level meters
+    int streamIdentifier = param->streamIdentifier();  // Returns -1 if not present
+    if (streamIdentifier != -1) {
+        log(LogLevel::Debug, QString("Parameter %1 has streamIdentifier=%2 (audio meter)")
+            .arg(pathStr).arg(streamIdentifier));
+    }
+    
+    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
 }
 
 void EmberConnection::processParameter(libember::glow::GlowParameter* param, const QString& parentPath)
@@ -1010,7 +1086,14 @@ void EmberConnection::processParameter(libember::glow::GlowParameter* param, con
         ? param->isOnline()
         : true;
     
-    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline);
+    // Get stream identifier for audio level meters
+    int streamIdentifier = param->streamIdentifier();  // Returns -1 if not present
+    if (streamIdentifier != -1) {
+        log(LogLevel::Debug, QString("Parameter %1 has streamIdentifier=%2 (audio meter)")
+            .arg(pathStr).arg(streamIdentifier));
+    }
+    
+    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
 }
 
 bool EmberConnection::isGenericNodeName(const QString &name)
@@ -1805,6 +1888,49 @@ void EmberConnection::processInvocationResult(libember::dom::Node* node)
     emit invocationResultReceived(invocationId, success, resultValues);
 }
 
+void EmberConnection::processStreamCollection(libember::glow::GlowContainer* streamCollection)
+{
+    // Process all stream entries in the collection
+    int entryCount = 0;
+    for (auto it = streamCollection->begin(); it != streamCollection->end(); ++it) {
+        auto streamEntry = dynamic_cast<libember::glow::GlowStreamEntry*>(&(*it));
+        if (streamEntry) {
+            int streamId = streamEntry->streamIdentifier();
+            auto value = streamEntry->value();
+            
+            // Extract numeric value based on type
+            double numericValue = 0.0;
+            bool hasValue = false;
+            
+            switch (value.type().value()) {
+                case libember::glow::ParameterType::Integer:
+                    numericValue = static_cast<double>(value.toInteger());
+                    hasValue = true;
+                    break;
+                case libember::glow::ParameterType::Real:
+                    numericValue = value.toReal();
+                    hasValue = true;
+                    break;
+                default:
+                    log(LogLevel::Warning, QString("StreamEntry %1 has non-numeric type %2")
+                        .arg(streamId).arg(value.type().value()));
+                    break;
+            }
+            
+            if (hasValue) {
+                log(LogLevel::Trace, QString("StreamEntry: streamId=%1, value=%2")
+                    .arg(streamId).arg(numericValue));
+                emit streamValueReceived(streamId, numericValue);
+                entryCount++;
+            }
+        }
+    }
+    
+    if (entryCount > 0) {
+        log(LogLevel::Debug, QString("Processed StreamCollection with %1 entries").arg(entryCount));
+    }
+}
+
 void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> &arguments)
 {
     if (!m_connected) {
@@ -2367,4 +2493,170 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
 bool EmberConnection::isSubscribed(const QString &path) const
 {
     return m_subscriptions.contains(path);
+}
+
+// Complete tree fetch implementation
+void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
+{
+    if (m_treeFetchActive) {
+        log(LogLevel::Warning, "Tree fetch already in progress");
+        return;
+    }
+    
+    if (!m_connected) {
+        emit treeFetchCompleted(false, "Not connected to device");
+        return;
+    }
+    
+    log(LogLevel::Info, QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size()));
+    
+    m_treeFetchActive = true;
+    m_pendingFetchPaths.clear();
+    m_completedFetchPaths.clear();
+    m_activeFetchPaths.clear();
+    m_treeFetchTotalEstimate = initialNodePaths.size();
+    
+    // Add all initial nodes to pending queue
+    for (const QString &path : initialNodePaths) {
+        QString type = path.split('|').value(1);  // Format: "path|type"
+        QString nodePath = path.split('|').value(0);
+        
+        // Only fetch nodes (they have children), skip parameters/matrices/functions
+        if (type == "Node") {
+            m_pendingFetchPaths.insert(nodePath);
+        }
+    }
+    
+    if (m_pendingFetchPaths.isEmpty()) {
+        log(LogLevel::Info, "No nodes to fetch (all are leaf elements)");
+        m_treeFetchActive = false;
+        emit treeFetchCompleted(true, "No nodes to fetch");
+        return;
+    }
+    
+    log(LogLevel::Debug, QString("Queued %1 nodes for fetching").arg(m_pendingFetchPaths.size()));
+    
+    // Start processing the queue
+    m_treeFetchTimer->start();
+    processFetchQueue();
+}
+
+void EmberConnection::cancelTreeFetch()
+{
+    if (!m_treeFetchActive) {
+        return;
+    }
+    
+    log(LogLevel::Info, "Cancelling tree fetch...");
+    
+    m_treeFetchActive = false;
+    m_treeFetchTimer->stop();
+    m_pendingFetchPaths.clear();
+    m_activeFetchPaths.clear();
+    m_completedFetchPaths.clear();
+    
+    emit treeFetchCompleted(false, "Cancelled by user");
+}
+
+void EmberConnection::processFetchQueue()
+{
+    if (!m_treeFetchActive) {
+        m_treeFetchTimer->stop();
+        return;
+    }
+    
+    // Batch size: how many requests to send in parallel
+    const int MAX_PARALLEL_REQUESTS = 5;
+    
+    // Send new requests if we have capacity
+    while (m_activeFetchPaths.size() < MAX_PARALLEL_REQUESTS && !m_pendingFetchPaths.isEmpty()) {
+        // Take a path from pending queue
+        QString path = *m_pendingFetchPaths.begin();
+        m_pendingFetchPaths.remove(path);
+        m_activeFetchPaths.insert(path);
+        
+        log(LogLevel::Trace, QString("Fetching children of: %1").arg(path.isEmpty() ? "root" : path));
+        
+        // Send GetDirectory request bypassing m_requestedPaths check
+        // We manage our own tracking with m_activeFetchPaths/m_completedFetchPaths
+        try {
+            auto root = new libember::glow::GlowRootElementCollection();
+            
+            if (path.isEmpty()) {
+                // Request root
+                auto command = new libember::glow::GlowCommand(
+                    libember::glow::CommandType::GetDirectory,
+                    libember::glow::DirFieldMask::All
+                );
+                root->insert(root->end(), command);
+            }
+            else {
+                // Request specific node path
+                QStringList segments = path.split('.', Qt::SkipEmptyParts);
+                libember::ber::ObjectIdentifier oid;
+                
+                for (const QString& seg : segments) {
+                    oid.push_back(seg.toInt());
+                }
+                
+                auto node = new libember::glow::GlowQualifiedNode(oid);
+                new libember::glow::GlowCommand(
+                    node,
+                    libember::glow::CommandType::GetDirectory,
+                    libember::glow::DirFieldMask::All
+                );
+                root->insert(root->end(), node);
+            }
+            
+            // Encode to EmBER  
+            libember::util::OctetStream stream;
+            root->encode(stream);
+            
+            // Wrap in S101 frame
+            auto encoder = libs101::StreamEncoder<unsigned char>();
+            encoder.encode(0x00);  // Slot
+            encoder.encode(libs101::MessageType::EmBER);
+            encoder.encode(libs101::CommandType::EmBER);
+            encoder.encode(0x01);  // Version
+            encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
+            encoder.encode(0x01);  // DTD (Glow)
+            encoder.encode(0x00);  // No app bytes
+            
+            // Add EmBER data
+            encoder.encode(stream.begin(), stream.end());
+            encoder.finish();
+            
+            // Send
+            std::vector<unsigned char> data(encoder.begin(), encoder.end());
+            QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
+            
+            if (m_socket->write(qdata) > 0) {
+                m_socket->flush();
+            }
+            
+            delete root;
+        }
+        catch (const std::exception &ex) {
+            log(LogLevel::Error, QString("Error sending GetDirectory for tree fetch: %1").arg(ex.what()));
+            // Move from active to completed even on error to avoid getting stuck
+            m_activeFetchPaths.remove(path);
+            m_completedFetchPaths.insert(path);
+        }
+    }
+    
+    // Check if we're done
+    if (m_pendingFetchPaths.isEmpty() && m_activeFetchPaths.isEmpty()) {
+        log(LogLevel::Info, QString("Tree fetch completed: fetched %1 nodes").arg(m_completedFetchPaths.size()));
+        
+        m_treeFetchActive = false;
+        m_treeFetchTimer->stop();
+        m_completedFetchPaths.clear();
+        
+        emit treeFetchCompleted(true, QString("Fetched %1 nodes").arg(m_completedFetchPaths.size()));
+    }
+    else {
+        // Update progress
+        int total = m_completedFetchPaths.size() + m_activeFetchPaths.size() + m_pendingFetchPaths.size();
+        emit treeFetchProgress(m_completedFetchPaths.size(), total);
+    }
 }
