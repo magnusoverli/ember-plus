@@ -199,6 +199,7 @@ endif()
 # Create a library for shared code (for testing)
 add_library(EmberViewerLib STATIC
     src/MatrixWidget.cpp
+    src/MeterWidget.cpp
     src/ParameterDelegate.cpp
     src/DeviceSnapshot.cpp
     src/UpdateManager.cpp
@@ -206,6 +207,7 @@ add_library(EmberViewerLib STATIC
     src/EmberTreeWidget.cpp
     ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
+    include/MeterWidget.h
     include/ParameterDelegate.h
     include/DeviceSnapshot.h
     include/UpdateManager.h
@@ -224,6 +226,7 @@ file(GLOB_RECURSE SOURCE_FILES
 )
 list(REMOVE_ITEM SOURCE_FILES 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MeterWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ParameterDelegate.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/DeviceSnapshot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateManager.cpp
@@ -233,6 +236,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MatrixWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/MeterWidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/ParameterDelegate.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/DeviceSnapshot.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateManager.h
