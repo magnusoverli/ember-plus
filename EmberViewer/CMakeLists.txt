@@ -213,6 +213,8 @@ add_library(EmberViewerLib STATIC
     src/CrosspointActivityTracker.cpp
     src/SnapshotManager.cpp
     src/FunctionInvoker.cpp
+    src/EmberConnection.cpp
+    src/EmberProvider.cpp
     ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
     include/MeterWidget.h
@@ -230,6 +232,8 @@ add_library(EmberViewerLib STATIC
     include/CrosspointActivityTracker.h
     include/SnapshotManager.h
     include/FunctionInvoker.h
+    include/EmberConnection.h
+    include/EmberProvider.h
 )
 
 # Make sure version is updated before building library
@@ -257,6 +261,8 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CrosspointActivityTracker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SnapshotManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FunctionInvoker.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberConnection.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberProvider.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
@@ -276,6 +282,8 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/CrosspointActivityTracker.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/SnapshotManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/FunctionInvoker.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberConnection.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberProvider.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h
@@ -464,6 +472,7 @@ endif()
 option(BUILD_TESTS "Build unit tests" ON)
 # Respect BUILD_TESTING option (standard CMake option)
 if(BUILD_TESTS AND BUILD_TESTING)
+    enable_testing()
     add_subdirectory(tests)
     message(STATUS "EmberViewer tests configured")
 endif()
