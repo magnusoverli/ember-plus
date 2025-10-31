@@ -15,6 +15,7 @@
 #include <QMutex>
 #include <QDebug>
 #include <QIcon>
+#include <QLoggingCategory>
 #include "MainWindow.h"
 #include "version.h"
 
@@ -139,6 +140,12 @@ int main(int argc, char *argv[])
         }
     }
     
+    // Qt 6 defaults to warning+ only, which is what we want.
+    // Application code should use qWarning/qCritical for important messages.
+    // qDebug/qInfo messages from Qt internals will be filtered out automatically.
+    // Our application qDebug/qInfo calls (with no category) are also filtered,
+    // so use qWarning() for startup/shutdown and user-facing messages.
+    
     QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
     QDir().mkpath(logDir);
     
@@ -148,9 +155,9 @@ int main(int argc, char *argv[])
     
     if (logFile->open(QIODevice::WriteOnly | QIODevice::Text)) {
         qInstallMessageHandler(messageHandler);
-        qInfo() << "EmberViewer started";
-        qInfo() << "Log file:" << logPath;
-        qInfo() << "Version:" << QApplication::applicationVersion();
+        // Use qWarning for startup messages as Qt6 filters qInfo() without explicit category
+        qWarning() << "EmberViewer started - Version:" << QApplication::applicationVersion();
+        qWarning() << "Log file:" << logPath;
     } else {
         fprintf(stderr, "Failed to open log file: %s\n", logPath.toUtf8().constData());
     }
@@ -163,7 +170,7 @@ int main(int argc, char *argv[])
     
     globalMainWindow = nullptr;
     
-    qInfo() << "EmberViewer shutting down";
+    qWarning() << "EmberViewer shutting down";
     
     if (logFile) {
         logFile->close();
