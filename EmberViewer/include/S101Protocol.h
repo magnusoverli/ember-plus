@@ -30,6 +30,9 @@ public:
     
     // Encode Ember+ data into S101 frame
     QByteArray encodeEmberData(const libember::util::OctetStream& emberData);
+    
+    // Encode keep-alive response frame
+    QByteArray encodeKeepAliveResponse();
 
 signals:
     // Emitted when a complete S101 message is decoded

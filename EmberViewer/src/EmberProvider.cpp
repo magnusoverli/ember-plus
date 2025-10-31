@@ -8,6 +8,7 @@
 
 #include "EmberProvider.h"
 #include "DeviceSnapshot.h"
+#include "S101Protocol.h"
 #include <ember/Ember.hpp>
 #include <ember/glow/GlowRootElementCollection.hpp>
 #include <ember/glow/GlowQualifiedNode.hpp>
@@ -20,9 +21,8 @@
 #include <ember/glow/GlowTarget.hpp>
 #include <ember/glow/GlowSource.hpp>
 #include <ember/glow/GlowTupleItemDescription.hpp>
-#include <s101/StreamEncoder.hpp>
-#include <s101/CommandType.hpp>
 #include <s101/MessageType.hpp>
+#include <s101/CommandType.hpp>
 #include <s101/PackageFlag.hpp>
 #include <QDebug>
 
@@ -148,12 +148,14 @@ void DomReader::rootReady(libember::dom::Node* root)
 EmberProvider::EmberProvider(QObject *parent)
     : QObject(parent)
     , m_server(nullptr)
+    , m_s101Protocol(new S101Protocol(this))
 {
 }
 
 EmberProvider::~EmberProvider()
 {
     stopListening();
+    delete m_s101Protocol;
 }
 
 bool EmberProvider::startListening(quint16 port)
@@ -721,16 +723,8 @@ void EmberProvider::sendFunctionResponse(const QString &path, ClientConnection *
 
 void EmberProvider::sendKeepAliveResponse(ClientConnection *client)
 {
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);  // Slot
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::KeepAliveResponse);
-    encoder.encode(0x01);  // Version
-    encoder.finish();
-    
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    client->sendData(qdata);
+    QByteArray frame = m_s101Protocol->encodeKeepAliveResponse();
+    client->sendData(frame);
 }
 
 void EmberProvider::handleSubscribe(const QString &path, ClientConnection *client)
@@ -749,22 +743,9 @@ void EmberProvider::sendEncodedMessage(const libember::glow::GlowContainer *cont
     libember::util::OctetStream stream;
     container->encode(stream);
     
-    // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);  // Slot
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);  // Version
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);  // DTD
-    encoder.encode(0x00);  // AppBytes
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
-    
-    // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    client->sendData(qdata);
+    // Encode to S101 and send
+    QByteArray frame = m_s101Protocol->encodeEmberData(stream);
+    client->sendData(frame);
 }
 
 void EmberProvider::sendMatrixLabelNode(const QString &matrixPath, ClientConnection *client)

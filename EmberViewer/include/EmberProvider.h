@@ -42,6 +42,7 @@ namespace libember {
 // Forward declarations
 class EmberProvider;
 class DomReader;
+class S101Protocol;
 
 // Client connection handler (must be outside EmberProvider for Qt MOC)
 class ClientConnection : public QObject
@@ -145,6 +146,7 @@ private:
     
     QTcpServer *m_server;
     QList<ClientConnection*> m_clients;
+    S101Protocol *m_s101Protocol;
     
     // Device tree data (loaded from snapshot)
     QMap<QString, NodeData> m_nodes;

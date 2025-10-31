@@ -93,3 +93,19 @@ QByteArray S101Protocol::encodeEmberData(const libember::util::OctetStream& embe
     std::vector<unsigned char> data(encoder.begin(), encoder.end());
     return QByteArray(reinterpret_cast<const char*>(data.data()), data.size());
 }
+
+QByteArray S101Protocol::encodeKeepAliveResponse()
+{
+    auto encoder = libs101::StreamEncoder<unsigned char>();
+    
+    // S101 keep-alive response frame
+    encoder.encode(0x00);  // Slot
+    encoder.encode(libs101::MessageType::EmBER);
+    encoder.encode(libs101::CommandType::KeepAliveResponse);
+    encoder.encode(0x01);  // Version
+    encoder.finish();
+    
+    // Convert to QByteArray
+    std::vector<unsigned char> data(encoder.begin(), encoder.end());
+    return QByteArray(reinterpret_cast<const char*>(data.data()), data.size());
+}
