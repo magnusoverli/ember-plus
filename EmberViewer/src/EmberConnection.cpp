@@ -7,6 +7,8 @@
 */
 
 #include "EmberConnection.h"
+#include "TreeFetchService.h"
+#include "CacheManager.h"
 #include <QDebug>
 #include <ember/Ember.hpp>
 #include <ember/ber/ObjectIdentifier.hpp>
@@ -41,8 +43,7 @@
 #include <ember/glow/ConnectionDisposition.hpp>
 #include <ember/util/OctetStream.hpp>
 
-// Static device cache definition
-QMap<QString, EmberConnection::DeviceCache> EmberConnection::s_deviceCache;
+
 
 // EmberConnection implementation
 EmberConnection::EmberConnection(QObject *parent)
@@ -50,15 +51,14 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_socket(new QTcpSocket(this))
     , m_s101Protocol(new S101Protocol(this))
     , m_glowParser(new GlowParser(this))
+    , m_treeFetchService(new TreeFetchService(this))
+    , m_cacheManager(new CacheManager(this))
     , m_connected(false)
     , m_emberDataReceived(false)
     , m_connectionTimer(nullptr)
     , m_protocolTimer(nullptr)
     , m_logLevel(LogLevel::Info)
     , m_nextInvocationId(1)
-    , m_treeFetchActive(false)
-    , m_treeFetchTotalEstimate(0)
-    , m_treeFetchTimer(nullptr)
 {
     // Socket connections
     connect(m_socket, &QTcpSocket::connected, this, &EmberConnection::onSocketConnected);
@@ -134,12 +134,6 @@ EmberConnection::EmberConnection(QObject *parent)
     m_protocolTimer->setSingleShot(true);
     m_protocolTimer->setInterval(PROTOCOL_TIMEOUT_MS);
     connect(m_protocolTimer, &QTimer::timeout, this, &EmberConnection::onProtocolTimeout);
-    
-    // Initialize tree fetch processing timer
-    m_treeFetchTimer = new QTimer(this);
-    m_treeFetchTimer->setSingleShot(false);  // Repeating timer
-    m_treeFetchTimer->setInterval(50);  // Process queue every 50ms
-    connect(m_treeFetchTimer, &QTimer::timeout, this, &EmberConnection::processFetchQueue);
 }
 
 EmberConnection::~EmberConnection()
@@ -275,25 +269,20 @@ void EmberConnection::onSocketConnected()
     // OPTIMIZATION: Check cache for previously discovered device name
     // Display cached name immediately for instant UI feedback on reconnection
     QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
-    if (s_deviceCache.contains(cacheKey)) {
-        DeviceCache& cache = s_deviceCache[cacheKey];
+    if (CacheManager::hasDeviceCache(cacheKey)) {
+        CacheManager::DeviceCache cache = CacheManager::getDeviceCache(cacheKey);
         
         // Check if cache is still valid (not expired)
         QDateTime now = QDateTime::currentDateTime();
-        int hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
+        qint64 hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
         
-        if (cache.isValid && hoursSinceLastSeen < CACHE_EXPIRY_HOURS) {
+        if (cache.isValid) {
             log(LogLevel::Info, QString("Using cached device name: '%1' (last seen %2 hours ago)")
                 .arg(cache.deviceName)
                 .arg(hoursSinceLastSeen));
             
             // Create/update root node with cached info
-            RootNodeInfo rootInfo;
-            rootInfo.path = cache.rootPath;
-            rootInfo.displayName = cache.deviceName;
-            rootInfo.isGeneric = false;  // We have the real name
-            rootInfo.identityPath = cache.identityPath;
-            m_rootNodes[cache.rootPath] = rootInfo;
+            m_cacheManager->setRootNode(cache.rootPath, cache.deviceName, false, cache.identityPath);
             
             // Emit cached device name immediately for instant UI update
             emit nodeReceived(cache.rootPath, cache.deviceName, cache.deviceName, true);
@@ -302,7 +291,6 @@ void EmberConnection::onSocketConnected()
         } else {
             log(LogLevel::Info, QString("Cache expired (last seen %1 hours ago), will rediscover device name")
                 .arg(hoursSinceLastSeen));
-            cache.isValid = false;
         }
     }
     
@@ -320,8 +308,7 @@ void EmberConnection::onSocketDisconnected()
     
     m_connected = false;
     m_emberDataReceived = false;
-    m_parameterCache.clear();  // Clear cached parameter metadata
-    m_rootNodes.clear();  // Clear root node tracking
+    m_cacheManager->clear();  // Clear cached metadata
     emit disconnected();
     log(LogLevel::Info, "Disconnected from provider");
 }
@@ -433,31 +420,29 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
             .arg(isGeneric ? "YES" : "no"));
         
         // Track this root node - but preserve existing non-generic name during tree fetch
-        if (m_rootNodes.contains(node.path) && !m_rootNodes[node.path].isGeneric) {
+        if (m_cacheManager->hasRootNode(node.path) && !m_cacheManager->isRootNodeGeneric(node.path)) {
             // Already have a good name, keep it
-            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[node.path].displayName));
+            CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(node.path);
+            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(rootInfo.displayName));
         } else {
             // New node or generic name - update it
-            RootNodeInfo rootInfo;
-            rootInfo.path = node.path;
-            rootInfo.displayName = displayName;
-            rootInfo.isGeneric = isGeneric;
-            // Preserve identityPath if it was already discovered
-            if (m_rootNodes.contains(node.path)) {
-                rootInfo.identityPath = m_rootNodes[node.path].identityPath;
+            QString existingIdentityPath;
+            if (m_cacheManager->hasRootNode(node.path)) {
+                // Preserve identityPath if it was already discovered
+                existingIdentityPath = m_cacheManager->getRootNode(node.path).identityPath;
             }
-            m_rootNodes[node.path] = rootInfo;
+            m_cacheManager->setRootNode(node.path, displayName, isGeneric, existingIdentityPath);
         }
     }
     // Track identity child nodes under root nodes
     else if (pathDepth == 2) {
         QString parentPath = pathParts[0];
-        if (m_rootNodes.contains(parentPath)) {
+        if (m_cacheManager->hasRootNode(parentPath)) {
             // Check if this is an identity node
             QString nodeName = node.identifier.toLower();
             if (nodeName == "identity" || nodeName == "_identity" || 
                 nodeName == "deviceinfo" || nodeName == "device_info") {
-                m_rootNodes[parentPath].identityPath = node.path;
+                m_cacheManager->updateRootNodeIdentityPath(parentPath, node.path);
                 log(LogLevel::Info, QString("Detected identity node for root %1: %2")
                     .arg(parentPath).arg(node.path));
             }
@@ -470,31 +455,28 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
     // Emit the node signal
     emit nodeReceived(node.path, node.identifier, node.description, node.isOnline);
     
-    // TREE FETCH: If tree fetch is active, add this node to the fetch queue
-    if (m_treeFetchActive) {
-        // Add this new node to pending fetch queue (to fetch its children)
-        if (!m_completedFetchPaths.contains(node.path) && 
-            !m_activeFetchPaths.contains(node.path) &&
-            !m_pendingFetchPaths.contains(node.path)) {
-            m_pendingFetchPaths.insert(node.path);
-            m_treeFetchTotalEstimate++;
-        }
+    // TREE FETCH: If tree fetch is active, notify the service
+    if (m_treeFetchService->isActive()) {
+        m_treeFetchService->onNodeReceived(node.path);
     }
     
     // LAZY LOADING: Only auto-request children for special cases (root name discovery)
     bool shouldAutoRequest = false;
     
     // Special case 1: Root nodes with generic names (to discover device name)
-    if (pathDepth == 1 && m_rootNodes.contains(node.path) && m_rootNodes[node.path].isGeneric) {
+    if (pathDepth == 1 && m_cacheManager->hasRootNode(node.path) && m_cacheManager->isRootNodeGeneric(node.path)) {
         shouldAutoRequest = true;
         log(LogLevel::Debug, QString("Auto-requesting children of root node %1 for name discovery").arg(node.path));
     }
     // Special case 2: Identity nodes under generic root (to find name parameter)
     else if (pathDepth == 2) {
         QString rootPath = pathParts[0];
-        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].identityPath == node.path) {
-            shouldAutoRequest = true;
-            log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(node.path));
+        if (m_cacheManager->hasRootNode(rootPath)) {
+            CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(rootPath);
+            if (rootInfo.identityPath == node.path) {
+                shouldAutoRequest = true;
+                log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(node.path));
+            }
         }
     }
     
@@ -513,31 +495,25 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
     QStringList pathParts = param.path.split('.');
     if (pathParts.size() >= 3) {
         QString rootPath = pathParts[0];
-        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].isGeneric) {
+        if (m_cacheManager->hasRootNode(rootPath) && m_cacheManager->isRootNodeGeneric(rootPath)) {
             // Check if parameter identifier suggests it's a device name
             QString paramName = param.identifier.toLower();
             if (paramName == "name" || paramName == "device name" || 
                 paramName == "devicename" || paramName == "product") {
                 
                 // Check if under identity node
-                if (!m_rootNodes[rootPath].identityPath.isEmpty()) {
-                    if (param.path.startsWith(m_rootNodes[rootPath].identityPath + ".")) {
+                CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(rootPath);
+                if (!rootInfo.identityPath.isEmpty()) {
+                    if (param.path.startsWith(rootInfo.identityPath + ".")) {
                         log(LogLevel::Info, QString("Found device name '%1' for root node %2 (from %3)")
                             .arg(param.value).arg(rootPath).arg(param.path));
                         
                         // Update the display name
-                        m_rootNodes[rootPath].displayName = param.value;
-                        m_rootNodes[rootPath].isGeneric = false;
+                        m_cacheManager->updateRootNodeDisplayName(rootPath, param.value, false);
                         
                         // OPTIMIZATION: Cache device name for instant reconnection
                         QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
-                        DeviceCache cache;
-                        cache.deviceName = param.value;
-                        cache.rootPath = rootPath;
-                        cache.identityPath = m_rootNodes[rootPath].identityPath;
-                        cache.lastSeen = QDateTime::currentDateTime();
-                        cache.isValid = true;
-                        s_deviceCache[cacheKey] = cache;
+                        CacheManager::cacheDevice(cacheKey, param.value, rootPath, rootInfo.identityPath);
                         
                         log(LogLevel::Debug, QString("Cached device name '%1' for %2")
                             .arg(param.value).arg(cacheKey));
@@ -1384,11 +1360,6 @@ bool EmberConnection::isSubscribed(const QString &path) const
 // Complete tree fetch implementation
 void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
 {
-    if (m_treeFetchActive) {
-        log(LogLevel::Warning, "Tree fetch already in progress");
-        return;
-    }
-    
     if (!m_connected) {
         emit treeFetchCompleted(false, "Not connected to device");
         return;
@@ -1396,75 +1367,10 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
     
     log(LogLevel::Info, QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size()));
     
-    m_treeFetchActive = true;
-    m_pendingFetchPaths.clear();
-    m_completedFetchPaths.clear();
-    m_activeFetchPaths.clear();
-    m_treeFetchTotalEstimate = initialNodePaths.size();
-    
-    // Add all initial nodes to pending queue
-    for (const QString &path : initialNodePaths) {
-        QString type = path.split('|').value(1);  // Format: "path|type"
-        QString nodePath = path.split('|').value(0);
+    // Set up callback for TreeFetchService to send GetDirectory requests
+    m_treeFetchService->setSendGetDirectoryCallback([this](const QString& path, bool isRoot) {
+        log(LogLevel::Trace, QString("Tree fetch requesting: %1").arg(path.isEmpty() ? "root" : path));
         
-        // Only fetch nodes (they have children), skip parameters/matrices/functions
-        if (type == "Node") {
-            m_pendingFetchPaths.insert(nodePath);
-        }
-    }
-    
-    if (m_pendingFetchPaths.isEmpty()) {
-        log(LogLevel::Info, "No nodes to fetch (all are leaf elements)");
-        m_treeFetchActive = false;
-        emit treeFetchCompleted(true, "No nodes to fetch");
-        return;
-    }
-    
-    log(LogLevel::Debug, QString("Queued %1 nodes for fetching").arg(m_pendingFetchPaths.size()));
-    
-    // Start processing the queue
-    m_treeFetchTimer->start();
-    processFetchQueue();
-}
-
-void EmberConnection::cancelTreeFetch()
-{
-    if (!m_treeFetchActive) {
-        return;
-    }
-    
-    log(LogLevel::Info, "Cancelling tree fetch...");
-    
-    m_treeFetchActive = false;
-    m_treeFetchTimer->stop();
-    m_pendingFetchPaths.clear();
-    m_activeFetchPaths.clear();
-    m_completedFetchPaths.clear();
-    
-    emit treeFetchCompleted(false, "Cancelled by user");
-}
-
-void EmberConnection::processFetchQueue()
-{
-    if (!m_treeFetchActive) {
-        m_treeFetchTimer->stop();
-        return;
-    }
-    
-    // Batch size: how many requests to send in parallel
-    const int MAX_PARALLEL_REQUESTS = 5;
-    
-    // Send new requests if we have capacity
-    while (m_activeFetchPaths.size() < MAX_PARALLEL_REQUESTS && !m_pendingFetchPaths.isEmpty()) {
-        // Take a path from pending queue
-        QString path = *m_pendingFetchPaths.begin();
-        m_pendingFetchPaths.remove(path);
-        m_activeFetchPaths.insert(path);
-        
-        log(LogLevel::Trace, QString("Fetching children of: %1").arg(path.isEmpty() ? "root" : path));
-        
-        // Send GetDirectory request bypassing m_requestedPaths check
-        // We manage our own tracking with m_activeFetchPaths/m_completedFetchPaths
         try {
             auto root = new libember::glow::GlowRootElementCollection();
             
@@ -1510,25 +1416,23 @@ void EmberConnection::processFetchQueue()
         }
         catch (const std::exception &ex) {
             log(LogLevel::Error, QString("Error sending GetDirectory for tree fetch: %1").arg(ex.what()));
-            // Move from active to completed even on error to avoid getting stuck
-            m_activeFetchPaths.remove(path);
-            m_completedFetchPaths.insert(path);
         }
-    }
+    });
     
-    // Check if we're done
-    if (m_pendingFetchPaths.isEmpty() && m_activeFetchPaths.isEmpty()) {
-        log(LogLevel::Info, QString("Tree fetch completed: fetched %1 nodes").arg(m_completedFetchPaths.size()));
-        
-        m_treeFetchActive = false;
-        m_treeFetchTimer->stop();
-        m_completedFetchPaths.clear();
-        
-        emit treeFetchCompleted(true, QString("Fetched %1 nodes").arg(m_completedFetchPaths.size()));
-    }
-    else {
-        // Update progress
-        int total = m_completedFetchPaths.size() + m_activeFetchPaths.size() + m_pendingFetchPaths.size();
-        emit treeFetchProgress(m_completedFetchPaths.size(), total);
-    }
+    // Connect progress signals
+    connect(m_treeFetchService, &TreeFetchService::progressUpdated, this, &EmberConnection::treeFetchProgress, Qt::UniqueConnection);
+    connect(m_treeFetchService, &TreeFetchService::fetchCompleted, this, &EmberConnection::treeFetchCompleted, Qt::UniqueConnection);
+    
+    // Start the fetch
+    m_treeFetchService->startFetch(initialNodePaths);
+}
+
+void EmberConnection::cancelTreeFetch()
+{
+    m_treeFetchService->cancel();
+}
+
+bool EmberConnection::isTreeFetchActive() const
+{
+    return m_treeFetchService->isActive();
 }

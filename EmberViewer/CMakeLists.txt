@@ -213,6 +213,8 @@ add_library(EmberViewerLib STATIC
     src/CrosspointActivityTracker.cpp
     src/SnapshotManager.cpp
     src/FunctionInvoker.cpp
+    src/TreeFetchService.cpp
+    src/CacheManager.cpp
     src/EmberConnection.cpp
     src/EmberProvider.cpp
     ${PLATFORM_UPDATE_SOURCES}
@@ -232,6 +234,8 @@ add_library(EmberViewerLib STATIC
     include/CrosspointActivityTracker.h
     include/SnapshotManager.h
     include/FunctionInvoker.h
+    include/TreeFetchService.h
+    include/CacheManager.h
     include/EmberConnection.h
     include/EmberProvider.h
 )
@@ -261,6 +265,8 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CrosspointActivityTracker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SnapshotManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FunctionInvoker.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/TreeFetchService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/CacheManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberConnection.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberProvider.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
@@ -282,6 +288,8 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/CrosspointActivityTracker.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/SnapshotManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/FunctionInvoker.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/TreeFetchService.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/CacheManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberConnection.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberProvider.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h

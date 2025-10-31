@@ -32,6 +32,8 @@ enum class LogLevel {
 // Forward declarations
 class S101Protocol;
 class GlowParser;
+class TreeFetchService;
+class CacheManager;
 
 class EmberConnection : public QObject
 {
@@ -77,7 +79,7 @@ public:
     // Complete tree fetch for comprehensive snapshots
     void fetchCompleteTree(const QStringList &initialNodePaths);
     void cancelTreeFetch();
-    bool isTreeFetchActive() const { return m_treeFetchActive; }
+    bool isTreeFetchActive() const;
 
 signals:
     void connected();
@@ -140,6 +142,10 @@ private:
     S101Protocol *m_s101Protocol;
     GlowParser *m_glowParser;
     
+    // Services
+    TreeFetchService *m_treeFetchService;
+    CacheManager *m_cacheManager;
+    
     // Connection state
     QString m_host;
     int m_port;
@@ -150,31 +156,8 @@ private:
     QTimer *m_connectionTimer;
     QTimer *m_protocolTimer;  // Timeout for waiting for Ember+ protocol response
     
-    // Cache of parameter metadata (path -> cache)
-    QMap<QString, ParameterCache> m_parameterCache;
-    
     // Track requested paths to avoid infinite loops
     QSet<QString> m_requestedPaths;
-    
-    // Device name tracking for smart root node naming
-    struct RootNodeInfo {
-        QString path;           // Node path (e.g., "1")
-        QString displayName;    // Current display name
-        bool isGeneric;         // Whether the name is generic and needs improvement
-        QString identityPath;   // Path to identity node (e.g., "1.4")
-    };
-    QMap<QString, RootNodeInfo> m_rootNodes;  // Track root-level nodes
-    
-    // Device name caching for instant reconnection
-    struct DeviceCache {
-        QString deviceName;        // Cached device name
-        QString rootPath;          // Root node path (e.g., "1")
-        QString identityPath;      // Identity node path (e.g., "1.4")
-        QDateTime lastSeen;        // When we last connected
-        bool isValid;              // Whether cache is still valid
-    };
-    static QMap<QString, DeviceCache> s_deviceCache;  // Static cache survives connections
-    static constexpr int CACHE_EXPIRY_HOURS = 24;     // Cache expires after 24 hours
     
     // Log level
     LogLevel m_logLevel;
@@ -190,15 +173,7 @@ private:
     };
     QMap<QString, SubscriptionState> m_subscriptions;  // path -> subscription info
     
-    // Complete tree fetch state
-    bool m_treeFetchActive;
-    QSet<QString> m_pendingFetchPaths;    // Paths waiting to be requested
-    QSet<QString> m_completedFetchPaths;  // Paths that have been fetched
-    QSet<QString> m_activeFetchPaths;     // Paths currently being requested
-    int m_treeFetchTotalEstimate;         // Estimated total nodes (updated as we discover more)
-    QTimer *m_treeFetchTimer;             // Timer for processing fetch queue
-    
-    void processFetchQueue();             // Process pending fetch requests
+
 
 public:
     // Subscription methods
