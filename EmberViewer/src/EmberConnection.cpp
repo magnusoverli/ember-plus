@@ -593,8 +593,13 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         
         // Track this root node - but preserve existing non-generic name during tree fetch
         if (m_rootNodes.contains(pathStr) && !m_rootNodes[pathStr].isGeneric) {
-            // Already have a good name, keep it
+            // Already have a good name, keep it - don't emit again
             log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[pathStr].displayName));
+            // Return early to prevent re-emitting nodeReceived with generic name
+            if (!hasIdentifier || isGeneric) {
+                log(LogLevel::Debug, "Skipping nodeReceived emit - would overwrite good name with generic/missing");
+                return;
+            }
         } else {
             // New node or generic name - update it
             RootNodeInfo rootInfo;
@@ -630,7 +635,24 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
     log(LogLevel::Debug, QString("QNode: %1 - Online: %2")
         .arg(pathStr).arg(isOnline ? "YES" : "NO"));
     
-    emit nodeReceived(pathStr, identifier, description, isOnline);
+    // Don't re-emit if we already have this node with a valid identifier
+    // and the new data lacks an identifier (device sent stub parent reference)
+    static QMap<QString, bool> nodesWithIdentifier;
+    bool hadIdentifier = nodesWithIdentifier.value(pathStr, false);
+    
+    bool shouldEmit = true;
+    if (hadIdentifier && !hasIdentifier) {
+        log(LogLevel::Debug, QString("Skipping re-emit for %1 - would replace valid name with generic").arg(pathStr));
+        shouldEmit = false;
+    }
+    
+    if (hasIdentifier) {
+        nodesWithIdentifier[pathStr] = true;
+    }
+    
+    if (shouldEmit) {
+        emit nodeReceived(pathStr, identifier, description, isOnline);
+    }
     
     // TREE FETCH: If tree fetch is active, add this node to the fetch queue
     if (m_treeFetchActive) {
@@ -740,7 +762,24 @@ void EmberConnection::processNode(libember::glow::GlowNode* node, const QString&
     log(LogLevel::Debug, QString("Node: %1 - Online: %2")
         .arg(pathStr).arg(isOnline ? "YES" : "NO"));
     
-    emit nodeReceived(pathStr, identifier, description, isOnline);
+    // Don't re-emit if we already have this node with a valid identifier
+    // and the new data lacks an identifier (device sent stub parent reference)
+    static QMap<QString, bool> nodesWithIdentifier;
+    bool hadIdentifier = nodesWithIdentifier.value(pathStr, false);
+    
+    bool shouldEmit = true;
+    if (hadIdentifier && !hasIdentifier) {
+        log(LogLevel::Info, QString("Skipping re-emit for %1 (processNode) - would replace valid name with generic").arg(pathStr));
+        shouldEmit = false;
+    }
+    
+    if (hasIdentifier) {
+        nodesWithIdentifier[pathStr] = true;
+    }
+    
+    if (shouldEmit) {
+        emit nodeReceived(pathStr, identifier, description, isOnline);
+    }
     
     // TREE FETCH: If tree fetch is active, add this node to the fetch queue
     if (m_treeFetchActive) {
@@ -1175,6 +1214,24 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
             root->insert(root->end(), command);
             log(LogLevel::Info, "Command inserted successfully");
         }
+        else {
+            // Request specific node path
+            log(LogLevel::Info, QString("Creating QualifiedNode for path: %1").arg(path));
+            QStringList segments = path.split('.', Qt::SkipEmptyParts);
+            libember::ber::ObjectIdentifier oid;
+            
+            for (const QString& seg : segments) {
+                oid.push_back(seg.toInt());
+            }
+            
+            auto node = new libember::glow::GlowQualifiedNode(oid);
+            new libember::glow::GlowCommand(
+                node,
+                libember::glow::CommandType::GetDirectory
+            );
+            root->insert(root->end(), node);
+            log(LogLevel::Info, "QualifiedNode with command inserted (no field mask)");
+        }
         
         // Encode to EmBER
         log(LogLevel::Info, "Encoding to EmBER...");
@@ -1295,7 +1352,9 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
         encoder.encode(0x01);  // Version
         encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
         encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x00);  // No app bytes
+        encoder.encode(0x02);  // 2 app bytes
+        encoder.encode(0x28);  // App byte 1
+        encoder.encode(0x02);  // App byte 2
         
         // Add EmBER data
         encoder.encode(stream.begin(), stream.end());
@@ -1385,7 +1444,9 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
         encoder.encode(0x01);  // Version
         encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
         encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x00);  // No app bytes
+        encoder.encode(0x02);  // 2 app bytes
+        encoder.encode(0x28);  // App byte 1
+        encoder.encode(0x02);  // App byte 2
         
         // Add EmBER data
         encoder.encode(stream.begin(), stream.end());
@@ -1470,7 +1531,9 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         encoder.encode(0x01);  // Version
         encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
         encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x00);  // No app bytes
+        encoder.encode(0x02);  // 2 app bytes
+        encoder.encode(0x28);  // App byte 1
+        encoder.encode(0x02);  // App byte 2
         
         // Add EmBER data
         encoder.encode(stream.begin(), stream.end());
