@@ -67,7 +67,13 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
                             file.contains("DeviceSnapshot") ||
                             file.contains("ParameterDelegate") ||
                             file.contains("EmulatorWindow") ||
-                            file.contains("FunctionInvocationDialog");
+                            file.contains("FunctionInvocationDialog") ||
+                            file.contains("TreeViewController") ||
+                            file.contains("MatrixManager") ||
+                            file.contains("SubscriptionManager") ||
+                            file.contains("FunctionInvoker") ||
+                            file.contains("SnapshotManager") ||
+                            file.contains("GlowParser");
         } else {
             // No file context - check if message looks like a Qt warning
             // Common Qt warnings contain these patterns
