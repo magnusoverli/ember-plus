@@ -207,6 +207,10 @@ add_library(EmberViewerLib STATIC
     src/EmberTreeWidget.cpp
     src/S101Protocol.cpp
     src/GlowParser.cpp
+    src/TreeViewController.cpp
+    src/SubscriptionManager.cpp
+    src/MatrixManager.cpp
+    src/CrosspointActivityTracker.cpp
     ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
     include/MeterWidget.h
@@ -218,6 +222,10 @@ add_library(EmberViewerLib STATIC
     include/S101Protocol.h
     include/GlowParser.h
     include/EmberDataTypes.h
+    include/TreeViewController.h
+    include/SubscriptionManager.h
+    include/MatrixManager.h
+    include/CrosspointActivityTracker.h
 )
 
 # Make sure version is updated before building library
@@ -239,6 +247,10 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberTreeWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/S101Protocol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/GlowParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/TreeViewController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SubscriptionManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/CrosspointActivityTracker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
@@ -252,6 +264,10 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/S101Protocol.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/GlowParser.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberDataTypes.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/TreeViewController.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/SubscriptionManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/MatrixManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/CrosspointActivityTracker.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h
