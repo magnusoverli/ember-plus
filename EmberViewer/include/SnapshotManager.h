@@ -21,16 +21,7 @@
 class EmberConnection;
 class DeviceSnapshot;
 class MatrixManager;
-
-// Forward declaration of MainWindow's internal type
-struct FunctionInfo {
-    QString identifier;
-    QString description;
-    QStringList argNames;
-    QList<int> argTypes;
-    QStringList resultNames;
-    QList<int> resultTypes;
-};
+class FunctionInvoker;
 
 class SnapshotManager : public QObject
 {
@@ -40,6 +31,7 @@ public:
     explicit SnapshotManager(QTreeWidget* treeWidget,
                             EmberConnection* connection,
                             MatrixManager* matrixManager,
+                            FunctionInvoker* functionInvoker,
                             QWidget* parent = nullptr);
     ~SnapshotManager();
 
@@ -47,8 +39,7 @@ public:
     void saveSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin);
     
     // Capture current tree state as snapshot
-    DeviceSnapshot captureSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin, 
-                                   const QMap<QString, FunctionInfo>& functions);
+    DeviceSnapshot captureSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin);
 
 signals:
     void snapshotCaptured(const DeviceSnapshot& snapshot);
@@ -66,6 +57,7 @@ private:
     QTreeWidget* m_treeWidget;
     EmberConnection* m_connection;
     MatrixManager* m_matrixManager;
+    FunctionInvoker* m_functionInvoker;
     QProgressDialog* m_treeFetchProgress;
     
     // Store host/port for use after tree fetch

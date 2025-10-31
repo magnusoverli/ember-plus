@@ -12,6 +12,7 @@
 #include "MatrixManager.h"
 #include "MatrixWidget.h"
 #include "EmberDataTypes.h"
+#include "FunctionInvoker.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QDateTime>
@@ -21,11 +22,13 @@
 SnapshotManager::SnapshotManager(QTreeWidget* treeWidget,
                                  EmberConnection* connection,
                                  MatrixManager* matrixManager,
+                                 FunctionInvoker* functionInvoker,
                                  QWidget* parent)
     : QObject(parent)
     , m_treeWidget(treeWidget)
     , m_connection(connection)
     , m_matrixManager(matrixManager)
+    , m_functionInvoker(functionInvoker)
     , m_treeFetchProgress(nullptr)
     , m_hostEdit(nullptr)
     , m_portSpin(nullptr)
@@ -149,10 +152,8 @@ void SnapshotManager::proceedWithSnapshot(QLineEdit* hostEdit, QSpinBox* portSpi
         return;  // User cancelled
     }
     
-    // Capture the snapshot (need to pass functions map - will handle in MainWindow integration)
-    // For now, create with empty functions
-    QMap<QString, FunctionInfo> emptyFunctions;
-    DeviceSnapshot snapshot = captureSnapshot(hostEdit, portSpin, emptyFunctions);
+    // Capture the snapshot
+    DeviceSnapshot snapshot = captureSnapshot(hostEdit, portSpin);
     
     // Save to file
     if (snapshot.saveToFile(fileName)) {
@@ -174,8 +175,7 @@ void SnapshotManager::proceedWithSnapshot(QLineEdit* hostEdit, QSpinBox* portSpi
     }
 }
 
-DeviceSnapshot SnapshotManager::captureSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin,
-                                                const QMap<QString, FunctionInfo>& functions)
+DeviceSnapshot SnapshotManager::captureSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin)
 {
     DeviceSnapshot snapshot;
     
@@ -296,8 +296,8 @@ DeviceSnapshot SnapshotManager::captureSnapshot(QLineEdit* hostEdit, QSpinBox* p
             }
             
         } else if (type == "Function") {
-            if (functions.contains(path)) {
-                FunctionInfo funcInfo = functions[path];
+            if (m_functionInvoker->hasFunction(path)) {
+                FunctionInfo funcInfo = m_functionInvoker->getFunctionInfo(path);
                 
                 FunctionData funcData;
                 funcData.path = path;

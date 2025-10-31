@@ -39,6 +39,8 @@ class TreeViewController;
 class SubscriptionManager;
 class MatrixManager;
 class CrosspointActivityTracker;
+class SnapshotManager;
+class FunctionInvoker;
 
 class MainWindow : public QMainWindow
 {
@@ -70,11 +72,8 @@ private slots:
     void onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
                            const QStringList &argNames, const QList<int> &argTypes,
                            const QStringList &resultNames, const QList<int> &resultTypes);
-    void onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results);
     void onStreamValueReceived(int streamIdentifier, double value);
     void onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
-    void onTreeFetchProgress(int fetchedCount, int totalCount);
-    void onTreeFetchCompleted(bool success, const QString &message);
     void onTreeSelectionChanged();
     void onEnableCrosspointsToggled(bool enabled);
     void onActivityTimeout();
@@ -102,8 +101,6 @@ private:
     void saveSettings();
     
     void logMessage(const QString &message);
-    DeviceSnapshot captureSnapshot();
-    void proceedWithSnapshot();  // Continue snapshot after tree fetch completes
     
     // Widgets
     EmberTreeWidget *m_treeWidget;
@@ -130,6 +127,8 @@ private:
     SubscriptionManager *m_subscriptionManager;
     MatrixManager *m_matrixManager;
     CrosspointActivityTracker *m_activityTracker;
+    SnapshotManager *m_snapshotManager;
+    FunctionInvoker *m_functionInvoker;
     
     // Meter widget (only one active at a time)
     MeterWidget *m_activeMeter;
@@ -137,20 +136,8 @@ private:
     // Stream identifier tracking (streamId -> parameter path)
     QMap<int, QString> m_streamIdToPath;
     
-    // Complete tree fetch progress tracking
-    QProgressDialog *m_treeFetchProgress;
-    
-    // Function metadata storage
-    struct FunctionInfo {
-        QString identifier;
-        QString description;
-        QStringList argNames;
-        QList<int> argTypes;
-        QStringList resultNames;
-        QList<int> resultTypes;
-    };
-    QMap<QString, FunctionInfo> m_functions;  // path -> function info
-    QMap<int, QString> m_pendingInvocations;  // invocationId -> function path
+    // Complete tree fetch progress tracking - now handled by SnapshotManager
+    // Function metadata storage - now handled by FunctionInvoker
     
     // State
     bool m_isConnected;

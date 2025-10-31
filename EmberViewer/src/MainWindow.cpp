@@ -26,6 +26,8 @@
 #include "SubscriptionManager.h"
 #include "MatrixManager.h"
 #include "CrosspointActivityTracker.h"
+#include "SnapshotManager.h"
+#include "FunctionInvoker.h"
 
 // Platform-specific update managers
 #ifdef Q_OS_LINUX
@@ -76,7 +78,6 @@ MainWindow::MainWindow(QWidget *parent)
     , m_pathLabel(nullptr)
     , m_connection(nullptr)
     , m_activeMeter(nullptr)
-    , m_treeFetchProgress(nullptr)
     , m_enableCrosspointsAction(nullptr)
     , m_crosspointsStatusLabel(nullptr)
     , m_emulatorWindow(nullptr)
@@ -117,12 +118,10 @@ MainWindow::MainWindow(QWidget *parent)
     
     // LAZY LOADING OPTIMIZATION: Use direct connections for instant UI updates
     // With lazy loading, we only receive small batches of children at a time,
-    // so there's no risk of UI freeze. Direct connections eliminate queuing latency.
-    connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
-    connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
-    connect(m_connection, &EmberConnection::streamValueReceived, this, &MainWindow::onStreamValueReceived);
-    connect(m_connection, &EmberConnection::treeFetchProgress, this, &MainWindow::onTreeFetchProgress);
-    connect(m_connection, &EmberConnection::treeFetchCompleted, this, &MainWindow::onTreeFetchCompleted);
+    // so there's no risk of UI freeze. User sees real-time tree population.
+    // (Previously disabled for aggressive enumeration with 100+ items at once)
+    
+    // Tree fetch progress now handled by SnapshotManager
     connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
     connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived);
     connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
@@ -130,13 +129,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
     connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared);
     connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
-    connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
+    // Invocation results now handled by FunctionInvoker
     
     // Initialize manager classes
     m_treeViewController = new TreeViewController(m_treeWidget, m_connection, this);
     m_subscriptionManager = new SubscriptionManager(m_connection, this);
     m_matrixManager = new MatrixManager(m_connection, this);
     m_activityTracker = new CrosspointActivityTracker(m_crosspointsStatusLabel, this);
+    m_functionInvoker = new FunctionInvoker(m_connection, this);
+    m_snapshotManager = new SnapshotManager(m_treeWidget, m_connection, m_matrixManager, m_functionInvoker, this);
     
     // Install event filter on application to detect user activity (for crosspoint tracker)
     qApp->installEventFilter(m_activityTracker);
@@ -277,25 +278,21 @@ void MainWindow::setupUi()
         QString type = item->text(1);
         if (type == "Function") {
             QString path = item->data(0, Qt::UserRole).toString();
-            if (!m_functions.contains(path)) return;
+            if (!m_functionInvoker->hasFunction(path)) return;
             
             QMenu contextMenu;
             QAction *invokeAction = contextMenu.addAction("Invoke Function...");
             
             QAction *selected = contextMenu.exec(m_treeWidget->mapToGlobal(pos));
             if (selected == invokeAction) {
-                FunctionInfo funcInfo = m_functions[path];
+                FunctionInfo funcInfo = m_functionInvoker->getFunctionInfo(path);
                 
                 FunctionInvocationDialog dialog(funcInfo.identifier, funcInfo.description,
                                                funcInfo.argNames, funcInfo.argTypes, this);
                 
                 if (dialog.exec() == QDialog::Accepted) {
                     QList<QVariant> arguments = dialog.getArguments();
-                    
-                    int invocationId = m_connection->property("nextInvocationId").toInt();
-                    m_pendingInvocations[invocationId] = path;
-                    
-                    m_connection->invokeFunction(path, arguments);
+                    m_functionInvoker->invokeFunction(path, arguments);
                     
                     qInfo().noquote() << QString("Invoking function '%1' with %2 arguments")
                         .arg(funcInfo.identifier).arg(arguments.size());
@@ -980,51 +977,14 @@ void MainWindow::onFunctionReceived(const QString &path, const QString &identifi
                                    const QStringList &argNames, const QList<int> &argTypes,
                                    const QStringList &resultNames, const QList<int> &resultTypes)
 {
-    // Store function metadata in MainWindow (for invocation dialog)
-    FunctionInfo info;
-    info.identifier = identifier;
-    info.description = description;
-    info.argNames = argNames;
-    info.argTypes = argTypes;
-    info.resultNames = resultNames;
-    info.resultTypes = resultTypes;
-    m_functions[path] = info;
+    // Register function with FunctionInvoker
+    m_functionInvoker->registerFunction(path, identifier, description, argNames, argTypes, resultNames, resultTypes);
     
     // Delegate tree item creation to TreeViewController
     m_treeViewController->onFunctionReceived(path, identifier, description, argNames, argTypes, resultNames, resultTypes);
 }
 
-void MainWindow::onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results)
-{
-    QString functionPath = m_pendingInvocations.value(invocationId, "Unknown");
-    m_pendingInvocations.remove(invocationId);
-    
-    FunctionInfo funcInfo = m_functions.value(functionPath);
-    
-    QString resultText;
-    if (success) {
-        resultText = QString("✅ Function '%1' invoked successfully").arg(funcInfo.identifier);
-        if (!results.isEmpty()) {
-            resultText += "\n\nReturn values:";
-            for (int i = 0; i < results.size() && i < funcInfo.resultNames.size(); i++) {
-                QString valueName = funcInfo.resultNames[i];
-                QVariant value = results[i];
-                resultText += QString("\n  • %1: %2").arg(valueName).arg(value.toString());
-            }
-        }
-    } else {
-        resultText = QString("❌ Function '%1' invocation failed").arg(funcInfo.identifier);
-    }
-    
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle("Function Invocation Result");
-    msgBox.setText(resultText);
-    msgBox.setIcon(success ? QMessageBox::Information : QMessageBox::Warning);
-    msgBox.exec();
-    
-    qInfo().noquote() << QString("Invocation result - ID: %1, Success: %2, Results: %3")
-        .arg(invocationId).arg(success ? "YES" : "NO").arg(results.size());
-}
+// onInvocationResultReceived now handled by FunctionInvoker
 
 void MainWindow::onStreamValueReceived(int streamIdentifier, double value)
 {
@@ -1051,269 +1011,11 @@ void MainWindow::onSaveEmberDevice()
         return;
     }
     
-    // Ask user if they want to fetch the complete tree first
-    QMessageBox::StandardButton reply = QMessageBox::question(this, 
-        "Complete Device Tree",
-        "Do you want to fetch the complete device tree before saving?\n\n"
-        "YES: Ensures complete snapshot (recommended, may take 10-30 seconds)\n"
-        "NO: Save only currently loaded nodes (faster, may be incomplete)",
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::Yes);  // Default to Yes
-    
-    if (reply == QMessageBox::Yes) {
-        // Get all current tree items
-        QStringList allPaths = m_treeViewController->getAllTreeItemPaths();
-        
-        if (allPaths.isEmpty()) {
-            QMessageBox::warning(this, "No Data", "No device data to save.");
-            return;
-        }
-        
-        // Create and show progress dialog
-        m_treeFetchProgress = new QProgressDialog(
-            "Fetching complete device tree...",
-            "Cancel",
-            0, 100,
-            this);
-        m_treeFetchProgress->setWindowTitle("Complete Tree Fetch");
-        m_treeFetchProgress->setWindowModality(Qt::WindowModal);
-        m_treeFetchProgress->setMinimumDuration(0);  // Show immediately
-        m_treeFetchProgress->setValue(0);
-        
-        // Connect cancel button
-        connect(m_treeFetchProgress, &QProgressDialog::canceled, 
-                m_connection, &EmberConnection::cancelTreeFetch);
-        
-        // Start the fetch
-        m_connection->fetchCompleteTree(allPaths);
-        
-        // Wait for completion (handled by onTreeFetchCompleted)
-        return;  // Will continue in onTreeFetchCompleted
-    }
-    
-    // User chose NO - proceed with current tree
-    proceedWithSnapshot();
+    // Delegate to SnapshotManager
+    m_snapshotManager->saveSnapshot(m_hostEdit, m_portSpin);
 }
 
-void MainWindow::proceedWithSnapshot()
-{
-    // Generate default filename using actual device name from tree
-    QString deviceName;
-    
-    // Try to get device name from first root node in tree
-    if (m_treeWidget->topLevelItemCount() > 0) {
-        QTreeWidgetItem* firstRoot = m_treeWidget->topLevelItem(0);
-        deviceName = firstRoot->text(0);
-    }
-    
-    // If no tree items or empty name, fall back to hostname
-    if (deviceName.isEmpty()) {
-        deviceName = m_hostEdit->text();
-    }
-    
-    // Sanitize device name for filename (remove invalid chars)
-    static const QRegularExpression invalidChars("[^a-zA-Z0-9_.-]");
-    deviceName = deviceName.replace(invalidChars, "_");
-    
-    // If still empty after sanitization, use generic name
-    if (deviceName.isEmpty()) {
-        deviceName = "ember_device";
-    }
-    
-    QString timestamp = QDateTime::currentDateTime().toString("ddMMyyyy");
-    QString defaultName = QString("%1_%2.json").arg(deviceName).arg(timestamp);
-    
-    QString fileName = QFileDialog::getSaveFileName(
-        this,
-        "Save Ember Device",
-        defaultName,
-        "Ember Device Files (*.json);;All Files (*)"
-    );
-    
-    if (fileName.isEmpty()) {
-        return;  // User cancelled
-    }
-    
-    // Capture the snapshot
-    DeviceSnapshot snapshot = captureSnapshot();
-    
-    // Save to file
-    if (snapshot.saveToFile(fileName)) {
-        QString stats = QString("Device saved: %1 nodes, %2 parameters, %3 matrices, %4 functions")
-            .arg(snapshot.nodeCount())
-            .arg(snapshot.parameterCount())
-            .arg(snapshot.matrixCount())
-            .arg(snapshot.functionCount());
-        
-        qInfo().noquote() << stats;
-        QMessageBox::information(this, "Device Saved", 
-            QString("Ember device saved successfully to:\n%1\n\n%2")
-                .arg(fileName)
-                .arg(stats));
-    } else {
-        QMessageBox::critical(this, "Save Failed", 
-            QString("Failed to save device to:\n%1").arg(fileName));
-    }
-}
 
-DeviceSnapshot MainWindow::captureSnapshot()
-{
-    DeviceSnapshot snapshot;
-    
-    // Set metadata
-    // Try to get actual device name from first root node
-    if (m_treeWidget->topLevelItemCount() > 0) {
-        QTreeWidgetItem* firstRoot = m_treeWidget->topLevelItem(0);
-        snapshot.deviceName = firstRoot->text(0);
-    }
-    // Fall back to hostname if no tree items
-    if (snapshot.deviceName.isEmpty()) {
-        snapshot.deviceName = m_hostEdit->text();
-    }
-    
-    snapshot.hostAddress = m_hostEdit->text();
-    snapshot.port = m_portSpin->value();
-    snapshot.captureTime = QDateTime::currentDateTime();
-    
-    // Iterate through tree and capture all elements
-    QTreeWidgetItemIterator it(m_treeWidget);
-    while (*it) {
-        QString path = (*it)->data(0, Qt::UserRole).toString();
-        QString type = (*it)->text(1);
-        
-        if (path.isEmpty()) {
-            ++it;
-            continue;
-        }
-        
-        if (type == "Node") {
-            NodeData nodeData;
-            nodeData.path = path;
-            nodeData.identifier = (*it)->text(0);
-            nodeData.description = "";  // Description not stored separately in tree
-            nodeData.isOnline = (*it)->data(0, Qt::UserRole + 4).toBool();
-            
-            // Collect child paths
-            for (int i = 0; i < (*it)->childCount(); ++i) {
-                QString childPath = (*it)->child(i)->data(0, Qt::UserRole).toString();
-                if (!childPath.isEmpty()) {
-                    nodeData.childPaths.append(childPath);
-                }
-            }
-            
-            snapshot.nodes[path] = nodeData;
-            
-        } else if (type == "Parameter") {
-            ParameterData paramData;
-            paramData.path = path;
-            paramData.identifier = (*it)->text(0);
-            paramData.value = (*it)->text(2);
-            paramData.type = (*it)->data(0, Qt::UserRole + 1).toInt();
-            paramData.access = (*it)->data(0, Qt::UserRole + 2).toInt();
-            paramData.minimum = (*it)->data(0, Qt::UserRole + 3);
-            paramData.maximum = (*it)->data(0, Qt::UserRole + 4);
-            paramData.enumOptions = (*it)->data(0, Qt::UserRole + 5).toStringList();
-            
-            // Convert QList<QVariant> to QList<int>
-            QList<QVariant> enumVarList = (*it)->data(0, Qt::UserRole + 6).toList();
-            for (const QVariant& var : enumVarList) {
-                paramData.enumValues.append(var.toInt());
-            }
-            
-            paramData.isOnline = (*it)->data(0, Qt::UserRole + 8).toBool();
-            paramData.streamIdentifier = (*it)->data(0, Qt::UserRole + 9).toInt();  // Audio meter stream ID
-            
-            snapshot.parameters[path] = paramData;
-            
-        } else if (type == "Matrix") {
-            // Get matrix widget to extract connection data
-            MatrixWidget* matrixWidget = m_matrixManager->getMatrix(path);
-            if (matrixWidget) {
-                MatrixData matrixData;
-                matrixData.path = path;
-                matrixData.identifier = (*it)->text(0);
-                matrixData.description = "";
-                
-                // Parse size from text (e.g., "8x16" or "8×16")
-                QString sizeText = (*it)->text(2);
-                QStringList sizeParts = sizeText.split(QChar(0x00D7));  // Unicode multiplication sign
-                if (sizeParts.size() == 2) {
-                    matrixData.sourceCount = sizeParts[0].toInt();
-                    matrixData.targetCount = sizeParts[1].toInt();
-                }
-                
-                matrixData.type = matrixWidget->getMatrixType();
-                
-                // Get actual target and source indices (not just counts!)
-                matrixData.targetNumbers = matrixWidget->getTargetNumbers();
-                matrixData.sourceNumbers = matrixWidget->getSourceNumbers();
-                
-                // Extract labels and connections from MatrixWidget
-                // Use actual indices, not 0 to count-1
-                for (int targetIdx : matrixData.targetNumbers) {
-                    QString label = matrixWidget->getTargetLabel(targetIdx);
-                    // Only save custom labels (not default "Target N" format)
-                    if (!label.isEmpty() && label != QString("Target %1").arg(targetIdx)) {
-                        matrixData.targetLabels[targetIdx] = label;
-                    }
-                }
-                
-                for (int sourceIdx : matrixData.sourceNumbers) {
-                    QString srcLabel = matrixWidget->getSourceLabel(sourceIdx);
-                    // Only save custom labels (not default "Source N" format)
-                    if (!srcLabel.isEmpty() && srcLabel != QString("Source %1").arg(sourceIdx)) {
-                        matrixData.sourceLabels[sourceIdx] = srcLabel;
-                    }
-                }
-                
-                // Extract connections for all valid crosspoints
-                for (int targetIdx : matrixData.targetNumbers) {
-                    for (int sourceIdx : matrixData.sourceNumbers) {
-                        bool connected = matrixWidget->isConnected(targetIdx, sourceIdx);
-                        matrixData.connections[{targetIdx, sourceIdx}] = connected;
-                    }
-                }
-                
-                snapshot.matrices[path] = matrixData;
-            }
-            
-        } else if (type == "Function") {
-            if (m_functions.contains(path)) {
-                FunctionInfo funcInfo = m_functions[path];
-                
-                FunctionData funcData;
-                funcData.path = path;
-                funcData.identifier = funcInfo.identifier;
-                funcData.description = funcInfo.description;
-                funcData.argNames = funcInfo.argNames;
-                funcData.argTypes = funcInfo.argTypes;
-                funcData.resultNames = funcInfo.resultNames;
-                funcData.resultTypes = funcInfo.resultTypes;
-                
-                snapshot.functions[path] = funcData;
-            }
-        }
-        
-        ++it;
-    }
-    
-    // Collect root paths in order (top-level items from tree widget)
-    for (int i = 0; i < m_treeWidget->topLevelItemCount(); ++i) {
-        QTreeWidgetItem* item = m_treeWidget->topLevelItem(i);
-        QString path = item->data(0, Qt::UserRole).toString();
-        if (!path.isEmpty()) {
-            snapshot.rootPaths.append(path);
-        }
-    }
-    
-    qInfo().noquote() << QString("Captured snapshot: %1 nodes, %2 parameters, %3 matrices, %4 functions")
-        .arg(snapshot.nodeCount())
-        .arg(snapshot.parameterCount())
-        .arg(snapshot.matrixCount())
-        .arg(snapshot.functionCount());
-    
-    return snapshot;
-}
 
 void MainWindow::onOpenEmulator()
 {
@@ -1542,48 +1244,3 @@ void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QStri
     onConnectClicked();
 }
 
-void MainWindow::onTreeFetchProgress(int fetchedCount, int totalCount)
-{
-    if (m_treeFetchProgress) {
-        // Update progress (0-100%)
-        int percent = totalCount > 0 ? (fetchedCount * 100 / totalCount) : 0;
-        m_treeFetchProgress->setValue(percent);
-        m_treeFetchProgress->setLabelText(
-            QString("Fetching complete device tree...\n%1 of %2 nodes fetched")
-                .arg(fetchedCount)
-                .arg(totalCount));
-    }
-}
-
-void MainWindow::onTreeFetchCompleted(bool success, const QString &message)
-{
-    // Close progress dialog
-    if (m_treeFetchProgress) {
-        m_treeFetchProgress->close();
-        delete m_treeFetchProgress;
-        m_treeFetchProgress = nullptr;
-    }
-    
-    if (success) {
-        qInfo() << "Tree fetch completed:" << message;
-        // Continue with snapshot
-        proceedWithSnapshot();
-    } else {
-        qWarning() << "Tree fetch failed/cancelled:" << message;
-        QMessageBox::information(this, "Tree Fetch Cancelled",
-            QString("Complete tree fetch was cancelled.\n\n%1\n\n"
-                   "You can still save the snapshot with currently loaded nodes.")
-                .arg(message));
-        
-        // Ask if user wants to proceed anyway
-        QMessageBox::StandardButton reply = QMessageBox::question(this,
-            "Save Partial Snapshot?",
-            "Do you want to save the snapshot with currently loaded nodes?\n\n"
-            "It may be incomplete.",
-            QMessageBox::Yes | QMessageBox::No);
-        
-        if (reply == QMessageBox::Yes) {
-            proceedWithSnapshot();
-        }
-    }
-}
