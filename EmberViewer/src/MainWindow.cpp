@@ -121,6 +121,11 @@ MainWindow::MainWindow(QWidget *parent)
     // so there's no risk of UI freeze. User sees real-time tree population.
     // (Previously disabled for aggressive enumeration with 100+ items at once)
     
+    // Connect tree population signals (delegates to TreeViewController)
+    connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
+    connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
+    connect(m_connection, &EmberConnection::streamValueReceived, this, &MainWindow::onStreamValueReceived);
+    
     // Tree fetch progress now handled by SnapshotManager
     connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
     connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived);
@@ -641,6 +646,30 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
     // Track stream identifiers for StreamCollection routing (used in onStreamValueReceived)
     if (streamIdentifier > 0) {
         m_streamIdToPath[streamIdentifier] = path;
+    }
+    
+    // Check if this parameter is actually a matrix label
+    // Pattern: matrixPath.666999666.1.N (targets) or matrixPath.666999666.2.N (sources)
+    QStringList pathParts = path.split('.');
+    if (pathParts.size() >= 4 && pathParts[pathParts.size() - 3] == QString::number(MATRIX_LABEL_PATH_MARKER)) {
+        // This is a label! Extract matrix path and target/source info
+        QString labelType = pathParts[pathParts.size() - 2];  // "1" for targets, "2" for sources
+        int labelNumber = pathParts.last().toInt();
+        
+        // Matrix path is everything except the last 3 segments
+        QStringList matrixPathParts = pathParts.mid(0, pathParts.size() - 3);
+        QString matrixPath = matrixPathParts.join('.');
+        
+        // Route label to MatrixManager
+        if (labelType == "1") {
+            // Target label
+            m_matrixManager->onMatrixTargetReceived(matrixPath, labelNumber, value);
+        } else if (labelType == "2") {
+            // Source label
+            m_matrixManager->onMatrixSourceReceived(matrixPath, labelNumber, value);
+        }
+        
+        // Still create the tree item for the label (for completeness)
     }
     
     // Delegate to TreeViewController for tree item creation
