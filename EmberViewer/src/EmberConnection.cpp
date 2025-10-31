@@ -40,38 +40,16 @@
 #include <ember/glow/ConnectionOperation.hpp>
 #include <ember/glow/ConnectionDisposition.hpp>
 #include <ember/util/OctetStream.hpp>
-#include <s101/CommandType.hpp>
-#include <s101/MessageType.hpp>
-#include <s101/PackageFlag.hpp>
-#include <s101/StreamEncoder.hpp>
 
 // Static device cache definition
 QMap<QString, EmberConnection::DeviceCache> EmberConnection::s_deviceCache;
-
-// DomReader implementation
-EmberConnection::DomReader::DomReader(EmberConnection* connection)
-    : libember::dom::AsyncDomReader(libember::glow::GlowNodeFactory::getFactory())
-    , m_connection(connection)
-{
-}
-
-EmberConnection::DomReader::~DomReader()
-{
-}
-
-void EmberConnection::DomReader::rootReady(libember::dom::Node* root)
-{
-    if (m_connection && root) {
-        m_connection->processRoot(root);
-    }
-}
 
 // EmberConnection implementation
 EmberConnection::EmberConnection(QObject *parent)
     : QObject(parent)
     , m_socket(new QTcpSocket(this))
-    , m_s101Decoder(new libs101::StreamDecoder<unsigned char>())
-    , m_domReader(new DomReader(this))
+    , m_s101Protocol(new S101Protocol(this))
+    , m_glowParser(new GlowParser(this))
     , m_connected(false)
     , m_emberDataReceived(false)
     , m_connectionTimer(nullptr)
@@ -82,6 +60,7 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_treeFetchTotalEstimate(0)
     , m_treeFetchTimer(nullptr)
 {
+    // Socket connections
     connect(m_socket, &QTcpSocket::connected, this, &EmberConnection::onSocketConnected);
     connect(m_socket, &QTcpSocket::disconnected, this, &EmberConnection::onSocketDisconnected);
     
@@ -94,6 +73,55 @@ EmberConnection::EmberConnection(QObject *parent)
     #endif
     
     connect(m_socket, &QTcpSocket::readyRead, this, &EmberConnection::onDataReceived);
+    
+    // Protocol layer connections: Socket -> S101Protocol -> GlowParser -> EmberConnection
+    connect(m_s101Protocol, &S101Protocol::messageReceived, this, &EmberConnection::onS101MessageReceived);
+    connect(m_s101Protocol, &S101Protocol::protocolError, this, [this](const QString& error) {
+        log(LogLevel::Error, QString("S101 protocol error: %1").arg(error));
+        disconnect();
+    });
+    
+    // Parser signal connections
+    connect(m_glowParser, &GlowParser::nodeReceived, this, &EmberConnection::onParserNodeReceived);
+    connect(m_glowParser, &GlowParser::parameterReceived, this, &EmberConnection::onParserParameterReceived);
+    connect(m_glowParser, &GlowParser::matrixReceived, this, &EmberConnection::onParserMatrixReceived);
+    
+    // Forward parser signals directly to our signals
+    connect(m_glowParser, &GlowParser::matrixTargetReceived, this, 
+            [this](const EmberData::MatrixTargetInfo& target) {
+                emit matrixTargetReceived(target.matrixPath, target.targetNumber, target.label);
+            });
+    connect(m_glowParser, &GlowParser::matrixSourceReceived, this,
+            [this](const EmberData::MatrixSourceInfo& source) {
+                emit matrixSourceReceived(source.matrixPath, source.sourceNumber, source.label);
+            });
+    connect(m_glowParser, &GlowParser::matrixConnectionReceived, this,
+            [this](const EmberData::MatrixConnectionInfo& conn) {
+                emit matrixConnectionReceived(conn.matrixPath, conn.targetNumber, 
+                                            conn.sourceNumber, conn.connected, conn.disposition);
+            });
+    connect(m_glowParser, &GlowParser::matrixTargetConnectionsCleared, this, 
+            &EmberConnection::matrixTargetConnectionsCleared);
+    connect(m_glowParser, &GlowParser::functionReceived, this,
+            [this](const EmberData::FunctionInfo& func) {
+                emit functionReceived(func.path, func.identifier, func.description,
+                                    func.argNames, func.argTypes, func.resultNames, func.resultTypes);
+            });
+    connect(m_glowParser, &GlowParser::invocationResultReceived, this,
+            [this](const EmberData::InvocationResult& result) {
+                if (m_pendingInvocations.contains(result.invocationId)) {
+                    m_pendingInvocations.remove(result.invocationId);
+                }
+                emit invocationResultReceived(result.invocationId, result.success, result.results);
+            });
+    connect(m_glowParser, &GlowParser::streamValueReceived, this,
+            [this](const EmberData::StreamValue& stream) {
+                emit streamValueReceived(stream.streamIdentifier, stream.value);
+            });
+    connect(m_glowParser, &GlowParser::parsingError, this, [this](const QString& error) {
+        log(LogLevel::Error, QString("Parsing error: %1").arg(error));
+        disconnect();
+    });
     
     // Initialize connection timeout timer (5 seconds)
     m_connectionTimer = new QTimer(this);
@@ -120,8 +148,8 @@ EmberConnection::~EmberConnection()
         m_socket->disconnectFromHost();
     }
     
-    delete m_domReader;
-    delete m_s101Decoder;
+    delete m_s101Protocol;
+    delete m_glowParser;
 }
 
 void EmberConnection::connectToHost(const QString &host, int port)
@@ -292,8 +320,6 @@ void EmberConnection::onSocketDisconnected()
     
     m_connected = false;
     m_emberDataReceived = false;
-    m_s101Decoder->reset();
-    m_domReader->reset();
     m_parameterCache.clear();  // Clear cached parameter metadata
     m_rootNodes.clear();  // Clear root node tracking
     emit disconnected();
@@ -366,93 +392,12 @@ void EmberConnection::onDataReceived()
     
     log(LogLevel::Info, QString("*** Received %1 bytes from device ***").arg(data.size()));
     
-    // Decode S101 frames
-    const unsigned char *bytes = reinterpret_cast<const unsigned char*>(data.constData());
-    
-    m_s101Decoder->read(bytes, bytes + data.size(),
-        [](libs101::StreamDecoder<unsigned char>::const_iterator first,
-           libs101::StreamDecoder<unsigned char>::const_iterator last,
-           EmberConnection* self)
-        {
-            self->handleS101Message(first, last);
-            return true;
-        },
-        this
-    );
+    // Feed data to S101 protocol layer
+    m_s101Protocol->feedData(data);
 }
 
-void EmberConnection::handleS101Message(
-    libs101::StreamDecoder<unsigned char>::const_iterator first,
-    libs101::StreamDecoder<unsigned char>::const_iterator last)
+void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
 {
-    if (first == last)
-        return;
-    
-    // Parse S101 frame header
-    first++;  // Skip slot
-    auto message = *first++;
-    
-    if (message == libs101::MessageType::EmBER) {
-        auto command = *first++;
-        first++;  // Skip version
-        auto flags = libs101::PackageFlag(*first++);
-        first++;  // Skip DTD
-        
-        if (command == libs101::CommandType::EmBER) {
-            // Skip application bytes
-            auto appBytes = *first++;
-            while (appBytes-- > 0 && first != last) {
-                ++first;
-            }
-            
-            // Feed EmBER data to DOM reader
-            try {
-                log(LogLevel::Trace, "Parsing Glow message...");
-                m_domReader->read(first, last);
-                
-                // If this is the last package, finalize the tree
-                if (flags.value() & libs101::PackageFlag::LastPackage) {
-                    log(LogLevel::Debug, "Complete message received");
-                    m_domReader->reset();
-                }
-            }
-            catch (const std::exception &ex) {
-                log(LogLevel::Error, QString("Error parsing Ember+ data: %1").arg(ex.what()));
-                log(LogLevel::Error, QString("This port is not serving valid Ember+ protocol. Disconnecting..."));
-                // Disconnect immediately - we're receiving invalid Ember+ data
-                disconnect();
-                return;
-            }
-        }
-        else if (command == libs101::CommandType::KeepAliveRequest) {
-            log(LogLevel::Debug, "Received keep-alive request, sending response");
-            
-            // Send keep-alive response
-            auto encoder = libs101::StreamEncoder<unsigned char>();
-            encoder.encode(0x00);  // Slot
-            encoder.encode(libs101::MessageType::EmBER);
-            encoder.encode(libs101::CommandType::KeepAliveResponse);
-            encoder.encode(0x01);  // Version
-            encoder.finish();
-            
-            std::vector<unsigned char> data(encoder.begin(), encoder.end());
-            QByteArray response(reinterpret_cast<const char*>(data.data()), data.size());
-            m_socket->write(response);
-            m_socket->flush();
-        }
-        else if (command == libs101::CommandType::KeepAliveResponse) {
-            log(LogLevel::Info, "Received KeepAliveResponse from device - connection is alive");
-            // Don't treat this as Ember+ data, but acknowledge the connection is working
-        }
-    }
-}
-
-void EmberConnection::processRoot(libember::dom::Node* root)
-{
-    if (!root) {
-        return;
-    }
-    
     // Stop protocol timeout timer - we've received valid Ember+ data!
     bool isFirstData = false;
     if (!m_emberDataReceived) {
@@ -462,26 +407,8 @@ void EmberConnection::processRoot(libember::dom::Node* root)
         log(LogLevel::Info, "Ember+ protocol confirmed");
     }
     
-    log(LogLevel::Trace, "Processing Ember+ tree...");
-    
-    // Detach root from reader
-    m_domReader->detachRoot();
-    
-    // Walk the tree and emit signals
-    try {
-        auto glowRoot = dynamic_cast<libember::glow::GlowRootElementCollection*>(root);
-        if (glowRoot) {
-            log(LogLevel::Debug, QString("Root has %1 elements").arg(glowRoot->size()));
-            
-            // Process all root elements
-            processElementCollection(glowRoot, "");
-        }
-    } catch (const std::exception& e) {
-        log(LogLevel::Error, QString("Error processing Ember+ tree: %1").arg(e.what()));
-    }
-    
-    // Always delete the root
-    delete root;
+    // Feed Ember data to parser
+    m_glowParser->parseEmberData(emberData);
     
     // Emit treePopulated signal if this was the first data received
     if (isFirstData) {
@@ -490,127 +417,36 @@ void EmberConnection::processRoot(libember::dom::Node* root)
     }
 }
 
-void EmberConnection::processElementCollection(libember::glow::GlowContainer* container, const QString& parentPath)
+void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
 {
-    // Count children for tree fetch completion tracking
-    int childCount = 0;
-    
-    // Iterate through all elements in the container
-    for (auto it = container->begin(); it != container->end(); ++it) {
-        auto element = &(*it);
-        
-        // Check qualified types first (they inherit from non-qualified)
-        if (auto matrix = dynamic_cast<libember::glow::GlowQualifiedMatrix*>(element)) {
-            processQualifiedMatrix(matrix);
-            childCount++;
-        }
-        else if (auto function = dynamic_cast<libember::glow::GlowQualifiedFunction*>(element)) {
-            processQualifiedFunction(function);
-            childCount++;
-        }
-        else if (auto node = dynamic_cast<libember::glow::GlowQualifiedNode*>(element)) {
-            processQualifiedNode(node);
-            childCount++;
-        }
-        else if (auto param = dynamic_cast<libember::glow::GlowQualifiedParameter*>(element)) {
-            processQualifiedParameter(param);
-            childCount++;
-        }
-        else if (auto invocationResult = dynamic_cast<libember::glow::GlowInvocationResult*>(element)) {
-            log(LogLevel::Info, "Received InvocationResult!");
-            processInvocationResult(element);
-        }
-        else if (auto streamCollection = dynamic_cast<libember::glow::GlowStreamCollection*>(element)) {
-            log(LogLevel::Debug, "Received StreamCollection (audio meters)");
-            processStreamCollection(streamCollection);
-        }
-        else if (auto matrix = dynamic_cast<libember::glow::GlowMatrix*>(element)) {
-            processMatrix(matrix, parentPath);
-            childCount++;
-        }
-        else if (auto function = dynamic_cast<libember::glow::GlowFunction*>(element)) {
-            processFunction(function, parentPath);
-            childCount++;
-        }
-        else if (auto node = dynamic_cast<libember::glow::GlowNode*>(element)) {
-            processNode(node, parentPath);
-            childCount++;
-        }
-        else if (auto param = dynamic_cast<libember::glow::GlowParameter*>(element)) {
-            processParameter(param, parentPath);
-            childCount++;
-        }
-        else {
-            log(LogLevel::Warning, QString("Unknown element type received (parent: %1)").arg(parentPath));
-        }
-    }
-    
-    // TREE FETCH: Mark parent as completed after processing all its children
-    if (m_treeFetchActive && !parentPath.isEmpty()) {
-        if (m_activeFetchPaths.contains(parentPath)) {
-            m_activeFetchPaths.remove(parentPath);
-            m_completedFetchPaths.insert(parentPath);
-            log(LogLevel::Trace, QString("Completed fetching node %1 (%2 children)").arg(parentPath).arg(childCount));
-        }
-    }
-}
-
-void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* node)
-{
-    auto path = node->path();
-    QString pathStr;
-    for (auto num : path) {
-        pathStr += QString::number(num) + ".";
-    }
-    pathStr.chop(1);  // Remove trailing dot
-    
-    bool hasIdentifier = node->contains(libember::glow::NodeProperty::Identifier);
-    QString identifier = hasIdentifier
-        ? QString::fromStdString(node->identifier()) 
-        : QString("Node %1").arg(path.back());
-    
-    if (!hasIdentifier) {
-        log(LogLevel::Warning, QString("QNode at %1 missing Identifier property").arg(pathStr));
-    }
-    
-    bool hasDescription = node->contains(libember::glow::NodeProperty::Description);
-    QString description = hasDescription
-        ? QString::fromStdString(node->description()) 
-        : "";
-    
     // Track root-level nodes for smart device name detection
-    QStringList pathParts = pathStr.split('.');
+    QStringList pathParts = node.path.split('.');
     int pathDepth = pathParts.size();
     
     if (pathDepth == 1) {
-        QString displayName = !description.isEmpty() ? description : identifier;
+        QString displayName = !node.description.isEmpty() ? node.description : node.identifier;
         bool isGeneric = isGenericNodeName(displayName);
         
-        log(LogLevel::Info, QString("ROOT QNode [%1]: Identifier='%2' (provided=%3), Description='%4' (provided=%5), Generic=%6")
-            .arg(pathStr).arg(identifier).arg(hasIdentifier ? "yes" : "no")
-            .arg(description).arg(hasDescription ? "yes" : "no")
+        log(LogLevel::Info, QString("ROOT Node [%1]: Identifier='%2', Description='%3', Generic=%4")
+            .arg(node.path).arg(node.identifier)
+            .arg(node.description)
             .arg(isGeneric ? "YES" : "no"));
         
         // Track this root node - but preserve existing non-generic name during tree fetch
-        if (m_rootNodes.contains(pathStr) && !m_rootNodes[pathStr].isGeneric) {
-            // Already have a good name, keep it - don't emit again
-            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[pathStr].displayName));
-            // Return early to prevent re-emitting nodeReceived with generic name
-            if (!hasIdentifier || isGeneric) {
-                log(LogLevel::Debug, "Skipping nodeReceived emit - would overwrite good name with generic/missing");
-                return;
-            }
+        if (m_rootNodes.contains(node.path) && !m_rootNodes[node.path].isGeneric) {
+            // Already have a good name, keep it
+            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[node.path].displayName));
         } else {
             // New node or generic name - update it
             RootNodeInfo rootInfo;
-            rootInfo.path = pathStr;
+            rootInfo.path = node.path;
             rootInfo.displayName = displayName;
             rootInfo.isGeneric = isGeneric;
             // Preserve identityPath if it was already discovered
-            if (m_rootNodes.contains(pathStr)) {
-                rootInfo.identityPath = m_rootNodes[pathStr].identityPath;
+            if (m_rootNodes.contains(node.path)) {
+                rootInfo.identityPath = m_rootNodes[node.path].identityPath;
             }
-            m_rootNodes[pathStr] = rootInfo;
+            m_rootNodes[node.path] = rootInfo;
         }
     }
     // Track identity child nodes under root nodes
@@ -618,350 +454,85 @@ void EmberConnection::processQualifiedNode(libember::glow::GlowQualifiedNode* no
         QString parentPath = pathParts[0];
         if (m_rootNodes.contains(parentPath)) {
             // Check if this is an identity node
-            QString nodeName = identifier.toLower();
+            QString nodeName = node.identifier.toLower();
             if (nodeName == "identity" || nodeName == "_identity" || 
                 nodeName == "deviceinfo" || nodeName == "device_info") {
-                m_rootNodes[parentPath].identityPath = pathStr;
+                m_rootNodes[parentPath].identityPath = node.path;
                 log(LogLevel::Info, QString("Detected identity node for root %1: %2")
-                    .arg(parentPath).arg(pathStr));
+                    .arg(parentPath).arg(node.path));
             }
         }
     }
-    
-    bool isOnline = node->contains(libember::glow::NodeProperty::IsOnline)
-        ? node->isOnline()
-        : true;
-    
-    log(LogLevel::Debug, QString("QNode: %1 - Online: %2")
-        .arg(pathStr).arg(isOnline ? "YES" : "NO"));
-    
-    // Don't re-emit if we already have this node with a valid identifier
-    // and the new data lacks an identifier (device sent stub parent reference)
-    static QMap<QString, bool> nodesWithIdentifier;
-    bool hadIdentifier = nodesWithIdentifier.value(pathStr, false);
-    
-    bool shouldEmit = true;
-    if (hadIdentifier && !hasIdentifier) {
-        log(LogLevel::Debug, QString("Skipping re-emit for %1 - would replace valid name with generic").arg(pathStr));
-        shouldEmit = false;
-    }
-    
-    if (hasIdentifier) {
-        nodesWithIdentifier[pathStr] = true;
-    }
-    
-    if (shouldEmit) {
-        emit nodeReceived(pathStr, identifier, description, isOnline);
-    }
-    
-    // TREE FETCH: If tree fetch is active, add this node to the fetch queue
-    if (m_treeFetchActive) {
-        // Add this new node to pending fetch queue (to fetch its children)
-        if (!m_completedFetchPaths.contains(pathStr) && 
-            !m_activeFetchPaths.contains(pathStr) &&
-            !m_pendingFetchPaths.contains(pathStr)) {
-            m_pendingFetchPaths.insert(pathStr);
-            m_treeFetchTotalEstimate++;
-        }
-    }
-    
-    // Process children if present inline
-    if (node->children()) {
-        processElementCollection(node->children(), pathStr);
-    }
-    
-    // LAZY LOADING: Only auto-request children for special cases (root name discovery)
-    // Otherwise, let the UI request children when user expands the node
-    bool shouldAutoRequest = false;
-    
-    // Special case 1: Root nodes with generic names (to discover device name)
-    if (pathDepth == 1 && m_rootNodes.contains(pathStr) && m_rootNodes[pathStr].isGeneric) {
-        shouldAutoRequest = true;
-    }
-    // Special case 2: Identity nodes under generic root (to find name parameter)
-    else if (pathDepth == 2) {
-        QString rootPath = pathParts[0];
-        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].identityPath == pathStr) {
-            shouldAutoRequest = true;
-        }
-    }
-    
-    if (shouldAutoRequest && (!node->children() || node->children()->size() == 0)) {
-        // OPTIMIZATION: Use optimized field mask for name discovery
-        sendGetDirectoryForPath(pathStr, true);
-    }
-}
-
-void EmberConnection::processNode(libember::glow::GlowNode* node, const QString& parentPath)
-{
-    int number = node->number();
-    QString pathStr = parentPath.isEmpty() 
-        ? QString::number(number) 
-        : QString("%1.%2").arg(parentPath).arg(number);
-    
-    bool hasIdentifier = node->contains(libember::glow::NodeProperty::Identifier);
-    QString identifier = hasIdentifier
-        ? QString::fromStdString(node->identifier())
-        : QString("Node %1").arg(number);
-    
-    bool hasDescription = node->contains(libember::glow::NodeProperty::Description);
-    QString description = hasDescription
-        ? QString::fromStdString(node->description())
-        : "";
-    
-    // Track root-level nodes for smart device name detection
-    QStringList pathParts = pathStr.split('.');
-    
-    int pathDepth = pathParts.size();
-    
-    if (pathDepth == 1) {
-        QString displayName = !description.isEmpty() ? description : identifier;
-        bool isGeneric = isGenericNodeName(displayName);
-        
-        log(LogLevel::Info, QString("ROOT Node [%1]: Identifier='%2' (provided=%3), Description='%4' (provided=%5), Generic=%6")
-            .arg(pathStr).arg(identifier).arg(hasIdentifier ? "yes" : "no")
-            .arg(description).arg(hasDescription ? "yes" : "no")
-            .arg(isGeneric ? "YES" : "no"));
-        
-        // Track this root node - but preserve existing non-generic name during tree fetch
-        if (m_rootNodes.contains(pathStr) && !m_rootNodes[pathStr].isGeneric) {
-            // Already have a good name, keep it
-            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(m_rootNodes[pathStr].displayName));
-        } else {
-            // New node or generic name - update it
-            RootNodeInfo rootInfo;
-            rootInfo.path = pathStr;
-            rootInfo.displayName = displayName;
-            rootInfo.isGeneric = isGeneric;
-            // Preserve identityPath if it was already discovered
-            if (m_rootNodes.contains(pathStr)) {
-                rootInfo.identityPath = m_rootNodes[pathStr].identityPath;
-            }
-            m_rootNodes[pathStr] = rootInfo;
-        }
-    }
-    // Track identity child nodes under root nodes
-    else if (pathDepth == 2) {
-        QString parentPath = pathParts[0];
-        if (m_rootNodes.contains(parentPath)) {
-            // Check if this is an identity node (common names: identity, _identity, deviceInfo, etc.)
-            QString nodeName = identifier.toLower();
-            if (nodeName == "identity" || nodeName == "_identity" || 
-                nodeName == "deviceinfo" || nodeName == "device_info") {
-                m_rootNodes[parentPath].identityPath = pathStr;
-                log(LogLevel::Info, QString("Detected identity node for root %1: %2")
-                    .arg(parentPath).arg(pathStr));
-            }
-        }
-    }
-    
-    bool isOnline = node->contains(libember::glow::NodeProperty::IsOnline)
-        ? node->isOnline()
-        : true;
     
     log(LogLevel::Debug, QString("Node: %1 - Online: %2")
-        .arg(pathStr).arg(isOnline ? "YES" : "NO"));
+        .arg(node.path).arg(node.isOnline ? "YES" : "NO"));
     
-    // Don't re-emit if we already have this node with a valid identifier
-    // and the new data lacks an identifier (device sent stub parent reference)
-    static QMap<QString, bool> nodesWithIdentifier;
-    bool hadIdentifier = nodesWithIdentifier.value(pathStr, false);
-    
-    bool shouldEmit = true;
-    if (hadIdentifier && !hasIdentifier) {
-        log(LogLevel::Info, QString("Skipping re-emit for %1 (processNode) - would replace valid name with generic").arg(pathStr));
-        shouldEmit = false;
-    }
-    
-    if (hasIdentifier) {
-        nodesWithIdentifier[pathStr] = true;
-    }
-    
-    if (shouldEmit) {
-        emit nodeReceived(pathStr, identifier, description, isOnline);
-    }
+    // Emit the node signal
+    emit nodeReceived(node.path, node.identifier, node.description, node.isOnline);
     
     // TREE FETCH: If tree fetch is active, add this node to the fetch queue
     if (m_treeFetchActive) {
         // Add this new node to pending fetch queue (to fetch its children)
-        if (!m_completedFetchPaths.contains(pathStr) && 
-            !m_activeFetchPaths.contains(pathStr) &&
-            !m_pendingFetchPaths.contains(pathStr)) {
-            m_pendingFetchPaths.insert(pathStr);
+        if (!m_completedFetchPaths.contains(node.path) && 
+            !m_activeFetchPaths.contains(node.path) &&
+            !m_pendingFetchPaths.contains(node.path)) {
+            m_pendingFetchPaths.insert(node.path);
             m_treeFetchTotalEstimate++;
         }
     }
     
-    // Process children if present inline
-    if (node->children()) {
-        processElementCollection(node->children(), pathStr);
-    }
-    
     // LAZY LOADING: Only auto-request children for special cases (root name discovery)
-    // Otherwise, let the UI request children when user expands the node
     bool shouldAutoRequest = false;
     
     // Special case 1: Root nodes with generic names (to discover device name)
-    if (pathDepth == 1 && m_rootNodes.contains(pathStr) && m_rootNodes[pathStr].isGeneric) {
+    if (pathDepth == 1 && m_rootNodes.contains(node.path) && m_rootNodes[node.path].isGeneric) {
         shouldAutoRequest = true;
-        log(LogLevel::Debug, QString("Auto-requesting children of root node %1 for name discovery").arg(pathStr));
+        log(LogLevel::Debug, QString("Auto-requesting children of root node %1 for name discovery").arg(node.path));
     }
     // Special case 2: Identity nodes under generic root (to find name parameter)
     else if (pathDepth == 2) {
-        QString parentPath = pathParts[0];
-        if (m_rootNodes.contains(parentPath) && m_rootNodes[parentPath].identityPath == pathStr) {
+        QString rootPath = pathParts[0];
+        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].identityPath == node.path) {
             shouldAutoRequest = true;
-            log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(pathStr));
+            log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(node.path));
         }
     }
     
-    if (shouldAutoRequest && (!node->children() || node->children()->size() == 0)) {
+    if (shouldAutoRequest) {
         // OPTIMIZATION: Use optimized field mask for name discovery
-        sendGetDirectoryForPath(pathStr, true);
+        sendGetDirectoryForPath(node.path, true);
     }
 }
 
-void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedParameter* param)
+void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& param)
 {
-    auto path = param->path();
-    QString pathStr;
-    for (auto num : path) {
-        pathStr += QString::number(num) + ".";
-    }
-    pathStr.chop(1);
-    
-    int number = path.back();
-    
-    // Get or create cache entry for this parameter (needed early for identifier)
-    ParameterCache& cache = m_parameterCache[pathStr];
-    
-    // Get identifier - if provided, update cache; otherwise use cached value
-    QString identifier;
-    bool hasIdentifier = param->contains(libember::glow::ParameterProperty::Identifier);
-    if (hasIdentifier) {
-        identifier = QString::fromStdString(param->identifier());
-        cache.identifier = identifier;  // Update cache
-        log(LogLevel::Debug, QString("QParam %1: Identifier='%2' (from message)").arg(pathStr).arg(identifier));
-    } else {
-        // Use cached value, or generate default if never seen before
-        if (!cache.identifier.isEmpty()) {
-            identifier = cache.identifier;
-            log(LogLevel::Debug, QString("QParam %1: Identifier='%2' (from cache)").arg(pathStr).arg(identifier));
-        } else {
-            identifier = QString("Param %1").arg(number);
-            cache.identifier = identifier;
-            log(LogLevel::Debug, QString("QParam %1: Identifier='%2' (generated default)").arg(pathStr).arg(identifier));
-        }
-    }
-    
-    // Extract value
-    QString value = "";
-    if (param->contains(libember::glow::ParameterProperty::Value)) {
-        auto val = param->value();
-        auto type = val.type();
-        
-        if (type.value() == libember::glow::ParameterType::Integer) {
-            value = QString::number(val.toInteger());
-        }
-        else if (type.value() == libember::glow::ParameterType::Real) {
-            value = QString::number(val.toReal());
-        }
-        else if (type.value() == libember::glow::ParameterType::String) {
-            value = QString::fromStdString(val.toString());
-        }
-        else if (type.value() == libember::glow::ParameterType::Boolean) {
-            value = val.toBoolean() ? "true" : "false";
-        }
-    }
-    
-    // Cache was already created above when getting identifier
-    // Get access property - if provided, update cache; otherwise use cached value
-    int access;
-    if (param->contains(libember::glow::ParameterProperty::Access)) {
-        access = param->access().value();
-        cache.access = access;  // Update cache
-        log(LogLevel::Debug, QString("QParam %1: Access=%2 (from message), Type will follow").arg(pathStr).arg(access));
-    } else {
-        // Use cached value, or default to ReadOnly if never seen before
-        access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadOnly;
-        QString source = (cache.access >= 0) ? "from cache" : "default ReadOnly";
-        log(LogLevel::Debug, QString("QParam %1: Access=%2 (%3)").arg(pathStr).arg(access).arg(source));
-    }
-    
-    // Get type property - if provided, update cache; otherwise use cached value
-    int type;
-    if (param->contains(libember::glow::ParameterProperty::Type)) {
-        type = param->type().value();
-        cache.type = type;  // Update cache
-    } else {
-        type = cache.type;  // Use cached value (defaults to 0/None)
-    }
-    
-    // Get minimum/maximum constraints
-    QVariant minimum, maximum;
-    if (param->contains(libember::glow::ParameterProperty::Minimum)) {
-        auto min = param->minimum();
-        if (min.type().value() == libember::glow::ParameterType::Integer) {
-            minimum = QVariant(static_cast<int>(min.toInteger()));
-        } else if (min.type().value() == libember::glow::ParameterType::Real) {
-            minimum = QVariant(min.toReal());
-        }
-    }
-    
-    if (param->contains(libember::glow::ParameterProperty::Maximum)) {
-        auto max = param->maximum();
-        if (max.type().value() == libember::glow::ParameterType::Integer) {
-            maximum = QVariant(static_cast<int>(max.toInteger()));
-        } else if (max.type().value() == libember::glow::ParameterType::Real) {
-            maximum = QVariant(max.toReal());
-        }
-    }
-    
-    // Get enumeration options
-    QStringList enumOptions;
-    QList<int> enumValues;
-    
-    if (param->contains(libember::glow::ParameterProperty::EnumMap)) {
-        auto enumMap = param->enumerationMap();
-        for (auto it = enumMap.begin(); it != enumMap.end(); ++it) {
-            enumOptions.append(QString::fromStdString((*it).first));
-            enumValues.append((*it).second);
-        }
-    }
-    else if (param->contains(libember::glow::ParameterProperty::Enumeration)) {
-        auto enumeration = param->enumeration();
-        for (auto it = enumeration.begin(); it != enumeration.end(); ++it) {
-            enumOptions.append(QString::fromStdString((*it).first));
-            enumValues.append((*it).second);
-        }
-    }
-    
-    log(LogLevel::Debug, QString("QParam %1 complete: '%2' = '%3' (Type=%4, Access=%5)").arg(pathStr).arg(identifier).arg(value).arg(type).arg(access));
+    log(LogLevel::Debug, QString("Param %1 complete: '%2' = '%3' (Type=%4, Access=%5)")
+        .arg(param.path).arg(param.identifier).arg(param.value).arg(param.type).arg(param.access));
     
     // Check if this parameter could be a device name for a root node with generic name
-    QStringList pathParts = pathStr.split('.');
+    QStringList pathParts = param.path.split('.');
     if (pathParts.size() >= 3) {
         QString rootPath = pathParts[0];
         if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].isGeneric) {
             // Check if parameter identifier suggests it's a device name
-            QString paramName = identifier.toLower();
+            QString paramName = param.identifier.toLower();
             if (paramName == "name" || paramName == "device name" || 
                 paramName == "devicename" || paramName == "product") {
                 
                 // Check if under identity node
                 if (!m_rootNodes[rootPath].identityPath.isEmpty()) {
-                    if (pathStr.startsWith(m_rootNodes[rootPath].identityPath + ".")) {
+                    if (param.path.startsWith(m_rootNodes[rootPath].identityPath + ".")) {
                         log(LogLevel::Info, QString("Found device name '%1' for root node %2 (from %3)")
-                            .arg(value).arg(rootPath).arg(pathStr));
+                            .arg(param.value).arg(rootPath).arg(param.path));
                         
                         // Update the display name
-                        m_rootNodes[rootPath].displayName = value;
+                        m_rootNodes[rootPath].displayName = param.value;
                         m_rootNodes[rootPath].isGeneric = false;
                         
                         // OPTIMIZATION: Cache device name for instant reconnection
                         QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
                         DeviceCache cache;
-                        cache.deviceName = value;
+                        cache.deviceName = param.value;
                         cache.rootPath = rootPath;
                         cache.identityPath = m_rootNodes[rootPath].identityPath;
                         cache.lastSeen = QDateTime::currentDateTime();
@@ -969,187 +540,27 @@ void EmberConnection::processQualifiedParameter(libember::glow::GlowQualifiedPar
                         s_deviceCache[cacheKey] = cache;
                         
                         log(LogLevel::Debug, QString("Cached device name '%1' for %2")
-                            .arg(value).arg(cacheKey));
+                            .arg(param.value).arg(cacheKey));
                         
                         // Re-emit node with new name (assume online since we're getting parameter updates)
-                        emit nodeReceived(rootPath, value, value, true);
+                        emit nodeReceived(rootPath, param.value, param.value, true);
                     }
                 }
             }
         }
     }
     
-    bool isOnline = param->contains(libember::glow::ParameterProperty::IsOnline)
-        ? param->isOnline()
-        : true;
-    
-    // Get stream identifier for audio level meters
-    int streamIdentifier = param->streamIdentifier();  // Returns -1 if not present
-    if (streamIdentifier != -1) {
-        log(LogLevel::Debug, QString("Parameter %1 has streamIdentifier=%2 (audio meter)")
-            .arg(pathStr).arg(streamIdentifier));
-    }
-    
-    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
+    emit parameterReceived(param.path, param.number, param.identifier, param.value, param.access, param.type, 
+                          param.minimum, param.maximum, param.enumOptions, param.enumValues, param.isOnline, param.streamIdentifier);
 }
 
-void EmberConnection::processParameter(libember::glow::GlowParameter* param, const QString& parentPath)
+void EmberConnection::onParserMatrixReceived(const EmberData::MatrixInfo& matrix)
 {
-    int number = param->number();
-    QString pathStr = parentPath.isEmpty()
-        ? QString::number(number)
-        : QString("%1.%2").arg(parentPath).arg(number);
+    log(LogLevel::Debug, QString("Matrix: %1 [%2] - Type:%3, %4×%5")
+                    .arg(matrix.identifier).arg(matrix.path).arg(matrix.type).arg(matrix.sourceCount).arg(matrix.targetCount));
     
-    // Get or create cache entry for this parameter (needed early for identifier)
-    ParameterCache& cache = m_parameterCache[pathStr];
-    
-    // Get identifier - if provided, update cache; otherwise use cached value
-    QString identifier;
-    if (param->contains(libember::glow::ParameterProperty::Identifier)) {
-        identifier = QString::fromStdString(param->identifier());
-        cache.identifier = identifier;  // Update cache
-    } else {
-        // Use cached value, or generate default if never seen before
-        if (!cache.identifier.isEmpty()) {
-            identifier = cache.identifier;
-        } else {
-            identifier = QString("Param %1").arg(number);
-            cache.identifier = identifier;
-        }
-    }
-    
-    // Extract value
-    QString value = "";
-    if (param->contains(libember::glow::ParameterProperty::Value)) {
-        auto val = param->value();
-        auto type = val.type();
-        
-        if (type.value() == libember::glow::ParameterType::Integer) {
-            value = QString::number(val.toInteger());
-        }
-        else if (type.value() == libember::glow::ParameterType::Real) {
-            value = QString::number(val.toReal());
-        }
-        else if (type.value() == libember::glow::ParameterType::String) {
-            value = QString::fromStdString(val.toString());
-        }
-        else if (type.value() == libember::glow::ParameterType::Boolean) {
-            value = val.toBoolean() ? "true" : "false";
-        }
-    }
-    
-    // Cache was already created above when getting identifier
-    // Get access property - if provided, update cache; otherwise use cached value
-    int access;
-    if (param->contains(libember::glow::ParameterProperty::Access)) {
-        access = param->access().value();
-        cache.access = access;  // Update cache
-    } else {
-        // Use cached value, or default to ReadOnly if never seen before
-        access = (cache.access >= 0) ? cache.access : libember::glow::Access::ReadOnly;
-    }
-    
-    // Get type property - if provided, update cache; otherwise use cached value
-    int type;
-    if (param->contains(libember::glow::ParameterProperty::Type)) {
-        type = param->type().value();
-        cache.type = type;  // Update cache
-    } else {
-        type = cache.type;  // Use cached value (defaults to 0/None)
-    }
-    
-    // Get minimum/maximum constraints
-    QVariant minimum, maximum;
-    if (param->contains(libember::glow::ParameterProperty::Minimum)) {
-        auto min = param->minimum();
-        if (min.type().value() == libember::glow::ParameterType::Integer) {
-            minimum = QVariant(static_cast<int>(min.toInteger()));
-        } else if (min.type().value() == libember::glow::ParameterType::Real) {
-            minimum = QVariant(min.toReal());
-        }
-    }
-    
-    if (param->contains(libember::glow::ParameterProperty::Maximum)) {
-        auto max = param->maximum();
-        if (max.type().value() == libember::glow::ParameterType::Integer) {
-            maximum = QVariant(static_cast<int>(max.toInteger()));
-        } else if (max.type().value() == libember::glow::ParameterType::Real) {
-            maximum = QVariant(max.toReal());
-        }
-    }
-    
-    // Get enumeration options
-    QStringList enumOptions;
-    QList<int> enumValues;
-    
-    if (param->contains(libember::glow::ParameterProperty::EnumMap)) {
-        auto enumMap = param->enumerationMap();
-        for (auto it = enumMap.begin(); it != enumMap.end(); ++it) {
-            enumOptions.append(QString::fromStdString((*it).first));
-            enumValues.append((*it).second);
-        }
-    }
-    else if (param->contains(libember::glow::ParameterProperty::Enumeration)) {
-        auto enumeration = param->enumeration();
-        for (auto it = enumeration.begin(); it != enumeration.end(); ++it) {
-            enumOptions.append(QString::fromStdString((*it).first));
-            enumValues.append((*it).second);
-        }
-    }
-    
-    // Check if this parameter could be a device name for a root node with generic name
-    QStringList pathParts = pathStr.split('.');
-    if (pathParts.size() >= 3) {
-        QString rootPath = pathParts[0];
-        if (m_rootNodes.contains(rootPath) && m_rootNodes[rootPath].isGeneric) {
-            // Check if parameter identifier suggests it's a device name
-            QString paramName = identifier.toLower();
-            if (paramName == "name" || paramName == "device name" || 
-                paramName == "devicename" || paramName == "product") {
-                
-                // Check if under identity node
-                if (!m_rootNodes[rootPath].identityPath.isEmpty()) {
-                    if (pathStr.startsWith(m_rootNodes[rootPath].identityPath + ".")) {
-                        log(LogLevel::Info, QString("Found device name '%1' for root node %2 (from %3)")
-                            .arg(value).arg(rootPath).arg(pathStr));
-                        
-                        // Update the display name
-                        m_rootNodes[rootPath].displayName = value;
-                        m_rootNodes[rootPath].isGeneric = false;
-                        
-                        // OPTIMIZATION: Cache device name for instant reconnection
-                        QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
-                        DeviceCache cache;
-                        cache.deviceName = value;
-                        cache.rootPath = rootPath;
-                        cache.identityPath = m_rootNodes[rootPath].identityPath;
-                        cache.lastSeen = QDateTime::currentDateTime();
-                        cache.isValid = true;
-                        s_deviceCache[cacheKey] = cache;
-                        
-                        log(LogLevel::Debug, QString("Cached device name '%1' for %2")
-                            .arg(value).arg(cacheKey));
-                        
-                        // Re-emit node with new name (assume online since we're getting parameter updates)
-                        emit nodeReceived(rootPath, value, value, true);
-                    }
-                }
-            }
-        }
-    }
-    
-    bool isOnline = param->contains(libember::glow::ParameterProperty::IsOnline)
-        ? param->isOnline()
-        : true;
-    
-    // Get stream identifier for audio level meters
-    int streamIdentifier = param->streamIdentifier();  // Returns -1 if not present
-    if (streamIdentifier != -1) {
-        log(LogLevel::Debug, QString("Parameter %1 has streamIdentifier=%2 (audio meter)")
-            .arg(pathStr).arg(streamIdentifier));
-    }
-    
-    emit parameterReceived(pathStr, number, identifier, value, access, type, minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
+    emit matrixReceived(matrix.path, matrix.number, matrix.identifier, matrix.description, 
+                       matrix.type, matrix.targetCount, matrix.sourceCount);
 }
 
 bool EmberConnection::isGenericNodeName(const QString &name)
@@ -1239,30 +650,14 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
         root->encode(stream);
         log(LogLevel::Info, QString("EmBER payload size: %1 bytes").arg(stream.size()));
         
-        // Wrap in S101 frame
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x02);  // 2 app bytes
-        encoder.encode(0x28);  // App byte 1
-        encoder.encode(0x02);  // App byte 2
-        
-        // Add EmBER data
-        encoder.encode(stream.begin(), stream.end());
-        encoder.finish();
+        // Use S101 protocol layer to encode
+        QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         // Send
-        std::vector<unsigned char> data(encoder.begin(), encoder.end());
-        QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-        
-        log(LogLevel::Info, QString("About to write %1 bytes to socket...").arg(qdata.size()));
-        if (m_socket->write(qdata) > 0) {
+        log(LogLevel::Info, QString("About to write %1 bytes to socket...").arg(s101Frame.size()));
+        if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
-            log(LogLevel::Info, QString("Successfully sent GetDirectory request (%1 bytes)").arg(qdata.size()));
+            log(LogLevel::Info, QString("Successfully sent GetDirectory request (%1 bytes)").arg(s101Frame.size()));
         }
         else {
             log(LogLevel::Error, "Failed to send GetDirectory - socket write returned 0 or error");
@@ -1344,27 +739,11 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Wrap in S101 frame
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x02);  // 2 app bytes
-        encoder.encode(0x28);  // App byte 1
-        encoder.encode(0x02);  // App byte 2
-        
-        // Add EmBER data
-        encoder.encode(stream.begin(), stream.end());
-        encoder.finish();
+        // Use S101 protocol layer to encode
+        QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         // Send
-        std::vector<unsigned char> data(encoder.begin(), encoder.end());
-        QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-        
-        if (m_socket->write(qdata) > 0) {
+        if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
         }
         else {
@@ -1436,27 +815,11 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Wrap in S101 frame
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x02);  // 2 app bytes
-        encoder.encode(0x28);  // App byte 1
-        encoder.encode(0x02);  // App byte 2
-        
-        // Add EmBER data
-        encoder.encode(stream.begin(), stream.end());
-        encoder.finish();
+        // Use S101 protocol layer to encode
+        QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         // Send
-        std::vector<unsigned char> data(encoder.begin(), encoder.end());
-        QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-        
-        if (m_socket->write(qdata) > 0) {
+        if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
             log(LogLevel::Debug, QString("Successfully sent value for %1").arg(path));
         }
@@ -1523,27 +886,11 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Wrap in S101 frame
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x02);  // 2 app bytes
-        encoder.encode(0x28);  // App byte 1
-        encoder.encode(0x02);  // App byte 2
-        
-        // Add EmBER data
-        encoder.encode(stream.begin(), stream.end());
-        encoder.finish();
+        // Use S101 protocol layer to encode
+        QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         // Send
-        std::vector<unsigned char> data(encoder.begin(), encoder.end());
-        QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-        
-        if (m_socket->write(qdata) > 0) {
+        if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
             log(LogLevel::Debug, QString("Successfully sent matrix connection command"));
         }
@@ -1555,456 +902,6 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
     }
     catch (const std::exception &ex) {
         log(LogLevel::Error, QString("Error sending matrix connection for %1: %2").arg(matrixPath).arg(ex.what()));
-    }
-}
-
-void EmberConnection::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix)
-{
-    auto path = matrix->path();
-    QString pathStr;
-    for (auto num : path) {
-        pathStr += QString::number(num) + ".";
-    }
-    pathStr.chop(1);  // Remove trailing dot
-    
-    int number = path.back();
-    
-    // Check if this message contains matrix metadata (not just connection updates)
-    // Per Ember+ spec, connection updates send only the connections collection
-    bool hasMetadata = matrix->contains(libember::glow::MatrixProperty::Identifier) ||
-                       matrix->contains(libember::glow::MatrixProperty::Description) ||
-                       matrix->contains(libember::glow::MatrixProperty::Type) ||
-                       matrix->contains(libember::glow::MatrixProperty::TargetCount) ||
-                       matrix->contains(libember::glow::MatrixProperty::SourceCount);
-    
-    // Only extract and emit metadata if this is a full matrix message (not just a connection update)
-    if (hasMetadata) {
-        QString identifier = matrix->contains(libember::glow::MatrixProperty::Identifier)
-            ? QString::fromStdString(matrix->identifier())
-            : QString("Matrix %1").arg(number);
-        
-        QString description = matrix->contains(libember::glow::MatrixProperty::Description)
-            ? QString::fromStdString(matrix->description())
-            : "";
-        
-        int type = matrix->contains(libember::glow::MatrixProperty::Type)
-            ? matrix->type().value()
-            : 2;  // Default to NToN
-        
-        int targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
-            ? matrix->targetCount()
-            : 0;
-        
-        int sourceCount = matrix->contains(libember::glow::MatrixProperty::SourceCount)
-            ? matrix->sourceCount()
-            : 0;
-        
-        log(LogLevel::Debug, QString("QualifiedMatrix: %1 [%2] - Type:%3, %4×%5 (full metadata)")
-                        .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
-        
-        emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
-    } else {
-        log(LogLevel::Debug, QString("QualifiedMatrix [%1] - connection update only (no metadata)").arg(pathStr));
-    }
-    
-    // Process targets
-    if (matrix->targets()) {
-        for (auto it = matrix->targets()->begin(); it != matrix->targets()->end(); ++it) {
-            if (auto target = dynamic_cast<libember::glow::GlowTarget*>(&(*it))) {
-                int targetNumber = target->number();
-                QString label = QString("Target %1").arg(targetNumber);
-                
-                // Targets don't have identifiers in the protocol, they're just numbers
-                // Labels would come from a labels node if present
-                emit matrixTargetReceived(pathStr, targetNumber, label);
-            }
-        }
-    }
-    
-    // Process sources
-    if (matrix->sources()) {
-        for (auto it = matrix->sources()->begin(); it != matrix->sources()->end(); ++it) {
-            if (auto source = dynamic_cast<libember::glow::GlowSource*>(&(*it))) {
-                int sourceNumber = source->number();
-                QString label = QString("Source %1").arg(sourceNumber);
-                
-                emit matrixSourceReceived(pathStr, sourceNumber, label);
-            }
-        }
-    }
-    
-    // Process connections
-    if (matrix->connections()) {
-        log(LogLevel::Debug, QString(" Qualified Matrix [%1] has connections collection").arg(pathStr));
-        
-        int connectionCount = 0;
-        int targetCount = 0;
-        for (auto it = matrix->connections()->begin(); it != matrix->connections()->end(); ++it) {
-            if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*it))) {
-                int targetNumber = connection->target();
-                targetCount++;
-                
-                // Per Ember+ spec: Each Connection object represents the complete state for that target
-                // Clear this target's connections first, then add the new ones
-                emit matrixTargetConnectionsCleared(pathStr, targetNumber);
-                log(LogLevel::Debug, QString(" Cleared connections for Target %1 in matrix %2").arg(targetNumber).arg(pathStr));
-                
-                // Get all sources for this connection (sources() returns ObjectIdentifier)
-                libember::ber::ObjectIdentifier sources = connection->sources();
-                log(LogLevel::Debug, QString(" Connection - Target %1, Sources count: %2")
-                               .arg(targetNumber).arg(sources.size()));
-                
-                if (!sources.empty()) {
-                    int disposition = connection->disposition().value();
-                    
-                    // Each subid in the ObjectIdentifier is a connected source number
-                    for (auto sourceIt = sources.begin(); sourceIt != sources.end(); ++sourceIt) {
-                        int sourceNumber = *sourceIt;
-                        log(LogLevel::Debug, QString(" Emitting connection: Target %1 <- Source %2 (Disposition: %3)")
-                                       .arg(targetNumber).arg(sourceNumber).arg(disposition));
-                        emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true, disposition);
-                        connectionCount++;
-                    }
-                } else {
-                    // Target with empty sources = disconnected target (per Ember+ spec)
-                    log(LogLevel::Debug, QString(" Target %1 has no sources (disconnected)").arg(targetNumber));
-                }
-            }
-        }
-        log(LogLevel::Debug, QString(" Processed %1 targets, %2 total connections").arg(targetCount).arg(connectionCount));
-        
-        // If connections collection is empty, request the connection state
-        if (connectionCount == 0) {
-            log(LogLevel::Debug, QString(" Requesting connection state for qualified matrix [%1]").arg(pathStr));
-            sendGetDirectoryForPath(pathStr);
-        }
-    } else {
-        log(LogLevel::Debug, QString(" Qualified Matrix [%1] has NO connections collection - requesting it").arg(pathStr));
-        // Request the matrix contents including connections
-        sendGetDirectoryForPath(pathStr);
-    }
-    
-    // Process children if present (matrix can contain nodes for parameters)
-    if (matrix->children()) {
-        processElementCollection(matrix->children(), pathStr);
-    }
-}
-
-void EmberConnection::processMatrix(libember::glow::GlowMatrix* matrix, const QString& parentPath)
-{
-    int number = matrix->number();
-    QString pathStr = parentPath.isEmpty() 
-        ? QString::number(number) 
-        : QString("%1.%2").arg(parentPath).arg(number);
-    
-    // Check if this message contains matrix metadata (not just connection updates)
-    // Per Ember+ spec, connection updates send only the connections collection
-    bool hasMetadata = matrix->contains(libember::glow::MatrixProperty::Identifier) ||
-                       matrix->contains(libember::glow::MatrixProperty::Description) ||
-                       matrix->contains(libember::glow::MatrixProperty::Type) ||
-                       matrix->contains(libember::glow::MatrixProperty::TargetCount) ||
-                       matrix->contains(libember::glow::MatrixProperty::SourceCount);
-    
-    // Only extract and emit metadata if this is a full matrix message (not just a connection update)
-    if (hasMetadata) {
-        QString identifier = matrix->contains(libember::glow::MatrixProperty::Identifier)
-            ? QString::fromStdString(matrix->identifier())
-            : QString("Matrix %1").arg(number);
-        
-        QString description = matrix->contains(libember::glow::MatrixProperty::Description)
-            ? QString::fromStdString(matrix->description())
-            : "";
-        
-        int type = matrix->contains(libember::glow::MatrixProperty::Type)
-            ? matrix->type().value()
-            : 2;  // Default to NToN
-        
-        int targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
-            ? matrix->targetCount()
-            : 0;
-        
-        int sourceCount = matrix->contains(libember::glow::MatrixProperty::SourceCount)
-            ? matrix->sourceCount()
-            : 0;
-        
-        log(LogLevel::Debug, QString("Matrix: %1 [%2] - Type:%3, %4×%5 (full metadata)")
-                        .arg(identifier).arg(pathStr).arg(type).arg(sourceCount).arg(targetCount));
-        
-        emit matrixReceived(pathStr, number, identifier, description, type, targetCount, sourceCount);
-    } else {
-        log(LogLevel::Debug, QString("Matrix [%1] - connection update only (no metadata)").arg(pathStr));
-    }
-    
-    // Process targets
-    if (matrix->targets()) {
-        for (auto it = matrix->targets()->begin(); it != matrix->targets()->end(); ++it) {
-            if (auto target = dynamic_cast<libember::glow::GlowTarget*>(&(*it))) {
-                int targetNumber = target->number();
-                QString label = QString("Target %1").arg(targetNumber);
-                emit matrixTargetReceived(pathStr, targetNumber, label);
-            }
-        }
-    }
-    
-    // Process sources
-    if (matrix->sources()) {
-        for (auto it = matrix->sources()->begin(); it != matrix->sources()->end(); ++it) {
-            if (auto source = dynamic_cast<libember::glow::GlowSource*>(&(*it))) {
-                int sourceNumber = source->number();
-                QString label = QString("Source %1").arg(sourceNumber);
-                emit matrixSourceReceived(pathStr, sourceNumber, label);
-            }
-        }
-    }
-    
-    // Process connections
-    if (matrix->connections()) {
-        log(LogLevel::Debug, QString(" NonQual Matrix [%1] has connections collection").arg(pathStr));
-        
-        int connectionCount = 0;
-        int targetCount = 0;
-        for (auto it = matrix->connections()->begin(); it != matrix->connections()->end(); ++it) {
-            if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*it))) {
-                int targetNumber = connection->target();
-                targetCount++;
-                
-                // Per Ember+ spec: Each Connection object represents the complete state for that target
-                // Clear this target's connections first, then add the new ones
-                emit matrixTargetConnectionsCleared(pathStr, targetNumber);
-                log(LogLevel::Debug, QString(" Cleared connections for Target %1 in matrix %2").arg(targetNumber).arg(pathStr));
-                
-                // Get all sources for this connection (sources() returns ObjectIdentifier)
-                libember::ber::ObjectIdentifier sources = connection->sources();
-                log(LogLevel::Debug, QString(" Connection - Target %1, Sources count: %2")
-                               .arg(targetNumber).arg(sources.size()));
-                
-                if (!sources.empty()) {
-                    int disposition = connection->disposition().value();
-                    
-                    // Each subid in the ObjectIdentifier is a connected source number
-                    for (auto sourceIt = sources.begin(); sourceIt != sources.end(); ++sourceIt) {
-                        int sourceNumber = *sourceIt;
-                        log(LogLevel::Debug, QString(" Emitting connection: Target %1 <- Source %2 (Disposition: %3)")
-                                       .arg(targetNumber).arg(sourceNumber).arg(disposition));
-                        emit matrixConnectionReceived(pathStr, targetNumber, sourceNumber, true, disposition);
-                        connectionCount++;
-                    }
-                } else {
-                    // Target with empty sources = disconnected target (per Ember+ spec)
-                    log(LogLevel::Debug, QString(" Target %1 has no sources (disconnected)").arg(targetNumber));
-                }
-            }
-        }
-        log(LogLevel::Debug, QString(" Processed %1 targets, %2 total connections").arg(targetCount).arg(connectionCount));
-        
-        // If connections collection is empty, request the connection state
-        if (connectionCount == 0) {
-            log(LogLevel::Debug, QString(" Requesting connection state for matrix [%1]").arg(pathStr));
-            sendGetDirectoryForPath(pathStr);
-        }
-    } else {
-        log(LogLevel::Debug, QString(" NonQual Matrix [%1] has NO connections collection - requesting it").arg(pathStr));
-        // Request the matrix contents including connections
-        sendGetDirectoryForPath(pathStr);
-    }
-    
-    // Process children if present
-    if (matrix->children()) {
-        processElementCollection(matrix->children(), pathStr);
-    }
-}
-
-void EmberConnection::processQualifiedFunction(libember::glow::GlowQualifiedFunction* function)
-{
-    auto path = function->path();
-    QString pathStr;
-    for (auto num : path) {
-        pathStr += QString::number(num) + ".";
-    }
-    pathStr.chop(1);
-    
-    QString identifier = function->contains(libember::glow::FunctionProperty::Identifier)
-        ? QString::fromStdString(function->identifier())
-        : QString("Function %1").arg(path.back());
-    
-    QString description = function->contains(libember::glow::FunctionProperty::Description)
-        ? QString::fromStdString(function->description())
-        : QString("");
-    
-    QStringList argNames;
-    QList<int> argTypes;
-    QStringList resultNames;
-    QList<int> resultTypes;
-    
-    if (function->arguments()) {
-        auto argsSeq = function->arguments();
-        for (auto it = argsSeq->begin(); it != argsSeq->end(); ++it) {
-            if (auto arg = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
-                argNames.append(QString::fromStdString(arg->name()));
-                argTypes.append(arg->type().value());
-            }
-        }
-    }
-    
-    if (function->result()) {
-        auto resultsSeq = function->result();
-        for (auto it = resultsSeq->begin(); it != resultsSeq->end(); ++it) {
-            if (auto res = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
-                resultNames.append(QString::fromStdString(res->name()));
-                resultTypes.append(res->type().value());
-            }
-        }
-    }
-    
-    log(LogLevel::Debug, QString("QualifiedFunction: %1 [%2] - %3 args, %4 results")
-        .arg(identifier).arg(pathStr).arg(argNames.size()).arg(resultNames.size()));
-    
-    emit functionReceived(pathStr, identifier, description, argNames, argTypes, resultNames, resultTypes);
-    
-    if (function->children()) {
-        processElementCollection(function->children(), pathStr);
-    }
-}
-
-void EmberConnection::processFunction(libember::glow::GlowFunction* function, const QString& parentPath)
-{
-    int number = function->number();
-    QString pathStr = parentPath.isEmpty() 
-        ? QString::number(number)
-        : QString("%1.%2").arg(parentPath).arg(number);
-    
-    QString identifier = function->contains(libember::glow::FunctionProperty::Identifier)
-        ? QString::fromStdString(function->identifier())
-        : QString("Function %1").arg(number);
-    
-    QString description = function->contains(libember::glow::FunctionProperty::Description)
-        ? QString::fromStdString(function->description())
-        : QString("");
-    
-    QStringList argNames;
-    QList<int> argTypes;
-    QStringList resultNames;
-    QList<int> resultTypes;
-    
-    if (function->arguments()) {
-        auto argsSeq = function->arguments();
-        for (auto it = argsSeq->begin(); it != argsSeq->end(); ++it) {
-            if (auto arg = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
-                argNames.append(QString::fromStdString(arg->name()));
-                argTypes.append(arg->type().value());
-            }
-        }
-    }
-    
-    if (function->result()) {
-        auto resultsSeq = function->result();
-        for (auto it = resultsSeq->begin(); it != resultsSeq->end(); ++it) {
-            if (auto res = dynamic_cast<const libember::glow::GlowTupleItemDescription*>(&(*it))) {
-                resultNames.append(QString::fromStdString(res->name()));
-                resultTypes.append(res->type().value());
-            }
-        }
-    }
-    
-    log(LogLevel::Debug, QString("Function: %1 [%2] - %3 args, %4 results")
-        .arg(identifier).arg(pathStr).arg(argNames.size()).arg(resultNames.size()));
-    
-    emit functionReceived(pathStr, identifier, description, argNames, argTypes, resultNames, resultTypes);
-    
-    if (function->children()) {
-        processElementCollection(function->children(), pathStr);
-    }
-}
-
-void EmberConnection::processInvocationResult(libember::dom::Node* node)
-{
-    log(LogLevel::Info, "processInvocationResult called!");
-    
-    auto result = dynamic_cast<libember::glow::GlowInvocationResult*>(node);
-    if (!result) {
-        log(LogLevel::Warning, "Invalid invocation result received - cast failed");
-        return;
-    }
-    
-    int invocationId = result->invocationId();
-    bool success = result->success();
-    
-    QList<QVariant> resultValues;
-    if (result->result()) {
-        std::vector<libember::glow::Value> values;
-        result->typedResult(std::back_inserter(values));
-        
-        for (const auto& val : values) {
-            switch (val.type().value()) {
-                case libember::glow::ParameterType::Integer:
-                    resultValues.append(QVariant::fromValue(val.toInteger()));
-                    break;
-                case libember::glow::ParameterType::Real:
-                    resultValues.append(QVariant::fromValue(val.toReal()));
-                    break;
-                case libember::glow::ParameterType::String:
-                    resultValues.append(QString::fromStdString(val.toString()));
-                    break;
-                case libember::glow::ParameterType::Boolean:
-                    resultValues.append(val.toBoolean());
-                    break;
-                default:
-                    resultValues.append(QVariant());
-                    break;
-            }
-        }
-    }
-    
-    log(LogLevel::Info, QString("Invocation result received - ID: %1, Success: %2, Values: %3")
-        .arg(invocationId).arg(success ? "YES" : "NO").arg(resultValues.size()));
-    
-    if (m_pendingInvocations.contains(invocationId)) {
-        m_pendingInvocations.remove(invocationId);
-    }
-    
-    emit invocationResultReceived(invocationId, success, resultValues);
-}
-
-void EmberConnection::processStreamCollection(libember::glow::GlowContainer* streamCollection)
-{
-    // Process all stream entries in the collection
-    int entryCount = 0;
-    for (auto it = streamCollection->begin(); it != streamCollection->end(); ++it) {
-        auto streamEntry = dynamic_cast<libember::glow::GlowStreamEntry*>(&(*it));
-        if (streamEntry) {
-            int streamId = streamEntry->streamIdentifier();
-            auto value = streamEntry->value();
-            
-            // Extract numeric value based on type
-            double numericValue = 0.0;
-            bool hasValue = false;
-            
-            switch (value.type().value()) {
-                case libember::glow::ParameterType::Integer:
-                    numericValue = static_cast<double>(value.toInteger());
-                    hasValue = true;
-                    break;
-                case libember::glow::ParameterType::Real:
-                    numericValue = value.toReal();
-                    hasValue = true;
-                    break;
-                default:
-                    log(LogLevel::Warning, QString("StreamEntry %1 has non-numeric type %2")
-                        .arg(streamId).arg(value.type().value()));
-                    break;
-            }
-            
-            if (hasValue) {
-                log(LogLevel::Trace, QString("StreamEntry: streamId=%1, value=%2")
-                    .arg(streamId).arg(numericValue));
-                emit streamValueReceived(streamId, numericValue);
-                entryCount++;
-            }
-        }
-    }
-    
-    if (entryCount > 0) {
-        log(LogLevel::Debug, QString("Processed StreamCollection with %1 entries").arg(entryCount));
     }
 }
 
@@ -2068,23 +965,12 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);
-    encoder.encode(0x00);
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
-    
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
-    log(LogLevel::Debug, QString("Sent GetDirectory request (root)"));
+    log(LogLevel::Debug, QString("Sent function invocation for %1").arg(path));
     delete root;
 }
 
@@ -2120,26 +1006,11 @@ void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscri
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Encode to S101
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x02);  // 2 app bytes (required by some devices!)
-        encoder.encode(0x28);  // App byte 1
-        encoder.encode(0x02);  // App byte 2
-        
-        // Add EmBER data
-        encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
     // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
     // Track subscription
@@ -2186,22 +1057,11 @@ void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);
-    encoder.encode(0x00);
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
     // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
     // Track subscription
@@ -2248,22 +1108,11 @@ void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);
-    encoder.encode(0x00);
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
     // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
     // Track subscription
@@ -2310,22 +1159,11 @@ void EmberConnection::unsubscribeFromParameter(const QString &path)
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);
-    encoder.encode(0x00);
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
     // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
     // Remove from tracking
@@ -2367,22 +1205,11 @@ void EmberConnection::unsubscribeFromNode(const QString &path)
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);
-    encoder.encode(0x00);
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
     // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
     // Remove from tracking
@@ -2424,22 +1251,11 @@ void EmberConnection::unsubscribeFromMatrix(const QString &path)
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Encode to S101
-    auto encoder = libs101::StreamEncoder<unsigned char>();
-    encoder.encode(0x00);
-    encoder.encode(libs101::MessageType::EmBER);
-    encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);
-    encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);
-    encoder.encode(0x00);
-    encoder.encode(stream.begin(), stream.end());
-    encoder.finish();
+    // Use S101 protocol layer to encode
+    QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
     // Send
-    std::vector<unsigned char> data(encoder.begin(), encoder.end());
-    QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-    m_socket->write(qdata);
+    m_socket->write(s101Frame);
     m_socket->flush();
     
     // Remove from tracking
@@ -2544,22 +1360,11 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Encode to S101
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD
-        encoder.encode(0x00);  // AppBytes
-        encoder.encode(stream.begin(), stream.end());
-        encoder.finish();
+        // Use S101 protocol layer to encode
+        QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         // Send
-        std::vector<unsigned char> data(encoder.begin(), encoder.end());
-        QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-        m_socket->write(qdata);
+        m_socket->write(s101Frame);
         m_socket->flush();
         
         log(LogLevel::Debug, QString("Successfully batch subscribed to %1 paths").arg(successCount));
@@ -2689,35 +1494,15 @@ void EmberConnection::processFetchQueue()
                 root->insert(root->end(), node);
             }
             
-        // Encode to EmBER
-        log(LogLevel::Info, "Encoding to EmBER...");
-        libember::util::OctetStream stream;
-        root->encode(stream);
-        log(LogLevel::Info, QString("Encoded %1 bytes").arg(stream.size()));
-        
-        // Wrap in S101 frame
-        log(LogLevel::Info, "Creating S101 encoder...");
-        auto encoder = libs101::StreamEncoder<unsigned char>();
-        encoder.encode(0x00);  // Slot
-        encoder.encode(libs101::MessageType::EmBER);
-        encoder.encode(libs101::CommandType::EmBER);
-        encoder.encode(0x01);  // Version
-        encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-        encoder.encode(0x01);  // DTD (Glow)
-        encoder.encode(0x02);  // 2 app bytes (CRITICAL: some devices require these!)
-        encoder.encode(0x28);  // App byte 1
-        encoder.encode(0x02);  // App byte 2
-        log(LogLevel::Info, "Added S101 app bytes: 0x28 0x02");
-        
-        // Add EmBER data
-        encoder.encode(stream.begin(), stream.end());
-            encoder.finish();
+            // Encode to EmBER
+            libember::util::OctetStream stream;
+            root->encode(stream);
+            
+            // Use S101 protocol layer to encode
+            QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
             
             // Send
-            std::vector<unsigned char> data(encoder.begin(), encoder.end());
-            QByteArray qdata(reinterpret_cast<const char*>(data.data()), data.size());
-            
-            if (m_socket->write(qdata) > 0) {
+            if (m_socket->write(s101Frame) > 0) {
                 m_socket->flush();
             }
             

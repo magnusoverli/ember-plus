@@ -16,8 +16,9 @@
 #include <QMap>
 #include <QTimer>
 #include <QDateTime>
-#include <ember/dom/AsyncDomReader.hpp>
-#include <s101/StreamDecoder.hpp>
+#include "S101Protocol.h"
+#include "GlowParser.h"
+#include "EmberDataTypes.h"
 
 // Log levels for controlling verbosity
 enum class LogLevel {
@@ -29,40 +30,14 @@ enum class LogLevel {
 };
 
 // Forward declarations
-namespace libember { 
-    namespace dom {
-        class Node;
-    }
-    namespace glow {
-        class GlowContainer;
-        class GlowNode;
-        class GlowQualifiedNode;
-        class GlowParameter;
-        class GlowQualifiedParameter;
-        class GlowMatrix;
-        class GlowQualifiedMatrix;
-        class GlowFunction;
-        class GlowQualifiedFunction;
-    }
-}
+class S101Protocol;
+class GlowParser;
 
 class EmberConnection : public QObject
 {
     Q_OBJECT
 
-    // Nested DomReader class
-    class DomReader : public libember::dom::AsyncDomReader
-    {
-    public:
-        explicit DomReader(EmberConnection* connection);
-        virtual ~DomReader();
-    
-    protected:
-        virtual void rootReady(libember::dom::Node* root) override;
-    
-    private:
-        EmberConnection *m_connection;
-    };
+
 
 public:
     // Subscription request for batch operations
@@ -146,20 +121,11 @@ private:
         int type = 0;        // Type: 0=None
     };
     
-    void handleS101Message(libs101::StreamDecoder<unsigned char>::const_iterator first,
-                           libs101::StreamDecoder<unsigned char>::const_iterator last);
-    void processRoot(libember::dom::Node* root);
-    void processElementCollection(libember::glow::GlowContainer* container, const QString& parentPath);
-    void processQualifiedNode(libember::glow::GlowQualifiedNode* node);
-    void processNode(libember::glow::GlowNode* node, const QString& parentPath);
-    void processQualifiedParameter(libember::glow::GlowQualifiedParameter* param);
-    void processParameter(libember::glow::GlowParameter* param, const QString& parentPath);
-    void processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix);
-    void processMatrix(libember::glow::GlowMatrix* matrix, const QString& parentPath);
-    void processQualifiedFunction(libember::glow::GlowQualifiedFunction* function);
-    void processFunction(libember::glow::GlowFunction* function, const QString& parentPath);
-    void processInvocationResult(libember::dom::Node* result);
-    void processStreamCollection(libember::glow::GlowContainer* streamCollection);
+    // Protocol layer handlers
+    void onS101MessageReceived(const QByteArray& emberData);
+    void onParserNodeReceived(const EmberData::NodeInfo& node);
+    void onParserParameterReceived(const EmberData::ParameterInfo& param);
+    void onParserMatrixReceived(const EmberData::MatrixInfo& matrix);
     void sendGetDirectory();
     
     // Logging helper
@@ -170,11 +136,9 @@ private:
 
     QTcpSocket *m_socket;
     
-    // S101 decoder
-    libs101::StreamDecoder<unsigned char> *m_s101Decoder;
-    
-    // Glow DOM reader
-    DomReader *m_domReader;
+    // Protocol layer
+    S101Protocol *m_s101Protocol;
+    GlowParser *m_glowParser;
     
     // Connection state
     QString m_host;

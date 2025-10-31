@@ -205,6 +205,8 @@ add_library(EmberViewerLib STATIC
     src/UpdateManager.cpp
     src/UpdateDialog.cpp
     src/EmberTreeWidget.cpp
+    src/S101Protocol.cpp
+    src/GlowParser.cpp
     ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
     include/MeterWidget.h
@@ -213,6 +215,9 @@ add_library(EmberViewerLib STATIC
     include/UpdateManager.h
     include/UpdateDialog.h
     include/EmberTreeWidget.h
+    include/S101Protocol.h
+    include/GlowParser.h
+    include/EmberDataTypes.h
 )
 
 # Make sure version is updated before building library
@@ -232,6 +237,8 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberTreeWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/S101Protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/GlowParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
@@ -242,6 +249,9 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateDialog.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberTreeWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/S101Protocol.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/GlowParser.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberDataTypes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h
