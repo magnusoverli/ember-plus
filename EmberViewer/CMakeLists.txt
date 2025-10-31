@@ -308,6 +308,16 @@ set_target_properties(EmberViewerLib
         POSITION_INDEPENDENT_CODE ON
 )
 
+# Ensure precompiled headers are built with same flags as executable
+# This prevents PCH warnings about mismatched compiler settings
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(EmberViewerLib PRIVATE -fPIE)
+    # Also apply optimization flags to library for PCH compatibility
+    if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+        target_compile_options(EmberViewerLib PRIVATE -march=native)
+    endif()
+endif()
+
 target_include_directories(EmberViewerLib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
