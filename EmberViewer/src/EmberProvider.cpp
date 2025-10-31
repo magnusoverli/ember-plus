@@ -506,6 +506,17 @@ void EmberProvider::sendGetDirectoryResponse(const QString &path, ClientConnecti
     }
 }
 
+// Helper: Parse path string to OID
+static libember::ber::ObjectIdentifier pathToOid(const QString &path)
+{
+    QStringList segments = path.split('.', Qt::SkipEmptyParts);
+    libember::ber::ObjectIdentifier oid;
+    for (const QString& seg : segments) {
+        oid.push_back(seg.toInt());
+    }
+    return oid;
+}
+
 void EmberProvider::sendNodeResponse(const QString &path, ClientConnection *client)
 {
     if (!m_nodes.contains(path)) {
@@ -514,15 +525,8 @@ void EmberProvider::sendNodeResponse(const QString &path, ClientConnection *clie
     
     const NodeData &node = m_nodes[path];
     
-    // Parse path to OID
-    QStringList segments = path.split('.', Qt::SkipEmptyParts);
-    libember::ber::ObjectIdentifier oid;
-    for (const QString& seg : segments) {
-        oid.push_back(seg.toInt());
-    }
-    
-    // Create qualified node
-    auto qualNode = new libember::glow::GlowQualifiedNode(oid);
+    // Create and populate qualified node
+    auto qualNode = new libember::glow::GlowQualifiedNode(pathToOid(path));
     qualNode->setIdentifier(node.identifier.toStdString());
     if (!node.description.isEmpty()) {
         qualNode->setDescription(node.description.toStdString());
@@ -544,15 +548,8 @@ void EmberProvider::sendParameterResponse(const QString &path, ClientConnection 
     
     const ParameterData &param = m_parameters[path];
     
-    // Parse path to OID
-    QStringList segments = path.split('.', Qt::SkipEmptyParts);
-    libember::ber::ObjectIdentifier oid;
-    for (const QString& seg : segments) {
-        oid.push_back(seg.toInt());
-    }
-    
-    // Create qualified parameter
-    auto qualParam = new libember::glow::GlowQualifiedParameter(oid);
+    // Create and populate qualified parameter
+    auto qualParam = new libember::glow::GlowQualifiedParameter(pathToOid(path));
     qualParam->setIdentifier(param.identifier.toStdString());
     
     // Set value based on type
@@ -611,15 +608,8 @@ void EmberProvider::sendMatrixResponse(const QString &path, ClientConnection *cl
     
     const MatrixData &matrix = m_matrices[path];
     
-    // Parse path to OID
-    QStringList segments = path.split('.', Qt::SkipEmptyParts);
-    libember::ber::ObjectIdentifier oid;
-    for (const QString& seg : segments) {
-        oid.push_back(seg.toInt());
-    }
-    
-    // Create qualified matrix
-    auto qualMatrix = new libember::glow::GlowQualifiedMatrix(oid);
+    // Create and populate qualified matrix
+    auto qualMatrix = new libember::glow::GlowQualifiedMatrix(pathToOid(path));
     qualMatrix->setIdentifier(matrix.identifier.toStdString());
     
     if (!matrix.description.isEmpty()) {
@@ -694,15 +684,8 @@ void EmberProvider::sendFunctionResponse(const QString &path, ClientConnection *
     
     const FunctionData &func = m_functions[path];
     
-    // Parse path to OID
-    QStringList segments = path.split('.', Qt::SkipEmptyParts);
-    libember::ber::ObjectIdentifier oid;
-    for (const QString& seg : segments) {
-        oid.push_back(seg.toInt());
-    }
-    
-    // Create qualified function
-    auto qualFunc = new libember::glow::GlowQualifiedFunction(oid);
+    // Create and populate qualified function
+    auto qualFunc = new libember::glow::GlowQualifiedFunction(pathToOid(path));
     qualFunc->setIdentifier(func.identifier.toStdString());
     
     if (!func.description.isEmpty()) {
@@ -799,15 +782,8 @@ void EmberProvider::sendMatrixLabelNode(const QString &matrixPath, ClientConnect
     // Create virtual label container node at matrixPath.666999666
     QString labelContainerPath = matrixPath + ".666999666";
     
-    // Parse path to OID
-    QStringList segments = labelContainerPath.split('.', Qt::SkipEmptyParts);
-    libember::ber::ObjectIdentifier oid;
-    for (const QString& seg : segments) {
-        oid.push_back(seg.toInt());
-    }
-    
     // Create qualified node for label container
-    auto qualNode = new libember::glow::GlowQualifiedNode(oid);
+    auto qualNode = new libember::glow::GlowQualifiedNode(pathToOid(labelContainerPath));
     qualNode->setIdentifier("labels");
     qualNode->setDescription("Matrix Labels");
     qualNode->setIsOnline(true);
@@ -841,15 +817,8 @@ void EmberProvider::sendMatrixLabelTypeNode(const QString &containerPath, const 
     // Create type node path: containerPath.1 or containerPath.2
     QString typePath = containerPath + "." + labelType;
     
-    // Parse path to OID
-    QStringList segments = typePath.split('.', Qt::SkipEmptyParts);
-    libember::ber::ObjectIdentifier oid;
-    for (const QString& seg : segments) {
-        oid.push_back(seg.toInt());
-    }
-    
     // Create qualified node
-    auto qualNode = new libember::glow::GlowQualifiedNode(oid);
+    auto qualNode = new libember::glow::GlowQualifiedNode(pathToOid(typePath));
     qualNode->setIdentifier(labelType == "1" ? "targets" : "sources");
     qualNode->setDescription(labelType == "1" ? "Target Labels" : "Source Labels");
     qualNode->setIsOnline(true);
@@ -882,15 +851,8 @@ void EmberProvider::sendMatrixLabelParameters(const QString &matrixPath, const Q
         // Create parameter path: matrixPath.666999666.labelType.number
         QString paramPath = QString("%1.666999666.%2.%3").arg(matrixPath).arg(labelType).arg(number);
         
-        // Parse path to OID
-        QStringList segments = paramPath.split('.', Qt::SkipEmptyParts);
-        libember::ber::ObjectIdentifier oid;
-        for (const QString& seg : segments) {
-            oid.push_back(seg.toInt());
-        }
-        
         // Create qualified parameter
-        auto qualParam = new libember::glow::GlowQualifiedParameter(oid);
+        auto qualParam = new libember::glow::GlowQualifiedParameter(pathToOid(paramPath));
         qualParam->setIdentifier(QString::number(number).toStdString());
         qualParam->setValue(label.toStdString());
         qualParam->setType(libember::glow::ParameterType::String);
