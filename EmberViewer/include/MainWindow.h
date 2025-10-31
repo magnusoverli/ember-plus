@@ -22,9 +22,6 @@
 #include <QStatusBar>
 #include <QSettings>
 #include <QAction>
-#include <QTimer>
-#include <QDateTime>
-#include <QSet>
 #include <QProgressDialog>
 
 #include "UpdateManager.h"
@@ -38,6 +35,10 @@ class UpdateDialog;
 class ConnectionManager;
 class ConnectionsTreeWidget;
 class EmberTreeWidget;
+class TreeViewController;
+class SubscriptionManager;
+class MatrixManager;
+class CrosspointActivityTracker;
 
 class MainWindow : public QMainWindow
 {
@@ -75,11 +76,8 @@ private slots:
     void onTreeFetchProgress(int fetchedCount, int totalCount);
     void onTreeFetchCompleted(bool success, const QString &message);
     void onTreeSelectionChanged();
-    void onItemExpanded(QTreeWidgetItem *item);
-    void onItemCollapsed(QTreeWidgetItem *item);
     void onEnableCrosspointsToggled(bool enabled);
     void onActivityTimeout();
-    void onActivityTimerTick();
     void onSaveEmberDevice();
     void onOpenEmulator();
     void onCheckForUpdates();
@@ -104,13 +102,7 @@ private:
     void saveSettings();
     
     void logMessage(const QString &message);
-    void setItemDisplayName(QTreeWidgetItem *item, const QString &baseName);
-    QTreeWidgetItem* findOrCreateTreeItem(const QString &path);
-    void resetActivityTimer();
-    void updateCrosspointsStatusBar();
-    void subscribeToExpandedItems();
     DeviceSnapshot captureSnapshot();
-    QStringList getAllTreeItemPaths();  // Get all tree item paths for complete tree fetch
     void proceedWithSnapshot();  // Continue snapshot after tree fetch completes
     
     // Widgets
@@ -133,8 +125,11 @@ private:
     // Ember+ connection
     EmberConnection *m_connection;
     
-    // Matrix widgets (path -> widget)
-    QMap<QString, MatrixWidget*> m_matrixWidgets;
+    // Manager classes
+    TreeViewController *m_treeViewController;
+    SubscriptionManager *m_subscriptionManager;
+    MatrixManager *m_matrixManager;
+    CrosspointActivityTracker *m_activityTracker;
     
     // Meter widget (only one active at a time)
     MeterWidget *m_activeMeter;
@@ -157,33 +152,12 @@ private:
     QMap<QString, FunctionInfo> m_functions;  // path -> function info
     QMap<int, QString> m_pendingInvocations;  // invocationId -> function path
     
-    // Fast path lookup for tree items
-    QMap<QString, QTreeWidgetItem*> m_pathToItem;
-    
-    // Subscription tracking
-    QSet<QString> m_subscribedPaths;
-    struct SubscriptionState {
-        QDateTime subscribedAt;
-        bool autoSubscribed;
-    };
-    QMap<QString, SubscriptionState> m_subscriptionStates;
-    
-    // Lazy loading: track which paths have had their children fetched
-    QSet<QString> m_fetchedPaths;
-    
     // State
     bool m_isConnected;
     bool m_showOidPath;
-    bool m_crosspointsEnabled;
-    
-    // Tree update batching (for progressive UI updates)
-    int m_itemsAddedSinceUpdate;
 
     // Crosspoint editing
     QAction *m_enableCrosspointsAction;
-    QTimer *m_activityTimer;
-    QTimer *m_tickTimer;
-    int m_activityTimeRemaining;
     QLabel *m_crosspointsStatusLabel;
     
     // Emulator window
@@ -201,12 +175,8 @@ private:
 public:
     // Constants
     static constexpr int MATRIX_LABEL_PATH_MARKER = 666999666;
-    static constexpr int ACTIVITY_TIMEOUT_MS = 60000;  // 60 seconds
-    static constexpr int TICK_INTERVAL_MS = 1000;       // 1 second
     static constexpr int DEFAULT_EMBER_PORT = 9092;
     static constexpr int DEFAULT_PORT_FALLBACK = 9000;  // For settings
-    static constexpr int UPDATE_BATCH_SIZE = 100;       // Process events every N items for progressive updates
 };
 
 #endif // MAINWINDOW_H
-

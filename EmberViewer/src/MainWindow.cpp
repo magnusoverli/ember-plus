@@ -22,6 +22,10 @@
 #include "ConnectionsTreeWidget.h"
 #include "ImportExportDialog.h"
 #include "version.h"
+#include "TreeViewController.h"
+#include "SubscriptionManager.h"
+#include "MatrixManager.h"
+#include "CrosspointActivityTracker.h"
 
 // Platform-specific update managers
 #ifdef Q_OS_LINUX
@@ -74,9 +78,6 @@ MainWindow::MainWindow(QWidget *parent)
     , m_activeMeter(nullptr)
     , m_treeFetchProgress(nullptr)
     , m_enableCrosspointsAction(nullptr)
-    , m_activityTimer(nullptr)
-    , m_tickTimer(nullptr)
-    , m_activityTimeRemaining(0)
     , m_crosspointsStatusLabel(nullptr)
     , m_emulatorWindow(nullptr)
     , m_updateManager(nullptr)
@@ -84,10 +85,12 @@ MainWindow::MainWindow(QWidget *parent)
     , m_updateStatusLabel(nullptr)
     , m_connectionManager(nullptr)
     , m_connectionsTree(nullptr)
+    , m_treeViewController(nullptr)
+    , m_subscriptionManager(nullptr)
+    , m_matrixManager(nullptr)
+    , m_activityTracker(nullptr)
     , m_isConnected(false)
     , m_showOidPath(false)
-    , m_crosspointsEnabled(false)
-    , m_itemsAddedSinceUpdate(0)
 {
     // Initialize connection manager and load saved connections early
     // (needed before createDockWindows to integrate into layout properly)
@@ -98,20 +101,6 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenu();
     setupStatusBar();
     createDockWindows();
-    
-    // Install event filter on application to detect user activity
-    qApp->installEventFilter(this);
-    
-    // Setup activity timer (60 second timeout)
-    m_activityTimer = new QTimer(this);
-    m_activityTimer->setSingleShot(true);
-    m_activityTimer->setInterval(ACTIVITY_TIMEOUT_MS);
-    connect(m_activityTimer, &QTimer::timeout, this, &MainWindow::onActivityTimeout);
-    
-    // Setup tick timer (1 second updates for status bar)
-    m_tickTimer = new QTimer(this);
-    m_tickTimer->setInterval(TICK_INTERVAL_MS); // 1 second
-    connect(m_tickTimer, &QTimer::timeout, this, &MainWindow::onActivityTimerTick);
     
     // Load saved settings
     loadSettings();
@@ -125,7 +114,6 @@ MainWindow::MainWindow(QWidget *parent)
         onConnectionStateChanged(false);
     });
     connect(m_connection, &EmberConnection::logMessage, this, &MainWindow::onLogMessage);
-    connect(m_connection, &EmberConnection::treePopulated, this, &MainWindow::subscribeToExpandedItems);
     
     // LAZY LOADING OPTIMIZATION: Use direct connections for instant UI updates
     // With lazy loading, we only receive small batches of children at a time,
@@ -143,6 +131,23 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared);
     connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
     connect(m_connection, &EmberConnection::invocationResultReceived, this, &MainWindow::onInvocationResultReceived);
+    
+    // Initialize manager classes
+    m_treeViewController = new TreeViewController(m_treeWidget, m_connection, this);
+    m_subscriptionManager = new SubscriptionManager(m_connection, this);
+    m_matrixManager = new MatrixManager(m_connection, this);
+    m_activityTracker = new CrosspointActivityTracker(m_crosspointsStatusLabel, this);
+    
+    // Install event filter on application to detect user activity (for crosspoint tracker)
+    qApp->installEventFilter(m_activityTracker);
+    
+    // Connect manager signals
+    connect(m_activityTracker, &CrosspointActivityTracker::timeout, this, &MainWindow::onActivityTimeout);
+    
+    // Connect tree signals directly to managers
+    connect(m_treeWidget, &QTreeWidget::itemExpanded, m_treeViewController, &TreeViewController::onItemExpanded);
+    connect(m_treeWidget, &QTreeWidget::itemExpanded, m_subscriptionManager, &SubscriptionManager::onItemExpanded);
+    connect(m_treeWidget, &QTreeWidget::itemCollapsed, m_subscriptionManager, &SubscriptionManager::onItemCollapsed);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
@@ -213,18 +218,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     
-    // Reset activity timer on any user interaction
-    if (m_crosspointsEnabled) {
-        QEvent::Type type = event->type();
-        if (type == QEvent::MouseButtonPress ||
-            type == QEvent::MouseButtonRelease ||
-            type == QEvent::MouseMove ||
-            type == QEvent::KeyPress ||
-            type == QEvent::KeyRelease ||
-            type == QEvent::Wheel) {
-            resetActivityTimer();
-        }
-    }
+    // Reset activity timer on any user interaction (handled by activity tracker's eventFilter)
+    // The activity tracker is installed on qApp and will handle this
     
     // Handle click on update status label
     if (watched == m_updateStatusLabel && event->type() == QEvent::MouseButtonPress) {
@@ -275,8 +270,6 @@ void MainWindow::setupUi()
     qDebug() << "Set double-click interval to: 250ms";
     
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
-    connect(m_treeWidget, &QTreeWidget::itemExpanded, this, &MainWindow::onItemExpanded);
-    connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainWindow::onItemCollapsed);
     connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         QTreeWidgetItem *item = m_treeWidget->itemAt(pos);
         if (!item) return;
@@ -326,7 +319,7 @@ void MainWindow::setupUi()
     connect(delegate, &ParameterDelegate::valueChanged, this, [this](const QString &path, const QString &newValue) {
         // Find the item to get its type
         // Use cached item lookup O(log n) instead of O(n) iteration
-        QTreeWidgetItem *item = m_pathToItem.value(path, nullptr);
+        QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
         if (item) {
             int type = item->data(0, Qt::UserRole + 1).toInt();
             m_connection->sendParameterValue(path, newValue, type);
@@ -595,9 +588,6 @@ void MainWindow::onConnectionStateChanged(bool connected)
         // We only receive small batches of children at a time (5-20 items max)
         // so there's no risk of UI freeze. User sees real-time tree population.
         // (Previously disabled for aggressive enumeration with 100+ items at once)
-        
-        // Reset batch counter for new connection
-        m_itemsAddedSinceUpdate = 0;
     } else {
         m_statusLabel->setText("Not connected");
         m_statusLabel->setStyleSheet("QLabel { color: red; }");
@@ -629,22 +619,10 @@ void MainWindow::onConnectionStateChanged(bool connected)
         
         m_treeWidget->clear();
         
-        // Clear the path cache
-        m_pathToItem.clear();
-        
-        // Clear subscription tracking
-        m_subscribedPaths.clear();
-        m_subscriptionStates.clear();
-        
-        // Clear lazy loading tracking
-        m_fetchedPaths.clear();
-        
-        // Reset batch counter
-        m_itemsAddedSinceUpdate = 0;
-        
-        // Now it's safe to delete all matrix widgets
-        qDeleteAll(m_matrixWidgets);
-        m_matrixWidgets.clear();
+        // Clear all manager state
+        m_treeViewController->clear();
+        m_subscriptionManager->clear();
+        m_matrixManager->clear();
     }
 }
 
@@ -655,544 +633,58 @@ void MainWindow::onLogMessage(const QString &message)
 
 void MainWindow::onNodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline)
 {
-    QTreeWidgetItem *item = findOrCreateTreeItem(path);
-    if (item) {
-        // Only log if this is a new node (no text set yet)
-        bool isNew = item->text(1).isEmpty();
-        
-        // For nodes: prefer description as display name (often more readable than UUID identifier)
-        // If no description, fall back to identifier
-        QString displayName = !description.isEmpty() ? description : identifier;
-        
-        setItemDisplayName(item, displayName);
-        item->setText(1, "Node");
-        item->setText(2, "");  // Keep Value column empty for nodes
-        
-        // Store isOnline state in item data (UserRole + 4 for nodes)
-        // Note: Parameters use UserRole + 8 to avoid collision with parameter metadata
-        item->setData(0, Qt::UserRole + 4, isOnline);
-        
-        // Apply offline styling if needed
-        if (!isOnline) {
-            item->setIcon(0, style()->standardIcon(QStyle::SP_MessageBoxWarning));
-            item->setForeground(0, QBrush(QColor("#888888")));
-            item->setForeground(1, QBrush(QColor("#888888")));
-            item->setForeground(2, QBrush(QColor("#888888")));
-            item->setToolTip(0, QString("%1 - Offline").arg(displayName));
-        } else {
-            item->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
-            // Reset foreground to default
-            item->setForeground(0, QBrush());
-            item->setForeground(1, QBrush());
-            item->setForeground(2, QBrush());
-            item->setToolTip(0, "");
-        }
-        
-        if (isNew) {
-            qDebug().noquote() << QString("Node: %1 [%2] - %3")
-                .arg(displayName).arg(path).arg(isOnline ? "Online" : "Offline");
-            
-            // LAZY LOADING: Make nodes expandable - they might have children
-            // Children will be fetched on-demand when user expands the node
-            item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-        }
-        
-        // Remove "Loading..." placeholder when real children arrive
-        if (item->parent()) {
-            QTreeWidgetItem *parent = item->parent();
-            // Look for "Loading..." child
-            for (int i = 0; i < parent->childCount(); i++) {
-                QTreeWidgetItem *child = parent->child(i);
-                if (child->text(0) == "Loading..." && child->text(1).isEmpty()) {
-                    delete child;
-                    break;  // Only one loading item per parent
-                }
-            }
-        }
-        
-        // Batch updates for better responsiveness - process events every N items
-        m_itemsAddedSinceUpdate++;
-        if (m_itemsAddedSinceUpdate >= UPDATE_BATCH_SIZE) {
-            // Process pending events to keep UI responsive
-            // ExcludeUserInputEvents prevents user clicks during update
-            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-            m_itemsAddedSinceUpdate = 0;
-        }
-    }
+    // Delegate to TreeViewController
+    m_treeViewController->onNodeReceived(path, identifier, description, isOnline);
 }
 
-void MainWindow::onParameterReceived(const QString &path, int /* number */, const QString &identifier, const QString &value, 
+void MainWindow::onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier)
 {
-    // Check if this parameter is actually a matrix label
-    // Pattern: matrixPath.666999666.1.N (targets) or matrixPath.666999666.2.N (sources)
-    QStringList pathParts = path.split('.');
-    if (pathParts.size() >= 4 && pathParts[pathParts.size() - 3] == QString::number(MATRIX_LABEL_PATH_MARKER)) {
-        // This is a label! Extract matrix path and target/source info
-        QString labelType = pathParts[pathParts.size() - 2];  // "1" for targets, "2" for sources
-        int number = pathParts.last().toInt();
-        
-        // Matrix path is everything except the last 3 segments
-        QStringList matrixPathParts = pathParts.mid(0, pathParts.size() - 3);
-        QString matrixPath = matrixPathParts.join('.');
-        
-        MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
-        if (matrixWidget) {
-            if (labelType == "1") {
-                // Target label
-                Q_ASSERT(matrixWidget != nullptr);
-                matrixWidget->setTargetLabel(number, value);
-            } else if (labelType == "2") {
-                // Source label
-                Q_ASSERT(matrixWidget != nullptr);
-                matrixWidget->setSourceLabel(number, value);
-            }
-        }
-        
-        // Still create the tree item for the label (for completeness)
+    // Track stream identifiers for StreamCollection routing (used in onStreamValueReceived)
+    if (streamIdentifier > 0) {
+        m_streamIdToPath[streamIdentifier] = path;
     }
     
-    QTreeWidgetItem *item = findOrCreateTreeItem(path);
-    if (item) {
-        // Only log if this is a new parameter (no text set yet)
-        bool isNew = item->text(1).isEmpty();
-        
-        setItemDisplayName(item, identifier);
-        item->setText(1, "Parameter");
-        
-        // Store parameter metadata in item for delegate access (do this BEFORE icon check)
-        // Using custom roles (Qt::UserRole + N)
-        item->setData(0, Qt::UserRole, path);          // Path (for sending updates)
-        item->setData(0, Qt::UserRole + 1, type);       // TypeRole
-        item->setData(0, Qt::UserRole + 2, access);     // AccessRole
-        item->setData(0, Qt::UserRole + 3, minimum);    // MinimumRole
-        item->setData(0, Qt::UserRole + 4, maximum);    // MaximumRole
-        item->setData(0, Qt::UserRole + 5, enumOptions); // EnumOptionsRole
-        item->setData(0, Qt::UserRole + 9, streamIdentifier);  // StreamIdentifier (always store, even if -1)
-        
-        // Convert QList<int> to QList<QVariant> for storage
-        QList<QVariant> enumValuesVar;
-        for (int val : enumValues) {
-            enumValuesVar.append(val);
-        }
-        item->setData(0, Qt::UserRole + 6, QVariant::fromValue(enumValuesVar)); // EnumValuesRole
-        item->setData(0, Qt::UserRole + 8, isOnline);   // IsOnlineRole (after Matrix's UserRole + 7)
-        
-        // Set icon based on whether this is an audio meter
-        // Audio meters must have: streamIdentifier > 0, AND be numeric type (Integer=1 or Real=2)
-        bool isAudioMeter = (streamIdentifier > 0) && (type == 1 || type == 2);
-        if (isAudioMeter) {
-            item->setText(0, QString("📊 %1").arg(identifier));  // Meter icon
-            m_streamIdToPath[streamIdentifier] = path;  // Track for StreamCollection routing
-        } else {
-            item->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
-        }
-        
-        // LAZY LOADING: Parameters are leaf elements - never expandable
-        // No need to set child indicator policy
-        
-        // Remove "Loading..." placeholder when real children arrive
-        if (item->parent()) {
-            QTreeWidgetItem *parent = item->parent();
-            for (int i = 0; i < parent->childCount(); i++) {
-                QTreeWidgetItem *child = parent->child(i);
-                if (child->text(0) == "Loading..." && child->text(1).isEmpty()) {
-                    delete child;
-                    break;
-                }
-            }
-        }
-        
-        // Check if parameter is editable
-        // Access: 0=None, 1=ReadOnly, 2=WriteOnly, 3=ReadWrite
-        bool isEditable = (access == 2 || access == 3);  // WriteOnly or ReadWrite
-        
-        // Determine effective type
-        int effectiveType = type;
-        
-        // Check if widget already exists - if so, preserve its type
-        QWidget *existingWidget = m_treeWidget->itemWidget(item, 2);
-        QComboBox *existingCombo = qobject_cast<QComboBox*>(existingWidget);
-        QPushButton *existingButton = qobject_cast<QPushButton*>(existingWidget);
-        
-        if (existingCombo) {
-            // Combobox exists - it's either Boolean or Enum, preserve the widget
-            // Infer type from combobox contents if type is None
-            if (effectiveType == 0) {
-                if (existingCombo->count() == 2 && existingCombo->itemText(0) == "false") {
-                    effectiveType = 4;  // Boolean
-                    qDebug().noquote() << QString("Preserving Boolean widget for %1 (type was 0)").arg(path);
-                } else {
-                    effectiveType = 6;  // Enum
-                    qDebug().noquote() << QString("Preserving Enum widget for %1 (type was 0)").arg(path);
-                }
-            } else {
-                qDebug().noquote() << QString("Widget exists for %1, type=%2").arg(path).arg(effectiveType);
-            }
-        } else if (existingButton) {
-            // Button exists - it's a Trigger
-            if (effectiveType == 0) {
-                effectiveType = 5;  // Trigger
-            }
-        } else {
-            // No widget exists - infer type if not set (Type=0 means None)
-            if (effectiveType == 0) {
-                QString lowerValue = value.toLower();
-                if (lowerValue == "true" || lowerValue == "false") {
-                    effectiveType = 4;  // Boolean
-                    qDebug().noquote() << QString("No widget for %1, inferring Boolean from value '%2'").arg(path).arg(value);
-                } else {
-                    qDebug().noquote() << QString("No widget for %1, type=0, value='%2' (not boolean)").arg(path).arg(value);
-                }
-            }
-        }
-        
-        // HYBRID APPROACH: Use persistent widgets for Boolean/Enum/Trigger, delegates for others
-        if (effectiveType == 5) {
-            // Trigger: Show button (regardless of access - triggers are actions, not values)
-            
-            // Remove any existing widget first
-            QWidget *existingWidget = m_treeWidget->itemWidget(item, 2);
-            if (existingWidget) {
-                m_treeWidget->removeItemWidget(item, 2);
-                existingWidget->deleteLater();
-            }
-            
-            QPushButton *button = new QPushButton("Trigger");
-            button->setMaximumWidth(100);
-            
-            connect(button, &QPushButton::clicked, this, [this, path]() {
-                qInfo().noquote() << QString("Trigger invoked: %1").arg(path);
-                // For triggers, send an empty or null value (convention varies)
-                m_connection->sendParameterValue(path, "", 5);  // Type: Trigger
-            });
-            
-            // Set the widget in the tree
-            m_treeWidget->setItemWidget(item, 2, button);
-            
-            // Clear text (widget takes precedence)
-            item->setText(2, "");
-            
-            // Disable delegate editing for this item (button handles it)
-            item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-            
-        } else if (isEditable && ((effectiveType == 4) || (effectiveType == 6 && !enumOptions.isEmpty()))) {
-            // Boolean or Enum: Use persistent dropdown widget (only for editable parameters)
-            // Read-only booleans/enums will be shown as text below
-            
-            // Re-use the existing widget check from above
-            QComboBox *combo = existingCombo;
-            
-            if (combo) {
-                // Widget exists - just update the value
-                combo->blockSignals(true);
-                
-                if (effectiveType == 4) {
-                    // Boolean - update selection
-                    combo->setCurrentText(value.toLower());
-                } else if (effectiveType == 6) {
-                    // Enum - find and set current value
-                    int currentIdx = -1;
-                    for (int i = 0; i < enumOptions.size(); i++) {
-                        if (enumOptions[i] == value) {
-                            currentIdx = i;
-                            break;
-                        }
-                    }
-                    if (currentIdx >= 0) {
-                        combo->setCurrentIndex(currentIdx);
-                    }
-                }
-                
-                combo->blockSignals(false);
-                
-            } else {
-                // Widget doesn't exist - create new one
-                
-                // Remove any non-combobox widget first
-                if (existingWidget) {
-                    m_treeWidget->removeItemWidget(item, 2);
-                    existingWidget->deleteLater();
-                }
-                
-                combo = new QComboBox();
-                combo->setFrame(false);  // Frameless for cleaner look
-                
-                if (effectiveType == 4) {
-                    // Boolean parameter
-                    combo->addItem("false");
-                    combo->addItem("true");
-                    
-                    // Set initial value WITHOUT triggering signal
-                    combo->blockSignals(true);
-                    combo->setCurrentText(value.toLower());
-                    combo->blockSignals(false);
-                    
-                    // Connect AFTER setting initial value
-                    connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, path, combo](int) {
-                        QString newValue = combo->currentText();
-                        qDebug().noquote() << QString("Boolean changed: %1 → %2").arg(path).arg(newValue);
-                        m_connection->sendParameterValue(path, newValue, 4);  // Type: Boolean
-                    });
-                } else if (effectiveType == 6) {
-                    // Enum parameter
-                    combo->addItems(enumOptions);
-                    
-                    // Find current value in enum options
-                    int currentIdx = -1;
-                    for (int i = 0; i < enumOptions.size(); i++) {
-                        if (enumOptions[i] == value) {
-                            currentIdx = i;
-                            break;
-                        }
-                    }
-                    
-                    // Set initial value WITHOUT triggering signal
-                    if (currentIdx >= 0) {
-                        combo->blockSignals(true);
-                        combo->setCurrentIndex(currentIdx);
-                        combo->blockSignals(false);
-                    }
-                    
-                    // Connect AFTER setting initial value
-                    connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, path, enumValues, combo](int idx) {
-                        if (idx >= 0 && idx < enumValues.size()) {
-                            QString newValue = QString::number(enumValues[idx]);
-                            QString displayValue = combo->currentText();
-                            qDebug().noquote() << QString("Enum changed: %1 → '%2' (value %3)").arg(path).arg(displayValue).arg(newValue);
-                            m_connection->sendParameterValue(path, newValue, 6);  // Type: Enum
-                        }
-                    });
-                }
-                
-                // Set the widget in the tree
-                m_treeWidget->setItemWidget(item, 2, combo);
-                
-                // Clear text and reset color (widget takes precedence)
-                item->setText(2, "");
-                item->setForeground(2, QBrush(palette().color(QPalette::Text)));  // Reset to default color
-                
-                // Disable delegate editing for this item (widget handles it)
-                item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-            }
-            
-        } else {
-            // Integer/Real/String/ReadOnly: Use text + delegate (double-click to edit)
-            
-            // Remove any existing widget
-            QWidget *existingWidget = m_treeWidget->itemWidget(item, 2);
-            if (existingWidget) {
-                qDebug().noquote() << QString("REMOVING WIDGET for %1 (fell through to text branch, type=%2, access=%3)").arg(path).arg(effectiveType).arg(access);
-                m_treeWidget->removeItemWidget(item, 2);
-                existingWidget->deleteLater();
-            }
-            
-            item->setText(2, value);
-            
-            if (isEditable) {
-                item->setForeground(2, QBrush(QColor(30, 144, 255)));  // Bright blue (DodgerBlue)
-                // Enable delegate editing for the value column
-                item->setFlags(item->flags() | Qt::ItemIsEditable);
-            } else {
-                item->setForeground(2, QBrush(palette().color(QPalette::Text)));  // Default color
-                // Disable editing for read-only parameters
-                item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-            }
-        }
-        
-        if (isNew) {
-            qDebug().noquote() << QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access);
-        }
-        
-        // Update meter widget if this is the active meter parameter
-        if (m_activeMeter && m_activeMeter->parameterPath() == path) {
-            bool ok;
-            double numValue = value.toDouble(&ok);
-            if (ok) {
-                m_activeMeter->updateValue(numValue);
-            }
-        }
-        
-        // Batch updates for better responsiveness
-        m_itemsAddedSinceUpdate++;
-        if (m_itemsAddedSinceUpdate >= UPDATE_BATCH_SIZE) {
-            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-            m_itemsAddedSinceUpdate = 0;
-        }
-    }
+    // Delegate to TreeViewController for tree item creation
+    m_treeViewController->onParameterReceived(path, number, identifier, value, access, type, 
+                                             minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
 }
 
-void MainWindow::onMatrixReceived(const QString &path, int /* number */, const QString &identifier, 
+void MainWindow::onMatrixReceived(const QString &path, int number, const QString &identifier, 
                                    const QString &description, int type, int targetCount, int sourceCount)
 {
-    QTreeWidgetItem *item = findOrCreateTreeItem(path);
-    if (item) {
-        bool isNew = item->text(1).isEmpty();
-        
-        // For matrices: prefer description as display name (like nodes)
-        QString displayName = !description.isEmpty() ? description : identifier;
-        
-        setItemDisplayName(item, displayName);
-        item->setText(1, "Matrix");
-        item->setText(2, QString("%1×%2").arg(sourceCount).arg(targetCount));
-        item->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogDetailedView));
-        
-        // Store matrix path in user data for later retrieval
-        item->setData(0, Qt::UserRole, path);
-        item->setData(0, Qt::UserRole + 7, "Matrix");  // Store type as string for onTreeSelectionChanged
-        
-        // Create or update the matrix widget
-        MatrixWidget *matrixWidget = m_matrixWidgets.value(path, nullptr);
-        if (!matrixWidget) {
-            matrixWidget = new MatrixWidget(this);
-            m_matrixWidgets[path] = matrixWidget;
-            matrixWidget->setMatrixPath(path);
-            
-            connect(matrixWidget, &MatrixWidget::crosspointClicked,
-                    this, &MainWindow::onCrosspointClicked);
-            connect(matrixWidget, &MatrixWidget::crosspointToggleRequested,
-                    this, [this]() {
-                m_enableCrosspointsAction->trigger();
-            });
-            
-            // Auto-subscribe to matrix for connection updates
-            if (m_isConnected && !m_subscribedPaths.contains(path)) {
-                m_connection->subscribeToMatrix(path, true);
-                m_subscribedPaths.insert(path);
-                SubscriptionState state;
-                state.subscribedAt = QDateTime::currentDateTime();
-                state.autoSubscribed = true;
-                m_subscriptionStates[path] = state;
-            }
-        }
-        
-        matrixWidget->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
-        
-        if (isNew) {
-            qInfo().noquote() << QString("Matrix discovered: %1 (%2×%3)").arg(displayName).arg(sourceCount).arg(targetCount);
-            
-            // LAZY LOADING: Make matrices expandable - they can have label children
-            item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-        }
-    }
+    // Delegate to TreeViewController for tree item creation
+    m_treeViewController->onMatrixReceived(path, number, identifier, description, type, targetCount, sourceCount);
+    
+    // Delegate to MatrixManager for widget management  
+    m_matrixManager->onMatrixReceived(path, number, identifier, description, type, targetCount, sourceCount);
 }
 
 void MainWindow::onMatrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label)
 {
-    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
-    if (matrixWidget) {
-        matrixWidget->setTargetLabel(targetNumber, label);
-        // Don't rebuild for every label - too expensive and destroys button map
-        // The grid will be built when the matrix is first displayed
-    }
+    m_matrixManager->onMatrixTargetReceived(matrixPath, targetNumber, label);
 }
 
 void MainWindow::onMatrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label)
 {
-    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
-    if (matrixWidget) {
-        matrixWidget->setSourceLabel(sourceNumber, label);
-        // Don't rebuild for every label - too expensive and destroys button map
-        // The grid will be built when the matrix is first displayed
-    }
+    m_matrixManager->onMatrixSourceReceived(matrixPath, sourceNumber, label);
 }
 
 void MainWindow::onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition)
 {
-    QString dispositionStr;
-    switch (disposition) {
-        case 0: dispositionStr = "Tally"; break;
-        case 1: dispositionStr = "Modified"; break;
-        case 2: dispositionStr = "Pending"; break;
-        case 3: dispositionStr = "Locked"; break;
-        default: dispositionStr = QString("Unknown(%1)").arg(disposition); break;
-    }
-    
-    qDebug().noquote() << QString("Connection received - Matrix [%1], Target %2, Source %3, Connected: %4, Disposition: %5")
-               .arg(matrixPath).arg(targetNumber).arg(sourceNumber).arg(connected ? "YES" : "NO").arg(dispositionStr);
-    
-    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
-    if (matrixWidget) {
-        qDebug().noquote() << QString("Found matrix widget, calling setConnection()");
-        matrixWidget->setConnection(targetNumber, sourceNumber, connected, disposition);
-    } else {
-        qWarning().noquote() << QString("No matrix widget found for path [%1]").arg(matrixPath);
-    }
+    m_matrixManager->onMatrixConnectionReceived(matrixPath, targetNumber, sourceNumber, connected, disposition);
 }
 
 void MainWindow::onMatrixConnectionsCleared(const QString &matrixPath)
 {
-    qDebug().noquote() << QString("Clearing all connections for matrix %1").arg(matrixPath);
-    
-    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
-    if (matrixWidget) {
-        matrixWidget->clearConnections();
-        qDebug().noquote() << QString("Connections cleared for matrix %1").arg(matrixPath);
-    }
+    m_matrixManager->onMatrixConnectionsCleared(matrixPath);
 }
 
 void MainWindow::onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber)
 {
-    qDebug().noquote() << QString("Clearing connections for target %1 in matrix %2").arg(targetNumber).arg(matrixPath);
-    
-    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
-    if (matrixWidget) {
-        matrixWidget->clearTargetConnections(targetNumber);
-        qDebug().noquote() << QString("Target %1 connections cleared for matrix %2").arg(targetNumber).arg(matrixPath);
-    }
+    m_matrixManager->onMatrixTargetConnectionsCleared(matrixPath, targetNumber);
 }
-
-QTreeWidgetItem* MainWindow::findOrCreateTreeItem(const QString &path)
-{
-    if (path.isEmpty()) {
-        return nullptr;
-    }
-    
-    // Check cache first for O(1) lookup
-    if (m_pathToItem.contains(path)) {
-        return m_pathToItem[path];
-    }
-    
-    // Split path into segments
-    QStringList pathSegments = path.split('.', Qt::SkipEmptyParts);
-    
-    QTreeWidgetItem *parent = nullptr;
-    QString currentPath;
-    
-    // Walk through the tree, creating missing nodes
-    for (int i = 0; i < pathSegments.size(); ++i) {
-        if (!currentPath.isEmpty()) {
-            currentPath += ".";
-        }
-        currentPath += pathSegments[i];
-        
-        // Check cache for this intermediate path (O(1) lookup)
-        QTreeWidgetItem *found = m_pathToItem.value(currentPath, nullptr);
-        
-        // If not in cache, create it
-        if (!found) {
-            QStringList columns;
-            columns << pathSegments[i] << "" << "";
-            
-            if (parent == nullptr) {
-                found = new QTreeWidgetItem(m_treeWidget, columns);
-            } else {
-                found = new QTreeWidgetItem(parent, columns);
-            }
-            found->setData(0, Qt::UserRole, currentPath);
-            
-            // Add to cache immediately
-            m_pathToItem[currentPath] = found;
-        }
-        
-        parent = found;
-    }
-    
-    return parent;
-}
-
-
 void MainWindow::onTreeSelectionChanged()
 {
     QList<QTreeWidgetItem*> selected = m_treeWidget->selectedItems();
@@ -1200,7 +692,7 @@ void MainWindow::onTreeSelectionChanged()
     if (selected.isEmpty()) {
         m_pathLabel->setText("No selection");
         // Disable crosspoints when nothing is selected
-        if (m_crosspointsEnabled) {
+        if (m_activityTracker && m_activityTracker->isEnabled()) {
             m_enableCrosspointsAction->setChecked(false);
         }
         return;
@@ -1251,7 +743,7 @@ void MainWindow::onTreeSelectionChanged()
             }
             
             // Disable crosspoints if active
-            if (m_crosspointsEnabled) {
+            if (m_activityTracker && m_activityTracker->isEnabled()) {
                 m_enableCrosspointsAction->setChecked(false);
             }
             
@@ -1303,7 +795,7 @@ void MainWindow::onTreeSelectionChanged()
     }
     else if (type == "Matrix") {
         // Show matrix widget in property panel
-        MatrixWidget *matrixWidget = m_matrixWidgets.value(oidPath, nullptr);
+        MatrixWidget *matrixWidget = m_matrixManager->getMatrix(oidPath);
         if (matrixWidget) {
             // Rebuild the grid to ensure it's up to date with all labels and connections
             matrixWidget->rebuild();
@@ -1343,7 +835,7 @@ void MainWindow::onTreeSelectionChanged()
         MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);
         if (currentMatrix) {
             // Disable crosspoints BEFORE we remove the matrix widget
-            if (m_crosspointsEnabled) {
+            if (m_activityTracker && m_activityTracker->isEnabled()) {
                 m_enableCrosspointsAction->setChecked(false);
             }
             
@@ -1406,21 +898,22 @@ void MainWindow::appendToConsole(const QString &message)
     }
 }
 
+void MainWindow::onActivityTimeout()
+{
+    // Timeout reached - disable crosspoints
+    m_enableCrosspointsAction->setChecked(false);
+    logMessage("Crosspoint editing auto-disabled after 60 seconds of inactivity");
+}
+
 void MainWindow::onEnableCrosspointsToggled(bool enabled)
 {
-    m_crosspointsEnabled = enabled;
-    
     if (enabled) {
-        // Start activity timer (60 seconds)
-        resetActivityTimer();
-        m_tickTimer->start();
+        // Enable crosspoint editing via activity tracker
+        m_activityTracker->enable();
         logMessage("Crosspoint editing ENABLED (60 second timeout)");
     } else {
-        // Stop timers
-        m_activityTimer->stop();
-        m_tickTimer->stop();
-        m_activityTimeRemaining = 0;
-        updateCrosspointsStatusBar();
+        // Disable crosspoint editing via activity tracker
+        m_activityTracker->disable();
         logMessage("Crosspoint editing DISABLED");
     }
     
@@ -1429,52 +922,21 @@ void MainWindow::onEnableCrosspointsToggled(bool enabled)
     if (matrixWidget) {
         matrixWidget->setCrosspointsEnabled(enabled);
     }
-    
 }
 
-void MainWindow::onActivityTimeout()
-{
-    // Timeout reached - disable crosspoints
-    m_enableCrosspointsAction->setChecked(false);
-    logMessage("Crosspoint editing auto-disabled after 60 seconds of inactivity");
-}
-
-void MainWindow::onActivityTimerTick()
-{
-    if (m_crosspointsEnabled) {
-        m_activityTimeRemaining = m_activityTimer->remainingTime() / 1000; // Convert to seconds
-        updateCrosspointsStatusBar();
-    }
-}
-
-void MainWindow::resetActivityTimer()
-{
-    if (m_crosspointsEnabled) {
-        m_activityTimeRemaining = 60;
-        m_activityTimer->start();
-        updateCrosspointsStatusBar();
-    }
-}
-
-void MainWindow::updateCrosspointsStatusBar()
-{
-    if (m_crosspointsEnabled && m_activityTimeRemaining > 0) {
-        m_crosspointsStatusLabel->setText(QString("⚠ Crosspoints Enabled (%1s)").arg(m_activityTimeRemaining));
-        m_crosspointsStatusLabel->setVisible(true);
-    } else {
-        m_crosspointsStatusLabel->setVisible(false);
-    }
-}
 
 
 void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber)
 {
-    if (!m_crosspointsEnabled) {
+    if (!m_activityTracker || !m_activityTracker->isEnabled()) {
         qDebug().noquote() << "Crosspoint click ignored - crosspoints not enabled";
         return;
     }
     
-    MatrixWidget *matrixWidget = m_matrixWidgets.value(matrixPath, nullptr);
+    // Reset activity timer on crosspoint interaction
+    m_activityTracker->resetTimer();
+    
+    MatrixWidget *matrixWidget = m_matrixManager->getMatrix(matrixPath);
     if (!matrixWidget) {
         qWarning().noquote() << "Matrix widget not found for path: " + matrixPath;
         return;
@@ -1518,39 +980,18 @@ void MainWindow::onFunctionReceived(const QString &path, const QString &identifi
                                    const QStringList &argNames, const QList<int> &argTypes,
                                    const QStringList &resultNames, const QList<int> &resultTypes)
 {
-    QTreeWidgetItem *item = findOrCreateTreeItem(path);
-    if (item) {
-        bool isNew = item->text(1).isEmpty();
-        
-        QString displayName = !description.isEmpty() ? description : identifier;
-        
-        setItemDisplayName(item, displayName);
-        item->setText(1, "Function");
-        item->setText(2, "");
-        item->setIcon(0, QIcon::fromTheme("system-run", style()->standardIcon(QStyle::SP_CommandLink)));
-        
-        FunctionInfo info;
-        info.identifier = identifier;
-        info.description = description;
-        info.argNames = argNames;
-        info.argTypes = argTypes;
-        info.resultNames = resultNames;
-        info.resultTypes = resultTypes;
-        m_functions[path] = info;
-        
-        if (isNew) {
-            QString argsStr;
-            for (int i = 0; i < argNames.size(); i++) {
-                if (i > 0) argsStr += ", ";
-                argsStr += argNames[i];
-            }
-            qDebug().noquote() << QString("Function: %1 [%2] (%3 args)")
-                .arg(displayName).arg(path).arg(argNames.size());
-            
-            // LAZY LOADING: Functions are leaf elements - never expandable
-            // No need to set child indicator policy
-        }
-    }
+    // Store function metadata in MainWindow (for invocation dialog)
+    FunctionInfo info;
+    info.identifier = identifier;
+    info.description = description;
+    info.argNames = argNames;
+    info.argTypes = argTypes;
+    info.resultNames = resultNames;
+    info.resultTypes = resultTypes;
+    m_functions[path] = info;
+    
+    // Delegate tree item creation to TreeViewController
+    m_treeViewController->onFunctionReceived(path, identifier, description, argNames, argTypes, resultNames, resultTypes);
 }
 
 void MainWindow::onInvocationResultReceived(int invocationId, bool success, const QList<QVariant> &results)
@@ -1594,190 +1035,11 @@ void MainWindow::onStreamValueReceived(int streamIdentifier, double value)
         // Also update the tree item value for consistency
         QString path = m_streamIdToPath.value(streamIdentifier);
         if (!path.isEmpty()) {
-            QTreeWidgetItem *item = m_pathToItem.value(path);
+            QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
             if (item) {
                 item->setText(2, QString::number(value, 'f', 2));
             }
         }
-    }
-}
-
-void MainWindow::onItemExpanded(QTreeWidgetItem *item)
-{
-    QString path = item->data(0, Qt::UserRole).toString();
-    QString type = item->text(1);
-    
-    if (path.isEmpty()) {
-        return;
-    }
-    
-    // LAZY LOADING: Request children if not yet fetched
-    // Only for nodes that haven't been fetched and have no real children yet
-    if (type == "Node" && !m_fetchedPaths.contains(path)) {
-        m_fetchedPaths.insert(path);  // Mark as fetched to avoid duplicate requests
-        
-        // AUTO-REQUEST: Children are automatically requested when node is received
-        // So by the time user expands, children should already be present
-        // Only fetch if somehow we don't have children yet
-        bool needsToFetch = (item->childCount() == 0);
-        
-        if (needsToFetch) {
-            // Add "Loading..." placeholder
-            QTreeWidgetItem *loadingItem = new QTreeWidgetItem(item);
-            loadingItem->setText(0, "Loading...");
-            loadingItem->setText(1, "");  // No type
-            loadingItem->setForeground(0, QBrush(QColor("#888888")));
-            loadingItem->setFlags(Qt::ItemIsEnabled);  // Not selectable
-            
-            // OPTIMIZATION 1 & 3: Batch request with smart prefetching
-            // Request the expanded node's children AND prefetch sibling nodes
-            // to reduce latency when users explore horizontally after expanding
-            QStringList pathsToPrefetch;
-            pathsToPrefetch << path;  // The expanded node itself
-            
-            // Prefetch siblings (nodes at same level) - common navigation pattern
-            if (QTreeWidgetItem* parent = item->parent()) {
-                for (int i = 0; i < parent->childCount(); i++) {
-                    QTreeWidgetItem* sibling = parent->child(i);
-                    if (sibling != item) {  // Don't re-add the current item
-                        QString siblingPath = sibling->data(0, Qt::UserRole).toString();
-                        QString siblingType = sibling->text(1);
-                        // Only prefetch Node types that haven't been fetched yet
-                        if (siblingType == "Node" && !siblingPath.isEmpty() && 
-                            !m_fetchedPaths.contains(siblingPath)) {
-                            pathsToPrefetch << siblingPath;
-                            m_fetchedPaths.insert(siblingPath);  // Mark as fetched
-                        }
-                    }
-                }
-            }
-            
-            // Request children from device using batch API for efficiency
-            if (pathsToPrefetch.size() == 1) {
-                qDebug().noquote() << QString("Lazy loading: Requesting children for %1").arg(path);
-                m_connection->sendGetDirectoryForPath(path);
-            } else {
-                qDebug().noquote() << QString("Lazy loading: Batch requesting %1 paths (expanded: %2 + %3 siblings)")
-                    .arg(pathsToPrefetch.size()).arg(path).arg(pathsToPrefetch.size() - 1);
-                m_connection->sendBatchGetDirectory(pathsToPrefetch);
-            }
-        }
-    }
-    
-    // OPTIMIZATION: Batch subscription - collect all subscriptions needed
-    // Subscribe to the expanded item + all visible children in one network packet
-    QList<EmberConnection::SubscriptionRequest> subscriptions;
-    
-    // Subscribe to the expanded item itself
-    if (!m_subscribedPaths.contains(path) && !type.isEmpty()) {
-        subscriptions.append({path, type});
-        m_subscribedPaths.insert(path);
-        SubscriptionState state;
-        state.subscribedAt = QDateTime::currentDateTime();
-        state.autoSubscribed = true;
-        m_subscriptionStates[path] = state;
-    }
-    
-    // Subscribe to all immediate children (they're now visible)
-    for (int i = 0; i < item->childCount(); i++) {
-        QTreeWidgetItem *child = item->child(i);
-        QString childPath = child->data(0, Qt::UserRole).toString();
-        QString childType = child->text(1);
-        
-        if (!childPath.isEmpty() && !childType.isEmpty() && 
-            !m_subscribedPaths.contains(childPath) &&
-            childType != "Loading...") {  // Skip placeholder items
-            
-            subscriptions.append({childPath, childType});
-            m_subscribedPaths.insert(childPath);
-            SubscriptionState state;
-            state.subscribedAt = QDateTime::currentDateTime();
-            state.autoSubscribed = true;
-            m_subscriptionStates[childPath] = state;
-        }
-    }
-    
-    // Send all subscriptions in one batch
-    if (!subscriptions.isEmpty()) {
-        if (subscriptions.size() == 1) {
-            // Single subscription - use existing methods for code simplicity
-            const auto& req = subscriptions.first();
-            if (req.type == "Node") {
-                m_connection->subscribeToNode(req.path, true);
-            } else if (req.type == "Parameter") {
-                m_connection->subscribeToParameter(req.path, true);
-            } else if (req.type == "Matrix") {
-                m_connection->subscribeToMatrix(req.path, true);
-            }
-        } else {
-            // Multiple subscriptions - use batch API for efficiency
-            qDebug().noquote() << QString("Batch subscribing to %1 paths (expanded: %2)")
-                .arg(subscriptions.size()).arg(path);
-            m_connection->sendBatchSubscribe(subscriptions);
-        }
-    }
-}
-
-void MainWindow::onItemCollapsed(QTreeWidgetItem *item)
-{
-    QString path = item->data(0, Qt::UserRole).toString();
-    QString type = item->text(1);
-    
-    if (path.isEmpty() || !m_subscribedPaths.contains(path)) {
-        return;  // Not subscribed
-    }
-    
-    // Only auto-unsubscribe if it was auto-subscribed
-    if (m_subscriptionStates.contains(path) && m_subscriptionStates[path].autoSubscribed) {
-        if (type == "Node") {
-            m_connection->unsubscribeFromNode(path);
-        } else if (type == "Parameter") {
-            m_connection->unsubscribeFromParameter(path);
-        } else if (type == "Matrix") {
-            m_connection->unsubscribeFromMatrix(path);
-        }
-        
-        m_subscribedPaths.remove(path);
-        m_subscriptionStates.remove(path);
-    }
-}
-
-void MainWindow::setItemDisplayName(QTreeWidgetItem *item, const QString &baseName)
-{
-    item->setText(0, baseName);
-}
-
-void MainWindow::subscribeToExpandedItems()
-{
-    // OPTIMIZATION: Tree updates no longer disabled with lazy loading
-    // This function now only handles subscriptions for expanded items
-    // Using batch subscription for better performance
-    
-    QList<EmberConnection::SubscriptionRequest> subscriptions;
-    
-    QTreeWidgetItemIterator it(m_treeWidget);
-    while (*it) {
-        if ((*it)->isExpanded()) {
-            QString path = (*it)->data(0, Qt::UserRole).toString();
-            QString type = (*it)->text(1);
-            
-            if (!path.isEmpty() && !type.isEmpty() && !m_subscribedPaths.contains(path)) {
-                subscriptions.append({path, type});
-                m_subscribedPaths.insert(path);
-                
-                SubscriptionState state;
-                state.subscribedAt = QDateTime::currentDateTime();
-                state.autoSubscribed = true;
-                m_subscriptionStates[path] = state;
-            }
-        }
-        ++it;
-    }
-    
-    if (!subscriptions.isEmpty()) {
-        qDebug().noquote() << QString("Batch subscribing to %1 expanded items after tree population")
-            .arg(subscriptions.size());
-        m_connection->sendBatchSubscribe(subscriptions);
     }
 }
 
@@ -1800,7 +1062,7 @@ void MainWindow::onSaveEmberDevice()
     
     if (reply == QMessageBox::Yes) {
         // Get all current tree items
-        QStringList allPaths = getAllTreeItemPaths();
+        QStringList allPaths = m_treeViewController->getAllTreeItemPaths();
         
         if (allPaths.isEmpty()) {
             QMessageBox::warning(this, "No Data", "No device data to save.");
@@ -1965,7 +1227,7 @@ DeviceSnapshot MainWindow::captureSnapshot()
             
         } else if (type == "Matrix") {
             // Get matrix widget to extract connection data
-            MatrixWidget* matrixWidget = m_matrixWidgets.value(path, nullptr);
+            MatrixWidget* matrixWidget = m_matrixManager->getMatrix(path);
             if (matrixWidget) {
                 MatrixData matrixData;
                 matrixData.path = path;
@@ -2278,27 +1540,6 @@ void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QStri
     // Connect
     qInfo() << "Connecting to saved connection:" << name << "(" << host << ":" << port << ")";
     onConnectClicked();
-}
-
-QStringList MainWindow::getAllTreeItemPaths()
-{
-    QStringList paths;
-    
-    // Iterate through all items in the tree
-    QTreeWidgetItemIterator it(m_treeWidget);
-    while (*it) {
-        QString path = (*it)->data(0, Qt::UserRole).toString();
-        QString type = (*it)->text(1);
-        
-        if (!path.isEmpty() && !type.isEmpty()) {
-            // Format: "path|type" for EmberConnection to filter nodes
-            paths.append(QString("%1|%2").arg(path).arg(type));
-        }
-        
-        ++it;
-    }
-    
-    return paths;
 }
 
 void MainWindow::onTreeFetchProgress(int fetchedCount, int totalCount)
