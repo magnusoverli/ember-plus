@@ -212,6 +212,7 @@ add_library(EmberViewerLib STATIC
     src/MatrixManager.cpp
     src/CrosspointActivityTracker.cpp
     src/SnapshotManager.cpp
+    src/FunctionInvoker.cpp
     ${PLATFORM_UPDATE_SOURCES}
     include/MatrixWidget.h
     include/MeterWidget.h
@@ -228,6 +229,7 @@ add_library(EmberViewerLib STATIC
     include/MatrixManager.h
     include/CrosspointActivityTracker.h
     include/SnapshotManager.h
+    include/FunctionInvoker.h
 )
 
 # Make sure version is updated before building library
@@ -254,6 +256,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CrosspointActivityTracker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SnapshotManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FunctionInvoker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
@@ -272,6 +275,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MatrixManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/CrosspointActivityTracker.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/SnapshotManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/FunctionInvoker.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LinuxUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/WindowsUpdateManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MacUpdateManager.h
