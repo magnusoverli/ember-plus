@@ -112,6 +112,7 @@ private:
     
     // Protocol layer handlers
     void onS101MessageReceived(const QByteArray& emberData);
+    void onKeepAliveReceived();
     void onParserNodeReceived(const EmberData::NodeInfo& node);
     void onParserParameterReceived(const EmberData::ParameterInfo& param);
     void onParserMatrixReceived(const EmberData::MatrixInfo& matrix);

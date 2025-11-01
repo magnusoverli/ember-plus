@@ -38,6 +38,9 @@ signals:
     // Emitted when a complete S101 message is decoded
     void messageReceived(const QByteArray& emberData);
     
+    // Emitted when a KeepAlive request is received
+    void keepAliveReceived();
+    
     // Emitted on protocol errors
     void protocolError(const QString& error);
 

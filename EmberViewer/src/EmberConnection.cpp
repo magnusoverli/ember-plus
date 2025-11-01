@@ -75,6 +75,7 @@ EmberConnection::EmberConnection(QObject *parent)
     
     // Protocol layer connections: Socket -> S101Protocol -> GlowParser -> EmberConnection
     connect(m_s101Protocol, &S101Protocol::messageReceived, this, &EmberConnection::onS101MessageReceived);
+    connect(m_s101Protocol, &S101Protocol::keepAliveReceived, this, &EmberConnection::onKeepAliveReceived);
     connect(m_s101Protocol, &S101Protocol::protocolError, this, [this](const QString& error) {
         qCritical().noquote() << "S101 protocol error:" << error;
         disconnect();
@@ -390,6 +391,15 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
         qDebug().noquote() << "Initial tree populated, emitting treePopulated signal";
         emit treePopulated();
     }
+}
+
+void EmberConnection::onKeepAliveReceived()
+{
+    // Device sent a KeepAlive request - send response to maintain connection
+    qDebug() << "[EmberConnection] Sending KeepAlive response";
+    QByteArray response = m_s101Protocol->encodeKeepAliveResponse();
+    m_socket->write(response);
+    m_socket->flush();
 }
 
 void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)

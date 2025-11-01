@@ -36,10 +36,10 @@ void S101Protocol::feedData(const QByteArray& data)
                 return true;
             
             // Parse S101 frame header with bounds checking
-            // Minimum header: slot(1) + message(1) + command(1) = 3 bytes minimum for any message
+            // All S101 frames have: slot(1) + message(1) + command(1) + version(1) + flags(1) + dtd(1) = 6 bytes minimum
             auto remaining = std::distance(first, last);
-            if (remaining < 3) {
-                qWarning() << "[S101] Frame too short:" << remaining << "bytes (need at least 3)";
+            if (remaining < 6) {
+                qWarning() << "[S101] Frame too short:" << remaining << "bytes (need at least 6 for header)";
                 return true;  // Skip malformed frame but continue processing
             }
             
@@ -47,12 +47,6 @@ void S101Protocol::feedData(const QByteArray& data)
             auto message = *first++;
             
             if (message == libs101::MessageType::EmBER) {
-                // EmBER messages need: command(1) + version(1) + flags(1) + dtd(1) + appBytes(1) = 5 more bytes minimum
-                if (std::distance(first, last) < 5) {
-                    qWarning() << "[S101] EmBER frame too short:" << std::distance(first, last) << "bytes after message type";
-                    return true;
-                }
-                
                 auto command = *first++;
                 first++;  // Skip version
                 auto flags = libs101::PackageFlag(*first++);
@@ -90,8 +84,9 @@ void S101Protocol::feedData(const QByteArray& data)
                     }
                 }
                 else if (command == libs101::CommandType::KeepAliveRequest) {
-                    // Keep-alive request received - acknowledgment handled elsewhere if needed
+                    // Keep-alive request received - emit signal for response
                     qDebug() << "[S101] KeepAlive request received";
+                    emit self->keepAliveReceived();
                 }
             }
             
