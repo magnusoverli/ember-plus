@@ -175,7 +175,7 @@ void TreeViewController::onParameterReceived(const QString &path, int /* number 
         // Audio meters must have: streamIdentifier > 0, AND be numeric type (Integer=1 or Real=2)
         bool isAudioMeter = (streamIdentifier > 0) && (type == 1 || type == 2);
         if (isAudioMeter) {
-            item->setText(0, QString("📊 %1").arg(identifier));  // Meter icon
+            item->setIcon(0, m_treeWidget->style()->standardIcon(QStyle::SP_MediaVolume));
         } else {
             item->setIcon(0, m_treeWidget->style()->standardIcon(QStyle::SP_FileIcon));
         }

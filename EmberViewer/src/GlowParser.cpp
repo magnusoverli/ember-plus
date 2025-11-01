@@ -737,18 +737,25 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
             info.streamIdentifier = streamEntry->streamIdentifier();
             
             // Extract numeric value from Glow::Value
+            // IMPORTANT: Per Ember+ spec, GlowStreamEntry values are in 1/32 dB steps
+            // Must convert to actual dB by dividing by 32.0
             auto value = streamEntry->value();
+            double rawValue = 0.0;
+            
             switch (value.type().value()) {
                 case libember::glow::ParameterType::Integer:
-                    info.value = static_cast<double>(value.toInteger());
+                    rawValue = static_cast<double>(value.toInteger());
                     break;
                 case libember::glow::ParameterType::Real:
-                    info.value = value.toReal();
+                    rawValue = value.toReal();
                     break;
                 default:
-                    info.value = 0.0;
+                    rawValue = 0.0;
                     break;
             }
+            
+            // Convert from 1/32 dB steps to dB
+            info.value = rawValue / 32.0;
             
             emit streamValueReceived(info);
         }
