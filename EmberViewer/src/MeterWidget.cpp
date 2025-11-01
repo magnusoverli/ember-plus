@@ -39,15 +39,20 @@ MeterWidget::MeterWidget(QWidget *parent)
     
     mainLayout->addLayout(headerLayout);
     
-    // Meter type selector
+    // Add stretch to push meter bar to center and dropdown to bottom
+    mainLayout->addStretch();
+    
+    // Meter type selector at the bottom
     QHBoxLayout *typeLayout = new QHBoxLayout();
     QLabel *typeLabel = new QLabel("Meter Type:", this);
+    typeLabel->setStyleSheet("font-size: 9pt;");
     m_meterTypeCombo = new QComboBox(this);
     m_meterTypeCombo->addItem("VU Meter (300ms)");       // Index 0 = VU_METER
     m_meterTypeCombo->addItem("Digital Peak (Instant)"); // Index 1 = DIGITAL_PEAK
     m_meterTypeCombo->addItem("DIN PPM (10ms/1.5s)");    // Index 2 = DIN_PPM
     m_meterTypeCombo->addItem("BBC PPM (4ms/2.8s)");     // Index 3 = BBC_PPM
     m_meterTypeCombo->setCurrentIndex(0);  // Start with VU Meter
+    m_meterTypeCombo->setStyleSheet("font-size: 9pt;");
     connect(m_meterTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MeterWidget::onMeterTypeChanged);
     
@@ -56,7 +61,6 @@ MeterWidget::MeterWidget(QWidget *parent)
     typeLayout->addStretch();
     
     mainLayout->addLayout(typeLayout);
-    mainLayout->addStretch();
     
     
     m_updateTimer = new QTimer(this);
