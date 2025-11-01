@@ -1084,14 +1084,8 @@ void MainWindow::onStreamValueReceived(int streamIdentifier, double value)
     if (m_activeMeter && m_activeMeter->streamIdentifier() == streamIdentifier) {
         m_activeMeter->updateValue(value);
         
-        
-        QString path = m_streamIdToPath.value(streamIdentifier);
-        if (!path.isEmpty()) {
-            QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
-            if (item) {
-                item->setText(2, QString::number(value, 'f', 2));
-            }
-        }
+        // Don't update tree value for audio meter parameters
+        // The meter widget displays the value instead
     }
 }
 

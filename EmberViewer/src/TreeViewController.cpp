@@ -196,8 +196,12 @@ void TreeViewController::onParameterReceived(const QString &path, int , const QS
         }
         
         
-        
-        item->setText(2, value);
+        // Don't display value in tree for audio meter parameters
+        if (!isAudioMeter) {
+            item->setText(2, value);
+        } else {
+            item->setText(2, "");  // Clear value column for audio meters
+        }
         
         if (isNew) {
             qDebug().noquote() << QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access);
