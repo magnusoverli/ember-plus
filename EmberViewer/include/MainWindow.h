@@ -49,6 +49,9 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    
+    bool isQtInternalLoggingEnabled() const { return m_enableQtInternalLogging; }
+    void setQtInternalLoggingEnabled(bool enabled);
 
 public slots:
     void appendToConsole(const QString &message);
@@ -141,6 +144,7 @@ private:
     // State
     bool m_isConnected;
     bool m_showOidPath;
+    bool m_enableQtInternalLogging;
 
     // Crosspoint editing
     QAction *m_enableCrosspointsAction;

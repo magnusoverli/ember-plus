@@ -22,6 +22,7 @@
 static QFile *logFile = nullptr;
 static QMutex logMutex;
 static MainWindow *globalMainWindow = nullptr;
+static bool enableQtInternalLogging = false;
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -39,17 +40,20 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
     QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
     QString logLine = QString("[%1] [%2] %3").arg(timestamp).arg(level).arg(msg);
     
-    // LOG FILE: Write ALL messages (Debug, Info, Warning, Error, Fatal)
-    if (logFile && logFile->isOpen()) {
-        QTextStream stream(logFile);
-        stream << logLine << "\n";
-        stream.flush();
-    }
-    
     // Determine if this is an application message or a Qt internal message
     // Use Qt's category system (proper way to filter)
     QString category = context.category ? QString(context.category) : QString("default");
     bool isQtInternal = category.startsWith("qt.");
+    
+    // Check if we should filter out Qt internal messages
+    bool shouldLog = !isQtInternal || (globalMainWindow && globalMainWindow->isQtInternalLoggingEnabled());
+    
+    // LOG FILE: Write filtered messages (Debug, Info, Warning, Error, Fatal)
+    if (logFile && logFile->isOpen() && shouldLog) {
+        QTextStream stream(logFile);
+        stream << logLine << "\n";
+        stream.flush();
+    }
     
     // GUI CONSOLE: Show WARNING+ application messages only (filter Qt internals and Debug/Info)
     if (globalMainWindow && type >= QtWarningMsg && !isQtInternal) {
@@ -57,8 +61,8 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
         QMetaObject::invokeMethod(globalMainWindow, "appendToConsole", Qt::DirectConnection, Q_ARG(QString, guiMessage));
     }
     
-    // STDERR: Write INFO+ for all messages (including Qt, for complete terminal output)
-    if (type >= QtInfoMsg) {
+    // STDERR: Write INFO+ filtered messages
+    if (type >= QtInfoMsg && shouldLog) {
         fprintf(stderr, "%s\n", logLine.toUtf8().constData());
     }
 }

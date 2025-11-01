@@ -92,6 +92,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_activityTracker(nullptr)
     , m_isConnected(false)
     , m_showOidPath(false)
+    , m_enableQtInternalLogging(false)
 {
     // Initialize connection manager and load saved connections early
     // (needed before createDockWindows to integrate into layout properly)
@@ -444,6 +445,13 @@ void MainWindow::setupMenu()
         QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
         QDesktopServices::openUrl(QUrl::fromLocalFile(logDir));
     });
+    
+    toolsMenu->addSeparator();
+    
+    QAction *qtInternalLoggingAction = toolsMenu->addAction("Enable &Qt Internal Logging");
+    qtInternalLoggingAction->setCheckable(true);
+    qtInternalLoggingAction->setChecked(m_enableQtInternalLogging);
+    connect(qtInternalLoggingAction, &QAction::toggled, this, &MainWindow::setQtInternalLoggingEnabled);
     
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
@@ -897,6 +905,9 @@ void MainWindow::loadSettings()
     
     m_hostEdit->setText(host);
     m_portSpin->setValue(port);
+    
+    // Load Qt internal logging setting (defaults to false/disabled)
+    m_enableQtInternalLogging = settings.value("logging/qtInternal", false).toBool();
 }
 
 void MainWindow::saveSettings()
@@ -907,8 +918,24 @@ void MainWindow::saveSettings()
     settings.setValue("connection/host", m_hostEdit->text());
     settings.setValue("connection/port", m_portSpin->value());
     
+    // Save Qt internal logging setting
+    settings.setValue("logging/qtInternal", m_enableQtInternalLogging);
+    
     // Force immediate write to disk
     settings.sync();
+}
+
+void MainWindow::setQtInternalLoggingEnabled(bool enabled)
+{
+    m_enableQtInternalLogging = enabled;
+    saveSettings();
+    
+    // Log the change
+    if (enabled) {
+        qInfo() << "Qt internal logging enabled";
+    } else {
+        qInfo() << "Qt internal logging disabled";
+    }
 }
 
 void MainWindow::logMessage(const QString &message)
