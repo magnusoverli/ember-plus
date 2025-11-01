@@ -45,7 +45,6 @@ private slots:
 
 private:
     void drawMeter(QPainter &painter);
-    void updatePeakHold();
     double normalizeValue(double value) const;
     QColor getColorForLevel(double normalizedLevel) const;
     QString formatValue(double value) const;
@@ -58,15 +57,14 @@ private:
     double m_maxValue;
     
     
-    double m_currentValue;
-    double m_displayValue;  
+    double m_targetValue;       // Latest value from provider
+    double m_displayValue;      // Current display value with ballistics applied
     double m_peakValue;
     QDateTime m_peakTime;
     
     
     QTimer *m_updateTimer;
-    bool m_needsRedraw;
-    qint64 m_lastUpdateTime;
+    qint64 m_lastRenderTime;    // For calculating dt in time-domain ballistics
     
     
     static constexpr int METER_WIDTH = 40;
@@ -74,7 +72,11 @@ private:
     static constexpr int PEAK_HOLD_MS = 2000;  
     static constexpr int UPDATE_INTERVAL_MS = 20;  
     static constexpr double GREEN_THRESHOLD = 0.75;   
-    static constexpr double YELLOW_THRESHOLD = 0.90;  
+    static constexpr double YELLOW_THRESHOLD = 0.90;
+    
+    // Time constants for DIN PPM ballistics (in seconds)
+    static constexpr double RISE_TIME_CONSTANT = 0.010;   // 10ms rise to 99% (5 * tau)
+    static constexpr double FALL_TIME_CONSTANT = 1.500;   // 1.5s fall time  
     
     
     

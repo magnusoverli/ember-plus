@@ -17,11 +17,10 @@ MeterWidget::MeterWidget(QWidget *parent)
     , m_streamIdentifier(-1)
     , m_minValue(0.0)
     , m_maxValue(100.0)
-    , m_currentValue(0.0)
+    , m_targetValue(0.0)
     , m_displayValue(0.0)
     , m_peakValue(0.0)
-    , m_needsRedraw(false)
-    , m_lastUpdateTime(0)
+    , m_lastRenderTime(QDateTime::currentMSecsSinceEpoch())
 {
     
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -61,7 +60,7 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
     m_maxValue = maxValue;
     
     
-    m_currentValue = minValue;
+    m_targetValue = minValue;
     m_displayValue = minValue;
     m_peakValue = minValue;
     
@@ -70,51 +69,48 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
 
 void MeterWidget::updateValue(double value)
 {
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    // Store target value - no processing, ballistics handled in onUpdateTimer()
+    m_targetValue = value;
     
-    
-    if (now - m_lastUpdateTime < UPDATE_INTERVAL_MS / 2) {
-        
-        m_currentValue = value;
-        m_needsRedraw = true;
-        return;
-    }
-    
-    m_currentValue = value;
-    m_lastUpdateTime = now;
-    m_needsRedraw = true;
-    
-    
-    updatePeakHold();
-    
-    
+    // Update text label immediately for quick feedback
     m_valueLabel->setText(formatValue(value));
+    
+    // Update peak hold if this is a new peak
+    if (value > m_peakValue) {
+        m_peakValue = value;
+        m_peakTime = QDateTime::currentDateTime();
+    }
 }
 
 void MeterWidget::onUpdateTimer()
 {
-    if (m_needsRedraw) {
-        
-        double alpha = 0.3;  
-        m_displayValue = alpha * m_currentValue + (1.0 - alpha) * m_displayValue;
-        
-        update();  
-        m_needsRedraw = false;
+    // Calculate time elapsed since last render
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    double dt = (now - m_lastRenderTime) / 1000.0;  // Convert to seconds
+    m_lastRenderTime = now;
+    
+    // Guard against extreme dt values
+    if (dt < 0.001) dt = 0.001;  // Minimum 1ms
+    if (dt > 1.0) dt = 1.0;      // Maximum 1 second (app pause/suspend)
+    
+    // Time-domain exponential approach to target
+    double tau;
+    if (m_targetValue > m_displayValue) {
+        // Rising: Fast response for peaks (DIN PPM: 10ms rise time)
+        tau = RISE_TIME_CONSTANT;
+    } else {
+        // Falling: Slow decay (DIN PPM: 1.5s fall time)
+        tau = FALL_TIME_CONSTANT;
     }
     
+    // Calculate alpha based on actual elapsed time
+    double alpha = 1.0 - std::exp(-dt / tau);
     
-    if (m_peakTime.isValid() && 
-        m_peakTime.msecsTo(QDateTime::currentDateTime()) > PEAK_HOLD_MS) {
-        update();  
-    }
-}
-
-void MeterWidget::updatePeakHold()
-{
-    if (m_currentValue > m_peakValue) {
-        m_peakValue = m_currentValue;
-        m_peakTime = QDateTime::currentDateTime();
-    }
+    // Exponential approach to target
+    m_displayValue += alpha * (m_targetValue - m_displayValue);
+    
+    // Always trigger repaint
+    update();
 }
 
 double MeterWidget::normalizeValue(double value) const
