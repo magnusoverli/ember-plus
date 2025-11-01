@@ -366,7 +366,8 @@ void EmberConnection::onDataReceived()
         return;
     }
     
-    qInfo().noquote() << QString("*** Received %1 bytes from device ***").arg(data.size());
+    // Don't log every receive at info level - S101Protocol will log important messages
+    qDebug().noquote() << QString("Received %1 bytes from socket").arg(data.size());
     
     // Feed data to S101 protocol layer
     m_s101Protocol->feedData(data);
@@ -396,10 +397,11 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
 void EmberConnection::onKeepAliveReceived()
 {
     // Device sent a KeepAlive request - send response to maintain connection
-    qDebug() << "[EmberConnection] Sending KeepAlive response";
+    qDebug() << "[EmberConnection] Sending KeepAlive RESPONSE to device";
     QByteArray response = m_s101Protocol->encodeKeepAliveResponse();
-    m_socket->write(response);
+    qint64 bytesWritten = m_socket->write(response);
     m_socket->flush();
+    qDebug() << "[EmberConnection] KeepAlive response sent:" << bytesWritten << "bytes";
 }
 
 void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)

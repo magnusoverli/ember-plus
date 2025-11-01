@@ -56,7 +56,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
     }
     
     // GUI CONSOLE: Show WARNING+ application messages only (filter Qt internals and Debug/Info)
-    if (globalMainWindow && type >= QtWarningMsg && !isQtInternal) {
+    if (globalMainWindow && type >= QtWarningMsg && type != QtInfoMsg && !isQtInternal) {
         QString guiMessage = QString("[%1] %2").arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz")).arg(msg);
         QMetaObject::invokeMethod(globalMainWindow, "appendToConsole", Qt::DirectConnection, Q_ARG(QString, guiMessage));
     }

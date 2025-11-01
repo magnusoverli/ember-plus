@@ -36,10 +36,10 @@ void S101Protocol::feedData(const QByteArray& data)
                 return true;
             
             // Parse S101 frame header with bounds checking
-            // All S101 frames have: slot(1) + message(1) + command(1) + version(1) + flags(1) + dtd(1) = 6 bytes minimum
+            // Minimum: slot(1) + message(1) + command(1) + version(1) = 4 bytes
             auto remaining = std::distance(first, last);
-            if (remaining < 6) {
-                qWarning() << "[S101] Frame too short:" << remaining << "bytes (need at least 6 for header)";
+            if (remaining < 4) {
+                qWarning() << "[S101] Frame too short:" << remaining << "bytes (need at least 4)";
                 return true;  // Skip malformed frame but continue processing
             }
             
@@ -49,10 +49,16 @@ void S101Protocol::feedData(const QByteArray& data)
             if (message == libs101::MessageType::EmBER) {
                 auto command = *first++;
                 first++;  // Skip version
-                auto flags = libs101::PackageFlag(*first++);
-                first++;  // Skip DTD
                 
                 if (command == libs101::CommandType::EmBER) {
+                    // EmBER data command has: flags(1) + dtd(1) + appBytes(1+) + payload
+                    if (std::distance(first, last) < 2) {
+                        qWarning() << "[S101] EmBER command frame too short";
+                        return true;
+                    }
+                    
+                    auto flags = libs101::PackageFlag(*first++);
+                    first++;  // Skip DTD
                     // Check bounds before reading appBytes
                     if (first == last) {
                         qWarning() << "[S101] Unexpected end of frame at appBytes field";
@@ -85,8 +91,16 @@ void S101Protocol::feedData(const QByteArray& data)
                 }
                 else if (command == libs101::CommandType::KeepAliveRequest) {
                     // Keep-alive request received - emit signal for response
-                    qDebug() << "[S101] KeepAlive request received";
+                    qDebug() << "[S101] KeepAlive REQUEST received from device";
                     emit self->keepAliveReceived();
+                }
+                else if (command == libs101::CommandType::KeepAliveResponse) {
+                    // Keep-alive response received (we don't send requests, but log if we get one)
+                    qDebug() << "[S101] KeepAlive RESPONSE received (unexpected)";
+                }
+                else {
+                    // Unknown command type
+                    qDebug() << "[S101] Unknown command type:" << static_cast<int>(command);
                 }
             }
             
