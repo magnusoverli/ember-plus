@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QComboBox>
 #include <cmath>
 
 MeterWidget::MeterWidget(QWidget *parent)
@@ -21,6 +22,7 @@ MeterWidget::MeterWidget(QWidget *parent)
     , m_displayValue(0.0)
     , m_peakValue(0.0)
     , m_lastRenderTime(QDateTime::currentMSecsSinceEpoch())
+    , m_meterType(MeterType::VU_METER)  // Default to VU meter (similar to old behavior)
 {
     
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -36,6 +38,24 @@ MeterWidget::MeterWidget(QWidget *parent)
     headerLayout->addStretch();
     
     mainLayout->addLayout(headerLayout);
+    
+    // Meter type selector
+    QHBoxLayout *typeLayout = new QHBoxLayout();
+    QLabel *typeLabel = new QLabel("Meter Type:", this);
+    m_meterTypeCombo = new QComboBox(this);
+    m_meterTypeCombo->addItem("VU Meter (300ms)");       // Index 0 = VU_METER
+    m_meterTypeCombo->addItem("Digital Peak (Instant)"); // Index 1 = DIGITAL_PEAK
+    m_meterTypeCombo->addItem("DIN PPM (10ms/1.5s)");    // Index 2 = DIN_PPM
+    m_meterTypeCombo->addItem("BBC PPM (4ms/2.8s)");     // Index 3 = BBC_PPM
+    m_meterTypeCombo->setCurrentIndex(0);  // Start with VU Meter
+    connect(m_meterTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MeterWidget::onMeterTypeChanged);
+    
+    typeLayout->addWidget(typeLabel);
+    typeLayout->addWidget(m_meterTypeCombo);
+    typeLayout->addStretch();
+    
+    mainLayout->addLayout(typeLayout);
     mainLayout->addStretch();
     
     
@@ -93,14 +113,18 @@ void MeterWidget::onUpdateTimer()
     if (dt < 0.001) dt = 0.001;  // Minimum 1ms
     if (dt > 1.0) dt = 1.0;      // Maximum 1 second (app pause/suspend)
     
+    // Get time constants for current meter type
+    double riseTime, fallTime;
+    getMeterConstants(m_meterType, riseTime, fallTime);
+    
     // Time-domain exponential approach to target
     double tau;
     if (m_targetValue > m_displayValue) {
-        // Rising: Fast response for peaks (DIN PPM: 10ms rise time)
-        tau = RISE_TIME_CONSTANT;
+        // Rising: Fast response for peaks
+        tau = riseTime;
     } else {
-        // Falling: Slow decay (DIN PPM: 1.5s fall time)
-        tau = FALL_TIME_CONSTANT;
+        // Falling: Decay time
+        tau = fallTime;
     }
     
     // Calculate alpha based on actual elapsed time
@@ -111,6 +135,52 @@ void MeterWidget::onUpdateTimer()
     
     // Always trigger repaint
     update();
+}
+
+void MeterWidget::onMeterTypeChanged(int index)
+{
+    // Map combo box index to MeterType enum
+    switch (index) {
+        case 0: m_meterType = MeterType::VU_METER; break;
+        case 1: m_meterType = MeterType::DIGITAL_PEAK; break;
+        case 2: m_meterType = MeterType::DIN_PPM; break;
+        case 3: m_meterType = MeterType::BBC_PPM; break;
+        default: m_meterType = MeterType::VU_METER; break;
+    }
+}
+
+void MeterWidget::getMeterConstants(MeterType type, double &riseTime, double &fallTime) const
+{
+    switch (type) {
+        case MeterType::DIN_PPM:
+            // DIN 45406 - Fast attack, slow decay
+            riseTime = 0.010;   // 10ms
+            fallTime = 1.500;   // 1.5s
+            break;
+            
+        case MeterType::BBC_PPM:
+            // IEC 60268-10 Type IIa - Very fast attack, slower decay
+            riseTime = 0.004;   // 4ms
+            fallTime = 2.800;   // 2.8s
+            break;
+            
+        case MeterType::VU_METER:
+            // ANSI C16.5-1942 - Slow symmetric response
+            riseTime = 0.300;   // 300ms
+            fallTime = 0.300;   // 300ms
+            break;
+            
+        case MeterType::DIGITAL_PEAK:
+            // Modern digital - Instant attack, moderate decay
+            riseTime = 0.001;   // ~instant (1ms)
+            fallTime = 0.500;   // 500ms
+            break;
+            
+        default:
+            riseTime = 0.300;
+            fallTime = 0.300;
+            break;
+    }
 }
 
 double MeterWidget::normalizeValue(double value) const

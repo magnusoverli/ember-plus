@@ -13,12 +13,20 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QLabel>
+#include <QComboBox>
 
 class MeterWidget : public QWidget
 {
     Q_OBJECT
 
 public:
+    enum class MeterType {
+        DIN_PPM,      // DIN 45406 - Fast attack (10ms), slow decay (1.5s)
+        BBC_PPM,      // IEC 60268-10 Type IIa - Very fast attack (4ms), slower decay (2.8s)
+        VU_METER,     // ANSI C16.5-1942 - Slow symmetric (300ms rise/fall)
+        DIGITAL_PEAK  // Modern digital - Instant attack, moderate decay (500ms)
+    };
+
     explicit MeterWidget(QWidget *parent = nullptr);
     ~MeterWidget();
 
@@ -42,12 +50,14 @@ protected:
 
 private slots:
     void onUpdateTimer();
+    void onMeterTypeChanged(int index);
 
 private:
     void drawMeter(QPainter &painter);
     double normalizeValue(double value) const;
     QColor getColorForLevel(double normalizedLevel) const;
     QString formatValue(double value) const;
+    void getMeterConstants(MeterType type, double &riseTime, double &fallTime) const;
 
     
     QString m_identifier;
@@ -65,6 +75,7 @@ private:
     
     QTimer *m_updateTimer;
     qint64 m_lastRenderTime;    // For calculating dt in time-domain ballistics
+    MeterType m_meterType;      // Current meter type
     
     
     static constexpr int METER_WIDTH = 40;
@@ -74,13 +85,10 @@ private:
     static constexpr double GREEN_THRESHOLD = 0.75;   
     static constexpr double YELLOW_THRESHOLD = 0.90;
     
-    // Time constants for DIN PPM ballistics (in seconds)
-    static constexpr double RISE_TIME_CONSTANT = 0.010;   // 10ms rise to 99% (5 * tau)
-    static constexpr double FALL_TIME_CONSTANT = 1.500;   // 1.5s fall time  
-    
     
     
     QLabel *m_valueLabel;
+    QComboBox *m_meterTypeCombo;
 };
 
 #endif 
