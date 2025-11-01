@@ -46,7 +46,10 @@ void GlowParser::parseEmberData(const QByteArray& data)
         
         if (m_domReader->isRootReady()) {
             auto root = m_domReader->detachRoot();
+            qDebug() << "[GlowParser] Processing root with" << data.size() << "bytes of EmBER data";
             processRoot(root);
+        } else {
+            qDebug() << "[GlowParser] Root not ready after reading" << data.size() << "bytes (accumulating)";
         }
     } catch (const std::exception& e) {
         emit parsingError(QString("Ember+ parsing error: %1").arg(e.what()));
@@ -62,7 +65,17 @@ void GlowParser::processRoot(libember::dom::Node* root)
     try {
         auto glowRoot = dynamic_cast<libember::glow::GlowRootElementCollection*>(root);
         if (glowRoot) {
+            qDebug() << "[GlowParser] Root is GlowRootElementCollection with" << glowRoot->size() << "elements";
             processElementCollection(glowRoot, "");
+        } else {
+            // Check if it's a standalone StreamCollection (for subscribed parameters)
+            auto streamColl = dynamic_cast<libember::glow::GlowStreamCollection*>(root);
+            if (streamColl) {
+                qDebug() << "[GlowParser] Root is standalone GlowStreamCollection";
+                processStreamCollection(streamColl);
+            } else {
+                qDebug() << "[GlowParser] WARNING: Root is unknown type!";
+            }
         }
     } catch (const std::exception& e) {
         emit parsingError(QString("Error processing root: %1").arg(e.what()));
@@ -106,6 +119,9 @@ void GlowParser::processElementCollection(libember::glow::GlowContainer* contain
         }
         else if (auto streamColl = dynamic_cast<libember::glow::GlowStreamCollection*>(element)) {
             processStreamCollection(streamColl);
+        }
+        else {
+            qDebug() << "[GlowParser] WARNING: Unknown element type received, might be stream data";
         }
     }
 }
@@ -308,6 +324,11 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     }
     
     emit parameterReceived(info);
+    
+    // Process children (e.g., StreamCollection for subscribed parameters)
+    if (param->children()) {
+        processElementCollection(param->children(), info.path);
+    }
 }
 
 void GlowParser::processParameter(libember::glow::GlowParameter* param, const QString& parentPath)
@@ -397,6 +418,11 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     }
     
     emit parameterReceived(info);
+    
+    // Process children (e.g., StreamCollection for subscribed parameters)
+    if (param->children()) {
+        processElementCollection(param->children(), info.path);
+    }
 }
 
 void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix)

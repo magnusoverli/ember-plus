@@ -78,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_pathLabel(nullptr)
     , m_connection(nullptr)
     , m_activeMeter(nullptr)
+    , m_activeMeterPath()
     , m_enableCrosspointsAction(nullptr)
     , m_crosspointsStatusLabel(nullptr)
     , m_emulatorWindow(nullptr)
@@ -637,6 +638,7 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_treeViewController->clear();
         m_subscriptionManager->clear();
         m_matrixManager->clear();
+        m_activeMeterPath.clear();
     }
 }
 
@@ -767,8 +769,18 @@ void MainWindow::onTreeSelectionChanged()
         int paramType = item->data(0, Qt::UserRole + 1).toInt();
         bool isAudioMeter = (streamIdentifier > 0) && (paramType == 1 || paramType == 2);
         
+        qDebug().noquote() << QString("[MainWindow] Parameter selected - Path: %1, StreamID: %2, ParamType: %3, IsAudioMeter: %4")
+            .arg(oidPath).arg(streamIdentifier).arg(paramType).arg(isAudioMeter ? "YES" : "NO");
+        
         if (isAudioMeter) {
             
+            // Unsubscribe from previous meter if exists
+            if (!m_activeMeterPath.isEmpty()) {
+                m_connection->unsubscribeFromParameter(m_activeMeterPath);
+                qDebug().noquote() << QString("Unsubscribed from previous meter: %1")
+                    .arg(m_activeMeterPath);
+                m_activeMeterPath.clear();
+            }
             
             
             if (m_activeMeter) {
@@ -805,6 +817,15 @@ void MainWindow::onTreeSelectionChanged()
             m_activeMeter->setStreamIdentifier(streamIdentifier);
             
             
+            // Subscribe to receive stream updates
+            if (!oidPath.isEmpty() && m_isConnected) {
+                m_connection->subscribeToParameter(oidPath, true);
+                m_activeMeterPath = oidPath;
+                qDebug().noquote() << QString("Subscribed to meter parameter: %1 (stream ID: %2)")
+                    .arg(oidPath).arg(streamIdentifier);
+            }
+            
+            
             QString currentValue = item->text(2);
             bool ok;
             double val = currentValue.toDouble(&ok);
@@ -827,6 +848,14 @@ void MainWindow::onTreeSelectionChanged()
         }
     }
     else if (type == "Matrix") {
+        
+        // Unsubscribe from meter if we're switching away from it
+        if (!m_activeMeterPath.isEmpty()) {
+            m_connection->unsubscribeFromParameter(m_activeMeterPath);
+            qDebug().noquote() << QString("Unsubscribed from meter (switching to Matrix): %1")
+                .arg(m_activeMeterPath);
+            m_activeMeterPath.clear();
+        }
         
         MatrixWidget *matrixWidget = m_matrixManager->getMatrix(oidPath);
         if (matrixWidget) {
@@ -863,6 +892,14 @@ void MainWindow::onTreeSelectionChanged()
             
         }
     } else {
+        
+        // Unsubscribe from meter if we're switching away from it
+        if (!m_activeMeterPath.isEmpty()) {
+            m_connection->unsubscribeFromParameter(m_activeMeterPath);
+            qDebug().noquote() << QString("Unsubscribed from meter (switching to other): %1")
+                .arg(m_activeMeterPath);
+            m_activeMeterPath.clear();
+        }
         
         
         MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);

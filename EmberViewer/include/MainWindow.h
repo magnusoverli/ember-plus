@@ -134,6 +134,7 @@ private:
     
     
     MeterWidget *m_activeMeter;
+    QString m_activeMeterPath;  // Track subscribed meter parameter path for cleanup
     
     
     QMap<int, QString> m_streamIdToPath;
