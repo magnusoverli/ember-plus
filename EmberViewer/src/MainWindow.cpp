@@ -792,7 +792,17 @@ void MainWindow::onTreeSelectionChanged()
                 m_enableCrosspointsAction->setChecked(false);
             }
             
+            // Delete old widget if it exists
+            QWidget *oldWidget = m_propertyPanel;
+            if (oldWidget) {
+                // Don't delete if it's a MatrixWidget (managed by MatrixManager)
+                MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldWidget);
+                if (!oldMatrix) {
+                    oldWidget->deleteLater();
+                }
+            }
             
+            // Clean up old layout
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *layoutItem;
@@ -840,7 +850,7 @@ void MainWindow::onTreeSelectionChanged()
             
             QLabel *infoLabel = new QLabel(QString("Path: %1\nMin: %2\nMax: %3\nStream ID: %4")
                 .arg(oidPath).arg(minValue).arg(maxValue).arg(streamIdentifier));
-            infoLabel->setStyleSheet("padding: 10px; background-color: #f0f0f0; border-radius: 5px;");
+            infoLabel->setStyleSheet("padding: 10px;");
             propLayout->addWidget(infoLabel);
             
             propLayout->setContentsMargins(5, 5, 5, 5);
