@@ -289,14 +289,27 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
     m_connectionTimer->stop();
     
     QString errorString = m_socket->errorString();
-    qCritical().noquote() << QString("Connection error: %1").arg(errorString);
-    
-    // For connection errors during connection attempt, abort and cleanup
     QAbstractSocket::SocketState state = m_socket->state();
+    
+    qCritical().noquote() << QString("Connection error: %1 (error code: %2, state: %3)")
+        .arg(errorString).arg(error).arg(state);
+    
+    // Handle different error types
+    // NOTE: RemoteHostClosedError is NORMAL when device closes connection gracefully
+    // We should NOT abort() for this - just let onSocketDisconnected() handle cleanup
+    if (error == QAbstractSocket::RemoteHostClosedError) {
+        qInfo().noquote() << "Remote host closed connection gracefully";
+        // Let onSocketDisconnected handle cleanup
+        return;
+    }
+    
+    // For actual connection errors during connection attempt, abort and cleanup
     if (error == QAbstractSocket::ConnectionRefusedError ||
         error == QAbstractSocket::NetworkError ||
         error == QAbstractSocket::HostNotFoundError ||
-        error == QAbstractSocket::SocketTimeoutError) {
+        error == QAbstractSocket::SocketTimeoutError ||
+        error == QAbstractSocket::SocketAccessError ||
+        error == QAbstractSocket::SocketResourceError) {
         
         qInfo().noquote() << "Aborting connection due to error...";
         
@@ -306,6 +319,11 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
         }
         
         // The abort() call will trigger onSocketDisconnected if needed
+    }
+    else {
+        // Unknown/unhandled error - log for investigation
+        qWarning() << "[EmberConnection] Unhandled socket error type:" << error 
+                   << "- relying on Qt's default handling";
     }
 }
 

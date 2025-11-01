@@ -298,6 +298,15 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.streamIdentifier = param->streamIdentifier();
     
+    // Debug: Log parameters with streamIdentifier
+    if (info.streamIdentifier > 0) {
+        qDebug() << "[GlowParser] PPM Parameter (qualified):" << info.path 
+                 << "identifier=" << info.identifier 
+                 << "streamId=" << info.streamIdentifier
+                 << "type=" << info.type
+                 << "value=" << info.value;
+    }
+    
     emit parameterReceived(info);
 }
 
@@ -377,6 +386,15 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
         : true;
     
     info.streamIdentifier = param->streamIdentifier();
+    
+    // Debug: Log parameters with streamIdentifier
+    if (info.streamIdentifier > 0) {
+        qDebug() << "[GlowParser] PPM Parameter (unqualified):" << info.path 
+                 << "identifier=" << info.identifier 
+                 << "streamId=" << info.streamIdentifier
+                 << "type=" << info.type
+                 << "value=" << info.value;
+    }
     
     emit parameterReceived(info);
 }
@@ -731,6 +749,8 @@ void GlowParser::processInvocationResult(libember::dom::Node* result)
 
 void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCollection)
 {
+    qDebug() << "[GlowParser] Processing StreamCollection with" << streamCollection->size() << "entries";
+    
     for (auto it = streamCollection->begin(); it != streamCollection->end(); ++it) {
         if (auto streamEntry = dynamic_cast<libember::glow::GlowStreamEntry*>(&(*it))) {
             EmberData::StreamValue info;
@@ -756,6 +776,9 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
             
             // Convert from 1/32 dB steps to dB
             info.value = rawValue / 32.0;
+            
+            qDebug() << "[GlowParser] StreamEntry: streamId=" << info.streamIdentifier 
+                     << "rawValue=" << rawValue << "dB=" << info.value;
             
             emit streamValueReceived(info);
         }

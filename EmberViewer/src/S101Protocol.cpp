@@ -35,32 +35,63 @@ void S101Protocol::feedData(const QByteArray& data)
             if (first == last)
                 return true;
             
-            // Parse S101 frame header
+            // Parse S101 frame header with bounds checking
+            // Minimum header: slot(1) + message(1) + command(1) = 3 bytes minimum for any message
+            auto remaining = std::distance(first, last);
+            if (remaining < 3) {
+                qWarning() << "[S101] Frame too short:" << remaining << "bytes (need at least 3)";
+                return true;  // Skip malformed frame but continue processing
+            }
+            
             first++;  // Skip slot
             auto message = *first++;
             
             if (message == libs101::MessageType::EmBER) {
+                // EmBER messages need: command(1) + version(1) + flags(1) + dtd(1) + appBytes(1) = 5 more bytes minimum
+                if (std::distance(first, last) < 5) {
+                    qWarning() << "[S101] EmBER frame too short:" << std::distance(first, last) << "bytes after message type";
+                    return true;
+                }
+                
                 auto command = *first++;
                 first++;  // Skip version
                 auto flags = libs101::PackageFlag(*first++);
                 first++;  // Skip DTD
                 
                 if (command == libs101::CommandType::EmBER) {
-                    // Skip application bytes
-                    auto appBytes = *first++;
-                    while (appBytes-- > 0 && first != last) {
-                        ++first;
+                    // Check bounds before reading appBytes
+                    if (first == last) {
+                        qWarning() << "[S101] Unexpected end of frame at appBytes field";
+                        return true;
                     }
                     
-                    // Extract Ember+ data
-                    QByteArray emberData(reinterpret_cast<const char*>(&(*first)), 
-                                        std::distance(first, last));
+                    // Skip application bytes with bounds checking
+                    auto appBytes = *first++;
+                    unsigned char appBytesCount = appBytes;
                     
-                    emit self->messageReceived(emberData);
+                    while (appBytes > 0) {
+                        if (first == last) {
+                            qWarning() << "[S101] Frame truncated during app bytes skip (expected" 
+                                       << appBytesCount << "bytes, got" << (appBytesCount - appBytes) << ")";
+                            return true;
+                        }
+                        ++first;
+                        --appBytes;
+                    }
+                    
+                    // Extract Ember+ data (whatever remains after header)
+                    if (first != last) {
+                        QByteArray emberData(reinterpret_cast<const char*>(&(*first)), 
+                                            std::distance(first, last));
+                        
+                        emit self->messageReceived(emberData);
+                    } else {
+                        qWarning() << "[S101] No Ember+ payload in frame";
+                    }
                 }
                 else if (command == libs101::CommandType::KeepAliveRequest) {
-                    // Send keep-alive response (handled by EmberConnection)
-                    // For now, just acknowledge
+                    // Keep-alive request received - acknowledgment handled elsewhere if needed
+                    qDebug() << "[S101] KeepAlive request received";
                 }
             }
             
