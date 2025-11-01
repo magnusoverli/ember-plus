@@ -57,7 +57,6 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_emberDataReceived(false)
     , m_connectionTimer(nullptr)
     , m_protocolTimer(nullptr)
-    , m_logLevel(LogLevel::Info)
     , m_nextInvocationId(1)
 {
     // Socket connections
@@ -77,7 +76,7 @@ EmberConnection::EmberConnection(QObject *parent)
     // Protocol layer connections: Socket -> S101Protocol -> GlowParser -> EmberConnection
     connect(m_s101Protocol, &S101Protocol::messageReceived, this, &EmberConnection::onS101MessageReceived);
     connect(m_s101Protocol, &S101Protocol::protocolError, this, [this](const QString& error) {
-        log(LogLevel::Error, QString("S101 protocol error: %1").arg(error));
+        qCritical().noquote() << "S101 protocol error:" << error;
         disconnect();
     });
     
@@ -119,7 +118,7 @@ EmberConnection::EmberConnection(QObject *parent)
                 emit streamValueReceived(stream.streamIdentifier, stream.value);
             });
     connect(m_glowParser, &GlowParser::parsingError, this, [this](const QString& error) {
-        log(LogLevel::Error, QString("Parsing error: %1").arg(error));
+        qCritical().noquote() << "Parsing error:" << error;
         disconnect();
     });
     
@@ -151,16 +150,16 @@ void EmberConnection::connectToHost(const QString &host, int port)
     // Check if already connected or connecting
     QAbstractSocket::SocketState state = m_socket->state();
     if (state != QAbstractSocket::UnconnectedState) {
-        log(LogLevel::Warning, QString("Cannot connect: socket is already in state %1").arg(static_cast<int>(state)));
+        qWarning().noquote() << QString("Cannot connect: socket is already in state %1").arg(static_cast<int>(state));
         
         // If we're connecting or connected to a different host/port, abort first
         if (state == QAbstractSocket::ConnectingState || 
             state == QAbstractSocket::HostLookupState) {
-            log(LogLevel::Info, "Aborting previous connection attempt...");
+            qInfo().noquote() << "Aborting previous connection attempt...";
             m_socket->abort();
             m_connectionTimer->stop();
         } else if (state == QAbstractSocket::ConnectedState) {
-            log(LogLevel::Info, "Already connected");
+            qInfo().noquote() << "Already connected";
             return;
         } else {
             // For other states (closing, etc), just return
@@ -188,7 +187,7 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_socket->setSocketOption(QAbstractSocket::SendBufferSizeSocketOption, 65536);
     m_socket->setSocketOption(QAbstractSocket::ReceiveBufferSizeSocketOption, 65536);
     
-    log(LogLevel::Info, QString("Connecting to %1:%2...").arg(host).arg(port));
+    qInfo().noquote() << QString("Connecting to %1:%2...").arg(host).arg(port);
     
     // Start connection timeout timer
     m_connectionTimer->start();
@@ -209,7 +208,7 @@ void EmberConnection::disconnect()
     } else if (state == QAbstractSocket::ConnectingState || 
                state == QAbstractSocket::HostLookupState) {
         // Abort pending connection
-        log(LogLevel::Info, "Aborting pending connection...");
+        qInfo().noquote() << "Aborting pending connection...";
         m_socket->abort();
     }
     
@@ -223,35 +222,6 @@ bool EmberConnection::isConnected() const
     return m_connected;
 }
 
-void EmberConnection::setLogLevel(LogLevel level)
-{
-    m_logLevel = level;
-    log(LogLevel::Info, QString("Log level changed to: %1").arg(static_cast<int>(level)));
-}
-
-void EmberConnection::log(LogLevel level, const QString &message)
-{
-    if (level > m_logLevel) {
-        return;
-    }
-    
-    switch (level) {
-        case LogLevel::Error:
-            qCritical().noquote() << message;
-            break;
-        case LogLevel::Warning:
-            qWarning().noquote() << message;
-            break;
-        case LogLevel::Info:
-            qInfo().noquote() << message;
-            break;
-        case LogLevel::Debug:
-        case LogLevel::Trace:
-            qDebug().noquote() << message;
-            break;
-    }
-}
-
 void EmberConnection::onSocketConnected()
 {
     // Stop connection timeout timer
@@ -260,11 +230,11 @@ void EmberConnection::onSocketConnected()
     m_connected = true;
     m_emberDataReceived = false;
     emit connected();
-    log(LogLevel::Info, "Connected to provider");
+    qInfo().noquote() << "Connected to provider";
     
     // Start protocol timeout timer - will be cancelled if we receive valid Ember+ data
     m_protocolTimer->start();
-    log(LogLevel::Info, "Waiting for Ember+ response...");
+    qInfo().noquote() << "Waiting for Ember+ response...";
     
     // OPTIMIZATION: Check cache for previously discovered device name
     // Display cached name immediately for instant UI feedback on reconnection
@@ -277,9 +247,9 @@ void EmberConnection::onSocketConnected()
         qint64 hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
         
         if (cache.isValid) {
-            log(LogLevel::Info, QString("Using cached device name: '%1' (last seen %2 hours ago)")
+            qInfo().noquote() << QString("Using cached device name: '%1' (last seen %2 hours ago)")
                 .arg(cache.deviceName)
-                .arg(hoursSinceLastSeen));
+                .arg(hoursSinceLastSeen);
             
             // Create/update root node with cached info
             m_cacheManager->setRootNode(cache.rootPath, cache.deviceName, false, cache.identityPath);
@@ -287,17 +257,17 @@ void EmberConnection::onSocketConnected()
             // Emit cached device name immediately for instant UI update
             emit nodeReceived(cache.rootPath, cache.deviceName, cache.deviceName, true);
             
-            log(LogLevel::Info, "Cached device name displayed instantly, will verify with device...");
+            qInfo().noquote() << "Cached device name displayed instantly, will verify with device...";
         } else {
-            log(LogLevel::Info, QString("Cache expired (last seen %1 hours ago), will rediscover device name")
-                .arg(hoursSinceLastSeen));
+            qInfo().noquote() << QString("Cache expired (last seen %1 hours ago), will rediscover device name")
+                .arg(hoursSinceLastSeen);
         }
     }
     
     // Send GetDirectory to request root tree (always validate with device)
-    log(LogLevel::Info, "About to send GetDirectory request...");
+    qInfo().noquote() << "About to send GetDirectory request...";
     sendGetDirectory();
-    log(LogLevel::Info, "GetDirectory call completed");
+    qInfo().noquote() << "GetDirectory call completed";
 }
 
 void EmberConnection::onSocketDisconnected()
@@ -310,7 +280,7 @@ void EmberConnection::onSocketDisconnected()
     m_emberDataReceived = false;
     m_cacheManager->clear();  // Clear cached metadata
     emit disconnected();
-    log(LogLevel::Info, "Disconnected from provider");
+    qInfo().noquote() << "Disconnected from provider";
 }
 
 void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
@@ -319,7 +289,7 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
     m_connectionTimer->stop();
     
     QString errorString = m_socket->errorString();
-    log(LogLevel::Error, QString("Connection error: %1").arg(errorString));
+    qCritical().noquote() << QString("Connection error: %1").arg(errorString);
     
     // For connection errors during connection attempt, abort and cleanup
     QAbstractSocket::SocketState state = m_socket->state();
@@ -328,7 +298,7 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
         error == QAbstractSocket::HostNotFoundError ||
         error == QAbstractSocket::SocketTimeoutError) {
         
-        log(LogLevel::Info, "Aborting connection due to error...");
+        qInfo().noquote() << "Aborting connection due to error...";
         
         // Abort the connection attempt
         if (state != QAbstractSocket::UnconnectedState) {
@@ -341,13 +311,13 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
 
 void EmberConnection::onConnectionTimeout()
 {
-    log(LogLevel::Error, QString("Connection timeout after 5 seconds"));
+    qCritical().noquote() << QString("Connection timeout after 5 seconds");
     
     // Abort the connection attempt
     QAbstractSocket::SocketState state = m_socket->state();
     if (state == QAbstractSocket::ConnectingState || 
         state == QAbstractSocket::HostLookupState) {
-        log(LogLevel::Info, "Aborting connection attempt...");
+        qInfo().noquote() << "Aborting connection attempt...";
         m_socket->abort();
         
         // Emit disconnected signal to notify UI
@@ -360,11 +330,11 @@ void EmberConnection::onConnectionTimeout()
 
 void EmberConnection::onProtocolTimeout()
 {
-    log(LogLevel::Error, QString("No Ember+ response received after 10 seconds. This port does not appear to be serving Ember+ protocol."));
+    qCritical().noquote() << QString("No Ember+ response received after 10 seconds. This port does not appear to be serving Ember+ protocol.");
     
     // Disconnect - this port doesn't seem to be Ember+
     if (m_connected) {
-        log(LogLevel::Info, "Disconnecting due to protocol timeout...");
+        qInfo().noquote() << "Disconnecting due to protocol timeout...";
         disconnect();
     }
 }
@@ -377,7 +347,7 @@ void EmberConnection::onDataReceived()
         return;
     }
     
-    log(LogLevel::Info, QString("*** Received %1 bytes from device ***").arg(data.size()));
+    qInfo().noquote() << QString("*** Received %1 bytes from device ***").arg(data.size());
     
     // Feed data to S101 protocol layer
     m_s101Protocol->feedData(data);
@@ -391,7 +361,7 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
         m_emberDataReceived = true;
         isFirstData = true;
         m_protocolTimer->stop();
-        log(LogLevel::Info, "Ember+ protocol confirmed");
+        qInfo().noquote() << "Ember+ protocol confirmed";
     }
     
     // Feed Ember data to parser
@@ -399,7 +369,7 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
     
     // Emit treePopulated signal if this was the first data received
     if (isFirstData) {
-        log(LogLevel::Debug, "Initial tree populated, emitting treePopulated signal");
+        qDebug().noquote() << "Initial tree populated, emitting treePopulated signal";
         emit treePopulated();
     }
 }
@@ -414,16 +384,16 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
         QString displayName = !node.description.isEmpty() ? node.description : node.identifier;
         bool isGeneric = isGenericNodeName(displayName);
         
-        log(LogLevel::Info, QString("ROOT Node [%1]: Identifier='%2', Description='%3', Generic=%4")
+        qInfo().noquote() << QString("ROOT Node [%1]: Identifier='%2', Description='%3', Generic=%4")
             .arg(node.path).arg(node.identifier)
             .arg(node.description)
-            .arg(isGeneric ? "YES" : "no"));
+            .arg(isGeneric ? "YES" : "no");
         
         // Track this root node - but preserve existing non-generic name during tree fetch
         if (m_cacheManager->hasRootNode(node.path) && !m_cacheManager->isRootNodeGeneric(node.path)) {
             // Already have a good name, keep it
             CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(node.path);
-            log(LogLevel::Debug, QString("Preserving existing root node name: %1").arg(rootInfo.displayName));
+            qDebug().noquote() << QString("Preserving existing root node name: %1").arg(rootInfo.displayName);
         } else {
             // New node or generic name - update it
             QString existingIdentityPath;
@@ -443,14 +413,14 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
             if (nodeName == "identity" || nodeName == "_identity" || 
                 nodeName == "deviceinfo" || nodeName == "device_info") {
                 m_cacheManager->updateRootNodeIdentityPath(parentPath, node.path);
-                log(LogLevel::Info, QString("Detected identity node for root %1: %2")
-                    .arg(parentPath).arg(node.path));
+                qInfo().noquote() << QString("Detected identity node for root %1: %2")
+                    .arg(parentPath).arg(node.path);
             }
         }
     }
     
-    log(LogLevel::Debug, QString("Node: %1 - Online: %2")
-        .arg(node.path).arg(node.isOnline ? "YES" : "NO"));
+    qDebug().noquote() << QString("Node: %1 - Online: %2")
+        .arg(node.path).arg(node.isOnline ? "YES" : "NO");
     
     // Emit the node signal
     emit nodeReceived(node.path, node.identifier, node.description, node.isOnline);
@@ -466,7 +436,7 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
     // Special case 1: Root nodes with generic names (to discover device name)
     if (pathDepth == 1 && m_cacheManager->hasRootNode(node.path) && m_cacheManager->isRootNodeGeneric(node.path)) {
         shouldAutoRequest = true;
-        log(LogLevel::Debug, QString("Auto-requesting children of root node %1 for name discovery").arg(node.path));
+        qDebug().noquote() << QString("Auto-requesting children of root node %1 for name discovery").arg(node.path);
     }
     // Special case 2: Identity nodes under generic root (to find name parameter)
     else if (pathDepth == 2) {
@@ -475,7 +445,7 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
             CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(rootPath);
             if (rootInfo.identityPath == node.path) {
                 shouldAutoRequest = true;
-                log(LogLevel::Debug, QString("Auto-requesting children of identity node %1 for name discovery").arg(node.path));
+                qDebug().noquote() << QString("Auto-requesting children of identity node %1 for name discovery").arg(node.path);
             }
         }
     }
@@ -488,8 +458,8 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
 
 void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& param)
 {
-    log(LogLevel::Debug, QString("Param %1 complete: '%2' = '%3' (Type=%4, Access=%5)")
-        .arg(param.path).arg(param.identifier).arg(param.value).arg(param.type).arg(param.access));
+    qDebug().noquote() << QString("Param %1 complete: '%2' = '%3' (Type=%4, Access=%5)")
+        .arg(param.path).arg(param.identifier).arg(param.value).arg(param.type).arg(param.access);
     
     // Check if this parameter could be a device name for a root node with generic name
     QStringList pathParts = param.path.split('.');
@@ -505,8 +475,8 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
                 CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(rootPath);
                 if (!rootInfo.identityPath.isEmpty()) {
                     if (param.path.startsWith(rootInfo.identityPath + ".")) {
-                        log(LogLevel::Info, QString("Found device name '%1' for root node %2 (from %3)")
-                            .arg(param.value).arg(rootPath).arg(param.path));
+                        qInfo().noquote() << QString("Found device name '%1' for root node %2 (from %3)")
+                            .arg(param.value).arg(rootPath).arg(param.path);
                         
                         // Update the display name
                         m_cacheManager->updateRootNodeDisplayName(rootPath, param.value, false);
@@ -515,8 +485,8 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
                         QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
                         CacheManager::cacheDevice(cacheKey, param.value, rootPath, rootInfo.identityPath);
                         
-                        log(LogLevel::Debug, QString("Cached device name '%1' for %2")
-                            .arg(param.value).arg(cacheKey));
+                        qDebug().noquote() << QString("Cached device name '%1' for %2")
+                            .arg(param.value).arg(cacheKey);
                         
                         // Re-emit node with new name (assume online since we're getting parameter updates)
                         emit nodeReceived(rootPath, param.value, param.value, true);
@@ -532,8 +502,8 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
 
 void EmberConnection::onParserMatrixReceived(const EmberData::MatrixInfo& matrix)
 {
-    log(LogLevel::Debug, QString("Matrix: %1 [%2] - Type:%3, %4×%5")
-                    .arg(matrix.identifier).arg(matrix.path).arg(matrix.type).arg(matrix.sourceCount).arg(matrix.targetCount));
+    qDebug().noquote() << QString("Matrix: %1 [%2] - Type:%3, %4×%5")
+                    .arg(matrix.identifier).arg(matrix.path).arg(matrix.type).arg(matrix.sourceCount).arg(matrix.targetCount);
     
     emit matrixReceived(matrix.path, matrix.number, matrix.identifier, matrix.description, 
                        matrix.type, matrix.targetCount, matrix.sourceCount);
@@ -558,25 +528,25 @@ void EmberConnection::sendGetDirectory()
 
 void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimizedForNameDiscovery)
 {
-    log(LogLevel::Info, QString("sendGetDirectoryForPath called with path='%1'").arg(path));
-    log(LogLevel::Info, QString("m_requestedPaths size: %1").arg(m_requestedPaths.size()));
+    qInfo().noquote() << QString("sendGetDirectoryForPath called with path='%1'").arg(path);
+    qInfo().noquote() << QString("m_requestedPaths size: %1").arg(m_requestedPaths.size());
     
     // Avoid infinite loops - don't request the same path twice
     if (m_requestedPaths.contains(path)) {
-        log(LogLevel::Info, QString("ERROR: Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path));
+        qInfo().noquote() << QString("ERROR: Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path);
         return;
     }
-    log(LogLevel::Info, "Passed duplicate check, inserting path");
+    qInfo().noquote() << "Passed duplicate check, inserting path";
     m_requestedPaths.insert(path);
-    log(LogLevel::Info, "Path inserted, continuing...");
+    qInfo().noquote() << "Path inserted, continuing...";
     
     try {
         if (path.isEmpty()) {
-            log(LogLevel::Info, "Requesting root directory...");
+            qInfo().noquote() << "Requesting root directory...";
         } else {
-            log(LogLevel::Info, QString("Requesting children of %1%2...")
+            qInfo().noquote() << QString("Requesting children of %1%2...")
                 .arg(path)
-                .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : ""));
+                .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : "");
         }
         
         // OPTIMIZATION: Use minimal field mask for faster name discovery
@@ -588,22 +558,22 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
                                            libember::glow::DirFieldMask::Value)
             : libember::glow::DirFieldMask::All;
         
-        log(LogLevel::Info, "Creating GlowRootElementCollection...");
+        qInfo().noquote() << "Creating GlowRootElementCollection...";
         auto root = new libember::glow::GlowRootElementCollection();
         
         if (path.isEmpty()) {
             // Request root - use bare GlowCommand like working applications do
-            log(LogLevel::Info, "Creating bare GlowCommand for root...");
+            qInfo().noquote() << "Creating bare GlowCommand for root...";
             auto command = new libember::glow::GlowCommand(
                 libember::glow::CommandType::GetDirectory
             );
-            log(LogLevel::Info, "Inserting command into root...");
+            qInfo().noquote() << "Inserting command into root...";
             root->insert(root->end(), command);
-            log(LogLevel::Info, "Command inserted successfully");
+            qInfo().noquote() << "Command inserted successfully";
         }
         else {
             // Request specific node path
-            log(LogLevel::Info, QString("Creating QualifiedNode for path: %1").arg(path));
+            qInfo().noquote() << QString("Creating QualifiedNode for path: %1").arg(path);
             QStringList segments = path.split('.', Qt::SkipEmptyParts);
             libember::ber::ObjectIdentifier oid;
             
@@ -617,32 +587,32 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
                 libember::glow::CommandType::GetDirectory
             );
             root->insert(root->end(), node);
-            log(LogLevel::Info, "QualifiedNode with command inserted (no field mask)");
+            qInfo().noquote() << "QualifiedNode with command inserted (no field mask)";
         }
         
         // Encode to EmBER
-        log(LogLevel::Info, "Encoding to EmBER...");
+        qInfo().noquote() << "Encoding to EmBER...";
         libember::util::OctetStream stream;
         root->encode(stream);
-        log(LogLevel::Info, QString("EmBER payload size: %1 bytes").arg(stream.size()));
+        qInfo().noquote() << QString("EmBER payload size: %1 bytes").arg(stream.size());
         
         // Use S101 protocol layer to encode
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         // Send
-        log(LogLevel::Info, QString("About to write %1 bytes to socket...").arg(s101Frame.size()));
+        qInfo().noquote() << QString("About to write %1 bytes to socket...").arg(s101Frame.size());
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
-            log(LogLevel::Info, QString("Successfully sent GetDirectory request (%1 bytes)").arg(s101Frame.size()));
+            qInfo().noquote() << QString("Successfully sent GetDirectory request (%1 bytes)").arg(s101Frame.size());
         }
         else {
-            log(LogLevel::Error, "Failed to send GetDirectory - socket write returned 0 or error");
+            qCritical().noquote() << "Failed to send GetDirectory - socket write returned 0 or error";
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        log(LogLevel::Error, QString("Error sending GetDirectory for %1: %2").arg(path).arg(ex.what()));
+        qCritical().noquote() << QString("Error sending GetDirectory for %1: %2").arg(path).arg(ex.what());
     }
 }
 
@@ -659,7 +629,7 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
             pathsToRequest.append(path);
             m_requestedPaths.insert(path);
         } else {
-            log(LogLevel::Debug, QString("Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path));
+            qDebug().noquote() << QString("Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path);
         }
     }
     
@@ -668,9 +638,9 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
     }
     
     try {
-        log(LogLevel::Debug, QString("Batch requesting %1 paths%2...")
+        qDebug().noquote() << QString("Batch requesting %1 paths%2...")
             .arg(pathsToRequest.size())
-            .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : ""));
+            .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : "");
         
         // OPTIMIZATION: Use minimal field mask for faster name discovery
         libember::glow::DirFieldMask fieldMask = optimizedForNameDiscovery
@@ -723,20 +693,20 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
             m_socket->flush();
         }
         else {
-            log(LogLevel::Warning, "Failed to send batch GetDirectory");
+            qWarning().noquote() << "Failed to send batch GetDirectory";
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        log(LogLevel::Error, QString("Error sending batch GetDirectory: %1").arg(ex.what()));
+        qCritical().noquote() << QString("Error sending batch GetDirectory: %1").arg(ex.what());
     }
 }
 
 void EmberConnection::sendParameterValue(const QString &path, const QString &value, int type)
 {
     try {
-        log(LogLevel::Debug, QString("Setting parameter %1 = %2").arg(path).arg(value));
+        qDebug().noquote() << QString("Setting parameter %1 = %2").arg(path).arg(value);
         
         // Parse path to OID
         QStringList segments = path.split('.', Qt::SkipEmptyParts);
@@ -778,7 +748,7 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
                 break;
                 
             default:
-                log(LogLevel::Warning, QString("Unsupported parameter type: %1").arg(type));
+                qWarning().noquote() << QString("Unsupported parameter type: %1").arg(type);
                 delete param;
                 return;
         }
@@ -797,16 +767,16 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
         // Send
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
-            log(LogLevel::Debug, QString("Successfully sent value for %1").arg(path));
+            qDebug().noquote() << QString("Successfully sent value for %1").arg(path);
         }
         else {
-            log(LogLevel::Warning, QString("Failed to send value for %1").arg(path));
+            qWarning().noquote() << QString("Failed to send value for %1").arg(path);
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        log(LogLevel::Error, QString("Error sending parameter value for %1: %2").arg(path).arg(ex.what()));
+        qCritical().noquote() << QString("Error sending parameter value for %1: %2").arg(path).arg(ex.what());
     }
 }
 
@@ -815,8 +785,8 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
     try {
         QString operation = connect ? "CONNECT" : "DISCONNECT";
         
-        log(LogLevel::Debug, QString(">>> Sending %1: Matrix=%2, Target=%3, Source=%4")
-                       .arg(operation).arg(matrixPath).arg(targetNumber).arg(sourceNumber));
+        qDebug().noquote() << QString(">>> Sending %1: Matrix=%2, Target=%3, Source=%4")
+                       .arg(operation).arg(matrixPath).arg(targetNumber).arg(sourceNumber);
         
         // Parse matrix path to OID
         QStringList segments = matrixPath.split('.', Qt::SkipEmptyParts);
@@ -838,10 +808,10 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         // Set the operation based on connect/disconnect
         if (connect) {
             connection->setOperation(libember::glow::ConnectionOperation::Connect);
-            log(LogLevel::Debug, QString("    Operation: Connect (1)"));
+            qDebug().noquote() << QString("    Operation: Connect (1)");
         } else {
             connection->setOperation(libember::glow::ConnectionOperation::Disconnect);
-            log(LogLevel::Debug, QString("    Operation: Disconnect (2)"));
+            qDebug().noquote() << QString("    Operation: Disconnect (2)");
         }
         
         // Add source(s) to the connection
@@ -849,7 +819,7 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         libember::ber::ObjectIdentifier sources;
         sources.push_back(sourceNumber);
         connection->setSources(sources);
-        log(LogLevel::Debug, QString("    Sources: [%1]").arg(sourceNumber));
+        qDebug().noquote() << QString("    Sources: [%1]").arg(sourceNumber);
         
         // Add connection to the connections sequence
         connectionsSeq->insert(connectionsSeq->end(), connection);
@@ -868,23 +838,23 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         // Send
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
-            log(LogLevel::Debug, QString("Successfully sent matrix connection command"));
+            qDebug().noquote() << QString("Successfully sent matrix connection command");
         }
         else {
-            log(LogLevel::Warning, QString("Failed to send matrix connection command"));
+            qWarning().noquote() << QString("Failed to send matrix connection command");
         }
         
         delete root;
     }
     catch (const std::exception &ex) {
-        log(LogLevel::Error, QString("Error sending matrix connection for %1: %2").arg(matrixPath).arg(ex.what()));
+        qCritical().noquote() << QString("Error sending matrix connection for %1: %2").arg(matrixPath).arg(ex.what());
     }
 }
 
 void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> &arguments)
 {
     if (!m_connected) {
-        log(LogLevel::Error, "Cannot invoke function - not connected");
+        qCritical().noquote() << "Cannot invoke function - not connected";
         return;
     }
     
@@ -919,7 +889,7 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
                     glowArgs.push_back(libember::glow::Value(arg.toBool()));
                     break;
                 default:
-                    log(LogLevel::Warning, QString("Unsupported argument type: %1").arg(arg.typeName()));
+                    qWarning().noquote() << QString("Unsupported argument type: %1").arg(arg.typeName());
                     break;
             }
         }
@@ -946,7 +916,7 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    log(LogLevel::Debug, QString("Sent function invocation for %1").arg(path));
+    qDebug().noquote() << QString("Sent function invocation for %1").arg(path);
     delete root;
 }
 
@@ -954,12 +924,12 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
 void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscribed)
 {
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot subscribe - not connected");
+        qWarning().noquote() << "Cannot subscribe - not connected";
         return;
     }
     
     if (m_subscriptions.contains(path)) {
-        log(LogLevel::Debug, QString("Already subscribed to %1").arg(path));
+        qDebug().noquote() << QString("Already subscribed to %1").arg(path);
         return;
     }
     
@@ -995,9 +965,9 @@ void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscri
     state.autoSubscribed = autoSubscribed;
     m_subscriptions[path] = state;
     
-    log(LogLevel::Debug, QString("Subscribed to parameter: %1 %2")
+    qDebug().noquote() << QString("Subscribed to parameter: %1 %2")
         .arg(path)
-        .arg(autoSubscribed ? "(auto)" : "(manual)"));
+        .arg(autoSubscribed ? "(auto)" : "(manual)");
     
     delete root;
 }
@@ -1005,12 +975,12 @@ void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscri
 void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
 {
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot subscribe - not connected");
+        qWarning().noquote() << "Cannot subscribe - not connected";
         return;
     }
     
     if (m_subscriptions.contains(path)) {
-        log(LogLevel::Debug, QString("Already subscribed to %1").arg(path));
+        qDebug().noquote() << QString("Already subscribed to %1").arg(path);
         return;
     }
     
@@ -1046,9 +1016,9 @@ void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
     state.autoSubscribed = autoSubscribed;
     m_subscriptions[path] = state;
     
-    log(LogLevel::Debug, QString("Subscribed to node: %1 %2")
+    qDebug().noquote() << QString("Subscribed to node: %1 %2")
         .arg(path)
-        .arg(autoSubscribed ? "(auto)" : "(manual)"));
+        .arg(autoSubscribed ? "(auto)" : "(manual)");
     
     delete root;
 }
@@ -1056,12 +1026,12 @@ void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
 void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed)
 {
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot subscribe - not connected");
+        qWarning().noquote() << "Cannot subscribe - not connected";
         return;
     }
     
     if (m_subscriptions.contains(path)) {
-        log(LogLevel::Debug, QString("Already subscribed to %1").arg(path));
+        qDebug().noquote() << QString("Already subscribed to %1").arg(path);
         return;
     }
     
@@ -1097,9 +1067,9 @@ void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed
     state.autoSubscribed = autoSubscribed;
     m_subscriptions[path] = state;
     
-    log(LogLevel::Debug, QString("Subscribed to matrix: %1 %2")
+    qDebug().noquote() << QString("Subscribed to matrix: %1 %2")
         .arg(path)
-        .arg(autoSubscribed ? "(auto)" : "(manual)"));
+        .arg(autoSubscribed ? "(auto)" : "(manual)");
     
     delete root;
 }
@@ -1107,12 +1077,12 @@ void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed
 void EmberConnection::unsubscribeFromParameter(const QString &path)
 {
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot unsubscribe - not connected");
+        qWarning().noquote() << "Cannot unsubscribe - not connected";
         return;
     }
     
     if (!m_subscriptions.contains(path)) {
-        log(LogLevel::Debug, QString("Not subscribed to %1").arg(path));
+        qDebug().noquote() << QString("Not subscribed to %1").arg(path);
         return;
     }
     
@@ -1145,7 +1115,7 @@ void EmberConnection::unsubscribeFromParameter(const QString &path)
     // Remove from tracking
     m_subscriptions.remove(path);
     
-    log(LogLevel::Debug, QString("Unsubscribed from parameter: %1").arg(path));
+    qDebug().noquote() << QString("Unsubscribed from parameter: %1").arg(path);
     
     delete root;
 }
@@ -1153,12 +1123,12 @@ void EmberConnection::unsubscribeFromParameter(const QString &path)
 void EmberConnection::unsubscribeFromNode(const QString &path)
 {
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot unsubscribe - not connected");
+        qWarning().noquote() << "Cannot unsubscribe - not connected";
         return;
     }
     
     if (!m_subscriptions.contains(path)) {
-        log(LogLevel::Debug, QString("Not subscribed to %1").arg(path));
+        qDebug().noquote() << QString("Not subscribed to %1").arg(path);
         return;
     }
     
@@ -1191,7 +1161,7 @@ void EmberConnection::unsubscribeFromNode(const QString &path)
     // Remove from tracking
     m_subscriptions.remove(path);
     
-    log(LogLevel::Debug, QString("Unsubscribed from node: %1").arg(path));
+    qDebug().noquote() << QString("Unsubscribed from node: %1").arg(path);
     
     delete root;
 }
@@ -1199,12 +1169,12 @@ void EmberConnection::unsubscribeFromNode(const QString &path)
 void EmberConnection::unsubscribeFromMatrix(const QString &path)
 {
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot unsubscribe - not connected");
+        qWarning().noquote() << "Cannot unsubscribe - not connected";
         return;
     }
     
     if (!m_subscriptions.contains(path)) {
-        log(LogLevel::Debug, QString("Not subscribed to %1").arg(path));
+        qDebug().noquote() << QString("Not subscribed to %1").arg(path);
         return;
     }
     
@@ -1237,7 +1207,7 @@ void EmberConnection::unsubscribeFromMatrix(const QString &path)
     // Remove from tracking
     m_subscriptions.remove(path);
     
-    log(LogLevel::Debug, QString("Unsubscribed from matrix: %1").arg(path));
+    qDebug().noquote() << QString("Unsubscribed from matrix: %1").arg(path);
     
     delete root;
 }
@@ -1249,7 +1219,7 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
     }
     
     if (!m_socket || !m_connected) {
-        log(LogLevel::Warning, "Cannot batch subscribe - not connected");
+        qWarning().noquote() << "Cannot batch subscribe - not connected";
         return;
     }
     
@@ -1259,17 +1229,17 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
         if (!m_subscriptions.contains(req.path)) {
             toSubscribe.append(req);
         } else {
-            log(LogLevel::Debug, QString("Skipping duplicate subscription for %1").arg(req.path));
+            qDebug().noquote() << QString("Skipping duplicate subscription for %1").arg(req.path);
         }
     }
     
     if (toSubscribe.isEmpty()) {
-        log(LogLevel::Debug, "All paths already subscribed, skipping batch");
+        qDebug().noquote() << "All paths already subscribed, skipping batch";
         return;
     }
     
     try {
-        log(LogLevel::Debug, QString("Batch subscribing to %1 paths...").arg(toSubscribe.size()));
+        qDebug().noquote() << QString("Batch subscribing to %1 paths...").arg(toSubscribe.size());
         
         // OPTIMIZATION: Batch multiple Subscribe commands in single S101 frame
         // This reduces protocol overhead and network round trips (5-20x reduction)
@@ -1314,8 +1284,8 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
                 successCount++;
             }
             else {
-                log(LogLevel::Warning, QString("Unknown subscription type '%1' for path %2")
-                    .arg(req.type).arg(req.path));
+                qWarning().noquote() << QString("Unknown subscription type '%1' for path %2")
+                    .arg(req.type).arg(req.path);
                 continue;
             }
             
@@ -1327,7 +1297,7 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
         }
         
         if (successCount == 0) {
-            log(LogLevel::Warning, "No valid subscriptions in batch");
+            qWarning().noquote() << "No valid subscriptions in batch";
             delete root;
             return;
         }
@@ -1343,12 +1313,12 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
         m_socket->write(s101Frame);
         m_socket->flush();
         
-        log(LogLevel::Debug, QString("Successfully batch subscribed to %1 paths").arg(successCount));
+        qDebug().noquote() << QString("Successfully batch subscribed to %1 paths").arg(successCount);
         
         delete root;
     }
     catch (const std::exception &ex) {
-        log(LogLevel::Error, QString("Error sending batch subscribe: %1").arg(ex.what()));
+        qCritical().noquote() << QString("Error sending batch subscribe: %1").arg(ex.what());
     }
 }
 
@@ -1365,11 +1335,11 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
         return;
     }
     
-    log(LogLevel::Info, QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size()));
+    qInfo().noquote() << QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size());
     
     // Set up callback for TreeFetchService to send GetDirectory requests
     m_treeFetchService->setSendGetDirectoryCallback([this](const QString& path, bool isRoot) {
-        log(LogLevel::Trace, QString("Tree fetch requesting: %1").arg(path.isEmpty() ? "root" : path));
+        qDebug().noquote() << QString("Tree fetch requesting: %1").arg(path.isEmpty() ? "root" : path);
         
         try {
             auto root = new libember::glow::GlowRootElementCollection();
@@ -1415,7 +1385,7 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
             delete root;
         }
         catch (const std::exception &ex) {
-            log(LogLevel::Error, QString("Error sending GetDirectory for tree fetch: %1").arg(ex.what()));
+            qCritical().noquote() << QString("Error sending GetDirectory for tree fetch: %1").arg(ex.what());
         }
     });
     

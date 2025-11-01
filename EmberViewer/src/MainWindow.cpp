@@ -114,7 +114,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::disconnected, this, [this]() {
         onConnectionStateChanged(false);
     });
-    connect(m_connection, &EmberConnection::logMessage, this, &MainWindow::onLogMessage);
     
     // LAZY LOADING OPTIMIZATION: Use direct connections for instant UI updates
     // With lazy loading, we only receive small batches of children at a time,
@@ -196,7 +195,12 @@ MainWindow::MainWindow(QWidget *parent)
     int treeHeight = height() - 150;
     m_verticalSplitter->setSizes(QList<int>() << treeHeight << 150);
     
-    logMessage("EmberViewer started. Ready to connect.");
+    // Log startup message directly to console since globalMainWindow isn't set yet during construction
+    QString startupMsg = QString("[%1] EmberViewer started. Ready to connect.")
+        .arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz"));
+    appendToConsole(startupMsg);
+    // Also log via qInfo for stderr and log file
+    qInfo().noquote() << "EmberViewer started. Ready to connect.";
 }
 
 MainWindow::~MainWindow()
@@ -560,16 +564,16 @@ void MainWindow::onConnectClicked()
     QString host = m_hostEdit->text();
     int port = m_portSpin->value();
     
-    // Clear console log from previous session
-    m_consoleLog->clear();
+    // Don't clear console - keep history across connections
+    // m_consoleLog->clear();
     
-    qDebug().noquote() << QString("Connecting to %1:%2...").arg(host).arg(port);
+    qInfo().noquote() << QString("Connecting to %1:%2...").arg(host).arg(port);
     m_connection->connectToHost(host, port);
 }
 
 void MainWindow::onDisconnectClicked()
 {
-    qDebug().noquote() << "Disconnecting...";
+    qInfo().noquote() << "Disconnecting...";
     m_connection->disconnect();
 }
 
@@ -626,11 +630,6 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_subscriptionManager->clear();
         m_matrixManager->clear();
     }
-}
-
-void MainWindow::onLogMessage(const QString &message)
-{
-    logMessage(message);
 }
 
 void MainWindow::onNodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline)

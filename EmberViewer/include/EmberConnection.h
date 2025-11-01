@@ -20,15 +20,6 @@
 #include "GlowParser.h"
 #include "EmberDataTypes.h"
 
-// Log levels for controlling verbosity
-enum class LogLevel {
-    Error = 0,    // Only errors
-    Warning = 1,  // Errors and warnings
-    Info = 2,     // Errors, warnings, and info (default)
-    Debug = 3,    // All messages including debug
-    Trace = 4     // Everything including protocol details
-};
-
 // Forward declarations
 class S101Protocol;
 class GlowParser;
@@ -54,9 +45,6 @@ public:
     void connectToHost(const QString &host, int port);
     void disconnect();
     bool isConnected() const;
-    
-    // Log level control
-    void setLogLevel(LogLevel level);
     
     // Send parameter value update to device
     void sendParameterValue(const QString &path, const QString &value, int type);
@@ -84,7 +72,6 @@ public:
 signals:
     void connected();
     void disconnected();
-    void logMessage(const QString &message);
     void treePopulated();  // Emitted when initial tree is received
     void nodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
     void parameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
@@ -130,9 +117,6 @@ private:
     void onParserMatrixReceived(const EmberData::MatrixInfo& matrix);
     void sendGetDirectory();
     
-    // Logging helper
-    void log(LogLevel level, const QString &message);
-    
     // Device name detection helper
     bool isGenericNodeName(const QString &name);
 
@@ -158,9 +142,6 @@ private:
     
     // Track requested paths to avoid infinite loops
     QSet<QString> m_requestedPaths;
-    
-    // Log level
-    LogLevel m_logLevel;
     
     // Function invocation tracking
     int m_nextInvocationId;

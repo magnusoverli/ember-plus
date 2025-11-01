@@ -337,14 +337,8 @@ target_link_libraries(EmberViewerLib
         ${LIBEMBER_TARGET}
 )
 
-# Qt Release-mode optimizations: remove debug/info logging overhead
-# Must be set BEFORE precompiled headers to ensure PCH is built with same definitions
-if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
-    target_compile_definitions(EmberViewerLib PUBLIC
-        QT_NO_DEBUG_OUTPUT    # Remove qDebug() calls
-        QT_NO_INFO_OUTPUT     # Remove qInfo() calls
-    )
-endif()
+# Qt logging is now controlled at runtime via QLoggingCategory filter rules
+# No compile-time removal - allows proper runtime log level control
 
 # Enable precompiled headers for faster compilation
 target_precompile_headers(EmberViewerLib
