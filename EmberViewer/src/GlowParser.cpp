@@ -314,13 +314,23 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.streamIdentifier = param->streamIdentifier();
     
+    // Parse format string if available
+    if (param->contains(libember::glow::ParameterProperty::Format)) {
+        info.format = QString::fromStdString(param->format());
+        info.referenceLevel = detectReferenceLevel(info.format);
+    }
+    
     
     if (info.streamIdentifier > 0) {
         qDebug() << "[GlowParser] PPM Parameter (qualified):" << info.path 
                  << "identifier=" << info.identifier 
                  << "streamId=" << info.streamIdentifier
                  << "type=" << info.type
-                 << "value=" << info.value;
+                 << "value=" << info.value
+                 << "min=" << info.minimum
+                 << "max=" << info.maximum
+                 << "format=" << info.format
+                 << "reference=" << info.referenceLevel;
     }
     
     emit parameterReceived(info);
@@ -408,13 +418,23 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     
     info.streamIdentifier = param->streamIdentifier();
     
+    // Parse format string if available
+    if (param->contains(libember::glow::ParameterProperty::Format)) {
+        info.format = QString::fromStdString(param->format());
+        info.referenceLevel = detectReferenceLevel(info.format);
+    }
+    
     
     if (info.streamIdentifier > 0) {
         qDebug() << "[GlowParser] PPM Parameter (unqualified):" << info.path 
                  << "identifier=" << info.identifier 
                  << "streamId=" << info.streamIdentifier
                  << "type=" << info.type
-                 << "value=" << info.value;
+                 << "value=" << info.value
+                 << "min=" << info.minimum
+                 << "max=" << info.maximum
+                 << "format=" << info.format
+                 << "reference=" << info.referenceLevel;
     }
     
     emit parameterReceived(info);
@@ -809,4 +829,45 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
             emit streamValueReceived(info);
         }
     }
+}
+
+QString GlowParser::detectReferenceLevel(const QString& formatString) const
+{
+    if (formatString.isEmpty()) {
+        return QString();
+    }
+    
+    // Check for common reference level indicators in the format string
+    QString upper = formatString.toUpper();
+    
+    if (upper.contains("DBFS")) {
+        return "dBFS";  // Digital Full Scale
+    }
+    else if (upper.contains("DBTP") || upper.contains("DB TP")) {
+        return "dBTP";  // True Peak
+    }
+    else if (upper.contains("DBR")) {
+        return "dBr";   // DIN PPM reference
+    }
+    else if (upper.contains("DBU")) {
+        return "dBu";   // Professional line level
+    }
+    else if (upper.contains("DBV")) {
+        return "dBV";   // Voltage reference
+    }
+    else if (upper.contains("VU")) {
+        return "VU";    // VU meter
+    }
+    else if (upper.contains("PPM")) {
+        return "PPM";   // Generic PPM (could be DIN or BBC)
+    }
+    else if (upper.contains("LUFS") || upper.contains("LU")) {
+        return "LUFS";  // Loudness Units relative to Full Scale
+    }
+    
+    else if (upper.contains("DB")) {
+        return "dB";    // Generic dB (no specific reference)
+    }
+    // No reference level detected
+    return QString();
 }

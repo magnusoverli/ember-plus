@@ -60,19 +60,19 @@ signals:
     void parsingError(const QString& error);
 
 private:
-    
     void processRoot(libember::dom::Node* root);
     void processElementCollection(libember::glow::GlowContainer* container, const QString& parentPath);
-    void processQualifiedNode(libember::glow::GlowQualifiedNode* node, bool emitNode = true);
-    void processNode(libember::glow::GlowNode* node, const QString& parentPath, bool emitNode = true);
     void processQualifiedParameter(libember::glow::GlowQualifiedParameter* param);
     void processParameter(libember::glow::GlowParameter* param, const QString& parentPath);
+    void processQualifiedNode(libember::glow::GlowQualifiedNode* node, bool isNew = true);
+    void processNode(libember::glow::GlowNode* node, const QString& parentPath, bool isNew = true);
     void processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix);
     void processMatrix(libember::glow::GlowMatrix* matrix, const QString& parentPath);
     void processQualifiedFunction(libember::glow::GlowQualifiedFunction* function);
     void processFunction(libember::glow::GlowFunction* function, const QString& parentPath);
     void processInvocationResult(libember::dom::Node* result);
     void processStreamCollection(libember::glow::GlowContainer* streamCollection);
+    QString detectReferenceLevel(const QString& formatString) const;
     
     libember::dom::AsyncDomReader *m_domReader;
     

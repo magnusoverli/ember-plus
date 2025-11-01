@@ -650,7 +650,8 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
 
 void MainWindow::onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
-                                    const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier)
+                                    const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
+                                    const QString &format, const QString &referenceLevel)
 {
     
     if (streamIdentifier > 0) {
@@ -683,7 +684,7 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
     
     
     m_treeViewController->onParameterReceived(path, number, identifier, value, access, type, 
-                                             minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
+                                             minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier, format, referenceLevel);
 }
 
 void MainWindow::onMatrixReceived(const QString &path, int number, const QString &identifier, 
@@ -823,7 +824,12 @@ void MainWindow::onTreeSelectionChanged()
             double minValue = minVar.isValid() ? minVar.toDouble() : 0.0;
             double maxValue = maxVar.isValid() ? maxVar.toDouble() : 100.0;
             
-            m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue);
+            
+            // Read format and referenceLevel
+            QString format = item->data(0, Qt::UserRole + 10).toString();
+            QString referenceLevel = item->data(0, Qt::UserRole + 11).toString();
+            qDebug() << "[MainWindow] Read from tree item - format:" << format << "referenceLevel:" << referenceLevel << "for path:" << oidPath;
+            m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue, format, referenceLevel);
             m_activeMeter->setStreamIdentifier(streamIdentifier);
             
             

@@ -76,13 +76,53 @@ MeterWidget::~MeterWidget()
 }
 
 void MeterWidget::setParameterInfo(const QString &identifier, const QString &path, 
-                                   double minValue, double maxValue)
+                                   double minValue, double maxValue,
+                                   const QString &format, const QString &referenceLevel)
 {
     m_identifier = identifier;
     m_parameterPath = path;
     m_minValue = minValue;
     m_maxValue = maxValue;
+    m_format = format;
+    m_referenceLevel = referenceLevel;
     
+    qDebug() << "[MeterWidget] setParameterInfo called - format:" << format << "referenceLevel:" << referenceLevel << "min:" << minValue << "max:" << maxValue;
+    
+    // Set tooltip showing cleaned format string
+    if (!format.isEmpty()) {
+        QString cleanFormat = format;
+        cleanFormat = cleanFormat.replace("\\n", " ").replace("\n", " ").replace("°", "").simplified();
+        setToolTip(QString("Format: %1\nRange: %2 to %3 %4")
+                   .arg(cleanFormat)
+                   .arg(minValue, 0, 'f', 1)
+                   .arg(maxValue, 0, 'f', 1)
+                   .arg(referenceLevel.isEmpty() ? "dB" : referenceLevel));
+    }
+    
+    // Auto-detect meter type based on reference level
+    if (!referenceLevel.isEmpty()) {
+        qDebug() << "[MeterWidget] Auto-detecting meter type from reference level:" << referenceLevel;
+        
+        if (referenceLevel == "dBFS" || referenceLevel == "dBTP") {
+            m_meterTypeCombo->setCurrentIndex(1);  // Digital Peak
+            qDebug() << "[MeterWidget] Auto-selected Digital Peak meter for" << referenceLevel;
+        }
+        else if (referenceLevel == "dBr") {
+            m_meterTypeCombo->setCurrentIndex(2);  // DIN PPM
+            qDebug() << "[MeterWidget] Auto-selected DIN PPM meter for dBr";
+        }
+        else if (referenceLevel == "VU") {
+            m_meterTypeCombo->setCurrentIndex(0);  // VU Meter
+            qDebug() << "[MeterWidget] Auto-selected VU meter";
+        }
+        else if (referenceLevel.contains("PPM")) {
+            m_meterTypeCombo->setCurrentIndex(2);  // DIN PPM
+            qDebug() << "[MeterWidget] Auto-selected DIN PPM meter for" << referenceLevel;
+        }
+        else {
+            qDebug() << "[MeterWidget] Unknown reference level, keeping default";
+        }
+    }
     
     m_targetValue = minValue;
     m_displayValue = minValue;
@@ -90,6 +130,7 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
     
     update();
 }
+
 
 void MeterWidget::updateValue(double value)
 {
@@ -189,6 +230,29 @@ void MeterWidget::getMeterConstants(MeterType type, double &riseTime, double &fa
 
 void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &yellowThreshold) const
 {
+    // If we have a dB scale with known reference level, use absolute dB thresholds
+    if (isDatabaseScale()) {
+        if (m_referenceLevel == "dBFS" || m_referenceLevel == "dBTP") {
+            // Digital Full Scale: Industry standard thresholds
+            // Green: below -20 dBFS, Yellow: -20 to -6 dBFS, Red: above -6 dBFS
+            greenThreshold = dBToNormalized(-20.0);
+            yellowThreshold = dBToNormalized(-6.0);
+            qDebug() << "[MeterWidget] Using dBFS thresholds: green=" << greenThreshold 
+                     << "(-20 dBFS), yellow=" << yellowThreshold << "(-6 dBFS)";
+            return;
+        }
+        else if (m_referenceLevel == "dBr") {
+            // DIN PPM reference level
+            // Green: below -9 dBr, Yellow: -9 to 0 dBr, Red: 0 to +5 dBr
+            greenThreshold = dBToNormalized(-9.0);
+            yellowThreshold = dBToNormalized(0.0);
+            qDebug() << "[MeterWidget] Using dBr thresholds: green=" << greenThreshold 
+                     << "(-9 dBr), yellow=" << yellowThreshold << "(0 dBr)";
+            return;
+        }
+    }
+    
+    // Fallback to percentage-based thresholds
     switch (type) {
         case MeterType::VU_METER:
             // VU Meter: Green below 0 VU (50%), Red above 0 VU
@@ -249,12 +313,56 @@ QColor MeterWidget::getColorForLevel(double normalizedLevel) const
 
 QString MeterWidget::formatValue(double value) const
 {
-    
-    if (m_minValue < 0 && m_maxValue <= 20) {
-        return QString("%1 dB").arg(value, 0, 'f', 1);
-    } else {
-        return QString("%1").arg(value, 0, 'f', 2);
+    // Use format string and reference level if available
+    if (!m_referenceLevel.isEmpty()) {
+        int precision = 1;  // default
+        
+        if (!m_format.isEmpty()) {
+            precision = extractPrecision(m_format);
+        }
+        
+        return QString("%1 %2").arg(value, 0, 'f', precision).arg(m_referenceLevel);
     }
+    
+    // Fallback to generic dB display
+    return QString("%1 dB").arg(value, 0, 'f', 1);
+}
+
+int MeterWidget::extractPrecision(const QString &formatString) const
+{
+    // Extract precision from format string like "%.1f" -> 1
+    QRegularExpression re(R"(%\.(\d+)[fdeEgG])");
+    QRegularExpressionMatch match = re.match(formatString);
+    
+    if (match.hasMatch()) {
+        return match.captured(1).toInt();
+    }
+    
+    // Default precision
+    return 1;
+}
+
+bool MeterWidget::isDatabaseScale() const
+{
+    // Check if we're using a dB-based scale
+    return !m_referenceLevel.isEmpty() && (
+        m_referenceLevel.contains("dB") || 
+        m_referenceLevel == "VU" || 
+        m_referenceLevel.contains("PPM"));
+}
+
+
+
+
+double MeterWidget::dBToNormalized(double dBValue) const
+{
+    // Convert a dB value to a normalized 0.0-1.0 position in the meter range
+    if (m_maxValue <= m_minValue) {
+        return 0.0;
+    }
+    
+    double normalized = (dBValue - m_minValue) / (m_maxValue - m_minValue);
+    return qBound(0.0, normalized, 1.0);
 }
 
 void MeterWidget::paintEvent(QPaintEvent *event)

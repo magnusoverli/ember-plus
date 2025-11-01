@@ -76,7 +76,8 @@ signals:
     void nodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
     void parameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                           int access, int type, const QVariant &minimum, const QVariant &maximum,
-                          const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier);
+                          const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
+                          const QString &format, const QString &referenceLevel);
     void matrixReceived(const QString &path, int number, const QString &identifier, const QString &description,
                        int type, int targetCount, int sourceCount);
     void matrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label);

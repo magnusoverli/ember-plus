@@ -32,7 +32,8 @@ public:
 
     
     void setParameterInfo(const QString &identifier, const QString &path, 
-                         double minValue, double maxValue);
+                         double minValue, double maxValue,
+                         const QString &format = QString(), const QString &referenceLevel = QString());
     
     
     void updateValue(double value);
@@ -59,10 +60,18 @@ private:
     QString formatValue(double value) const;
     void getMeterConstants(MeterType type, double &riseTime, double &fallTime) const;
     void getColorZones(MeterType type, double &greenThreshold, double &yellowThreshold) const;
+    
+    // dB-aware helper methods
+    bool isDatabaseScale() const;
+    double dBToNormalized(double dBValue) const;
+    double normalizedToDb(double normalized) const;
+    int extractPrecision(const QString &formatString) const;
 
     
     QString m_identifier;
     QString m_parameterPath;
+    QString m_format;           // Format string from provider
+    QString m_referenceLevel;   // Detected reference level (dBFS, dBr, etc.)
     int m_streamIdentifier;
     double m_minValue;
     double m_maxValue;
