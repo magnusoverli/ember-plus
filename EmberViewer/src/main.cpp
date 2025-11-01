@@ -108,15 +108,16 @@ int main(int argc, char *argv[])
     QString logPath = logDir + "/emberviewer_" + timestamp + ".log";
     logFile = new QFile(logPath);
     
+    // Set Qt logging filter rules BEFORE opening log file or installing handler
+    // This prevents Qt internal debug spam from being output
+    QLoggingCategory::setFilterRules(
+        "qt.*.debug=false\n"        // Disable ALL Qt internal debug categories
+        "qt.*.info=false\n"         // Disable ALL Qt internal info categories  
+        "*.warning=true\n"          // Enable warnings
+        "*.critical=true"           // Enable critical/fatal
+    );
+    
     if (logFile->open(QIODevice::WriteOnly | QIODevice::Text)) {
-        // Qt logging filter rules (runtime control)
-        // Enable all levels - filtering is done in messageHandler based on output destination
-        QLoggingCategory::setFilterRules(
-            "*.debug=true\n"            // Enable debug globally (messageHandler filters per-destination)
-            "*.info=true\n"             // Enable info globally
-            "*.warning=true\n"          // Enable warnings
-            "*.critical=true"           // Enable critical/fatal
-        );
         qInstallMessageHandler(messageHandler);
         qInfo() << "EmberViewer started - Version:" << QApplication::applicationVersion();
         qInfo() << "Log file:" << logPath;
