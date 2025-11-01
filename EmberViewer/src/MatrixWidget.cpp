@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Widget for displaying Ember+ matrix crosspoints
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "MatrixWidget.h"
 #include <QVBoxLayout>
@@ -21,14 +21,14 @@
 #include <QIcon>
 #include <algorithm>
 
-// Define static constants
+
 const int MatrixWidget::BUTTON_SIZE;
 const int MatrixWidget::GRID_SPACING;
 const int MatrixWidget::LABEL_HEIGHT;
 const int MatrixWidget::MAX_LABEL_WIDTH;
 
-// RotatedLabel implementation
-// RotatedLabel implementation
+
+
 RotatedLabel::RotatedLabel(const QString &text, int buttonWidth, QWidget *parent)
     : QWidget(parent), m_fullText(text), m_displayText(text)
 {
@@ -37,12 +37,12 @@ RotatedLabel::RotatedLabel(const QString &text, int buttonWidth, QWidget *parent
     font.setPointSize(9);
     setFont(font);
     
-    // Set fixed width (matches button width), but allow height to vary
+    
     setFixedWidth(buttonWidth);
-    setMinimumHeight(50);  // Minimum reasonable height
+    setMinimumHeight(50);  
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     
-    // Initial display text will be updated when widget is sized
+    
     updateDisplayText();
 }
 
@@ -60,18 +60,18 @@ void RotatedLabel::updateDisplayText()
     QFontMetrics fm(font);
     
     int textWidth = fm.horizontalAdvance(m_fullText);
-    int availableHeight = height();  // After rotation, height becomes horizontal space
+    int availableHeight = height();  
     
-    // Truncate only if text exceeds available height
+    
     if (textWidth > availableHeight) {
         m_displayText = fm.elidedText(m_fullText, Qt::ElideRight, availableHeight);
-        setToolTip(m_fullText);  // Show full text on hover
+        setToolTip(m_fullText);  
     } else {
         m_displayText = m_fullText;
-        setToolTip("");  // No tooltip needed if full text fits
+        setToolTip("");  
     }
     
-    update();  // Trigger repaint
+    update();  
 }
 
 void RotatedLabel::paintEvent(QPaintEvent *)
@@ -85,12 +85,12 @@ void RotatedLabel::paintEvent(QPaintEvent *)
     font.setPointSize(9);
     painter.setFont(font);
     
-    // Rotate around center of widget
+    
     painter.save();
     painter.translate(width() / 2, height() / 2);
     painter.rotate(-90);
     
-    // Draw text bottom-aligned (AlignLeft in rotated space = bottom on screen)
+    
     QRect boundingRect(-height() / 2, -width() / 2, height(), width());
     painter.drawText(boundingRect, Qt::AlignLeft | Qt::AlignVCenter, m_displayText);
     
@@ -99,7 +99,7 @@ void RotatedLabel::paintEvent(QPaintEvent *)
 
 
 
-// SourceLabel implementation
+
 SourceLabel::SourceLabel(const QString &text, int buttonHeight, QWidget *parent)
     : QWidget(parent), m_fullText(text), m_displayText(text)
 {
@@ -108,12 +108,12 @@ SourceLabel::SourceLabel(const QString &text, int buttonHeight, QWidget *parent)
     font.setPointSize(9);
     setFont(font);
     
-    // Set fixed height (matches button height), but allow width to vary
+    
     setFixedHeight(buttonHeight);
-    setMinimumWidth(50);  // Minimum reasonable width
+    setMinimumWidth(50);  
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     
-    // Initial display text will be updated when widget is sized
+    
     updateDisplayText();
 }
 
@@ -131,18 +131,18 @@ void SourceLabel::updateDisplayText()
     QFontMetrics fm(font);
     
     int textWidth = fm.horizontalAdvance(m_fullText);
-    int availableWidth = width() - 4;  // Leave small padding
+    int availableWidth = width() - 4;  
     
-    // Truncate only if text exceeds available width
+    
     if (textWidth > availableWidth) {
         m_displayText = fm.elidedText(m_fullText, Qt::ElideRight, availableWidth);
-        setToolTip(m_fullText);  // Show full text on hover
+        setToolTip(m_fullText);  
     } else {
         m_displayText = m_fullText;
-        setToolTip("");  // No tooltip needed if full text fits
+        setToolTip("");  
     }
     
-    update();  // Trigger repaint
+    update();  
 }
 
 void SourceLabel::paintEvent(QPaintEvent *)
@@ -156,14 +156,14 @@ void SourceLabel::paintEvent(QPaintEvent *)
     font.setPointSize(9);
     painter.setFont(font);
     
-    // Draw text right-aligned, vertically centered
+    
     QRect boundingRect(0, 0, width(), height());
     painter.drawText(boundingRect, Qt::AlignRight | Qt::AlignVCenter, m_displayText);
 }
-// MatrixWidget implementation
+
 MatrixWidget::MatrixWidget(QWidget *parent)
     : QWidget(parent)
-    , m_matrixType(2)  // Default to NToN
+    , m_matrixType(2)  
     , m_targetCount(0)
     , m_sourceCount(0)
     , m_headerLabel(nullptr)
@@ -189,24 +189,24 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     outerLayout->setContentsMargins(10, 10, 10, 10);
     outerLayout->setSpacing(5);
     
-    // Header label (above the frozen pane)
+    
     m_headerLabel = new QLabel("Matrix", this);
     m_headerLabel->setStyleSheet("font-weight: bold; font-size: 12pt;");
     outerLayout->addWidget(m_headerLabel);
     
-    // Create outer vertical splitter (top row vs bottom row)
+    
     m_outerVerticalSplitter = new QSplitter(Qt::Vertical, this);
     m_outerVerticalSplitter->setChildrenCollapsible(false);
     m_outerVerticalSplitter->setHandleWidth(6);
     m_outerVerticalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
     
-    // === TOP ROW: Corner + Target Headers ===
+    
     m_topHorizontalSplitter = new QSplitter(Qt::Horizontal);
     m_topHorizontalSplitter->setChildrenCollapsible(false);
     m_topHorizontalSplitter->setHandleWidth(6);
     m_topHorizontalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
     
-    // [Top-Left] Corner widget - button to toggle crosspoint editing
+    
     m_cornerWidget = new QPushButton();
     m_cornerWidget->setMinimumWidth(50);
     m_cornerWidget->setMaximumWidth(200);
@@ -221,7 +221,7 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     
     connect(m_cornerWidget, &QPushButton::clicked, this, &MatrixWidget::crosspointToggleRequested);
     
-    // [Top-Right] Target header (horizontal scroll only)
+    
     m_targetHeaderScrollArea = new QScrollArea();
     m_targetHeaderScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_targetHeaderScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -236,16 +236,16 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     
     m_topHorizontalSplitter->addWidget(m_cornerWidget);
     m_topHorizontalSplitter->addWidget(m_targetHeaderScrollArea);
-    m_topHorizontalSplitter->setStretchFactor(0, 0);  // Corner doesn't stretch
-    m_topHorizontalSplitter->setStretchFactor(1, 1);  // Headers stretch
+    m_topHorizontalSplitter->setStretchFactor(0, 0);  
+    m_topHorizontalSplitter->setStretchFactor(1, 1);  
     
-    // === BOTTOM ROW: Source Sidebar + Button Grid ===
+    
     m_bottomHorizontalSplitter = new QSplitter(Qt::Horizontal);
     m_bottomHorizontalSplitter->setChildrenCollapsible(false);
     m_bottomHorizontalSplitter->setHandleWidth(6);
     m_bottomHorizontalSplitter->setStyleSheet("QSplitter::handle { background: transparent; }");
     
-    // [Bottom-Left] Source sidebar (vertical scroll only)
+    
     m_sourcesSidebarScrollArea = new QScrollArea();
     m_sourcesSidebarScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_sourcesSidebarScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -261,7 +261,7 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     m_sourcesSidebarLayout->setContentsMargins(0, 0, 0, 0);
     m_sourcesSidebarScrollArea->setWidget(m_sourcesSidebarContainer);
     
-    // [Bottom-Right] Button grid (both scrollbars)
+    
     m_buttonGridScrollArea = new QScrollArea();
     m_buttonGridScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_buttonGridScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -275,25 +275,25 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     
     m_bottomHorizontalSplitter->addWidget(m_sourcesSidebarScrollArea);
     m_bottomHorizontalSplitter->addWidget(m_buttonGridScrollArea);
-    m_bottomHorizontalSplitter->setStretchFactor(0, 0);  // Sidebar doesn't stretch
-    m_bottomHorizontalSplitter->setStretchFactor(1, 1);  // Grid stretches
+    m_bottomHorizontalSplitter->setStretchFactor(0, 0);  
+    m_bottomHorizontalSplitter->setStretchFactor(1, 1);  
     
-    // Add both rows to outer vertical splitter
+    
     m_outerVerticalSplitter->addWidget(m_topHorizontalSplitter);
     m_outerVerticalSplitter->addWidget(m_bottomHorizontalSplitter);
     
-    // Set initial sizes for vertical splitter (target headers smaller than button grid)
+    
     m_outerVerticalSplitter->setMinimumHeight(200);
-    m_outerVerticalSplitter->setStretchFactor(0, 0);  // Top row doesn't stretch much
-    m_outerVerticalSplitter->setStretchFactor(1, 1);  // Bottom row stretches
+    m_outerVerticalSplitter->setStretchFactor(0, 0);  
+    m_outerVerticalSplitter->setStretchFactor(1, 1);  
     
-    // Note: Don't call setSizes() here - it will be set in resizeEvent() 
-    // to maintain static handle positions regardless of initial widget size
     
-    // Add the splitter to outer layout
+    
+    
+    
     outerLayout->addWidget(m_outerVerticalSplitter);
     
-    // Set all child widgets to transparent background so parent background shows through
+    
     m_outerVerticalSplitter->setStyleSheet(m_outerVerticalSplitter->styleSheet() + " QSplitter { background: transparent; }");
     m_topHorizontalSplitter->setStyleSheet(m_topHorizontalSplitter->styleSheet() + " QSplitter { background: transparent; }");
     m_bottomHorizontalSplitter->setStyleSheet(m_bottomHorizontalSplitter->styleSheet() + " QSplitter { background: transparent; }");
@@ -303,7 +303,7 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     m_buttonGridContainer->setStyleSheet("QWidget { background-color: transparent; }");
     m_sourcesSidebarContainer->setStyleSheet("QWidget { background-color: transparent; }");
     
-    // Connect splitter synchronization
+    
     connect(m_topHorizontalSplitter, &QSplitter::splitterMoved,
             this, &MatrixWidget::onTopSplitterMoved);
     connect(m_bottomHorizontalSplitter, &QSplitter::splitterMoved,
@@ -311,7 +311,7 @@ MatrixWidget::MatrixWidget(QWidget *parent)
     connect(m_outerVerticalSplitter, &QSplitter::splitterMoved,
             this, &MatrixWidget::onVerticalSplitterMoved);
     
-    // Connect scroll synchronization
+    
     connectScrollSync();
 }
 
@@ -323,7 +323,7 @@ void MatrixWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     
-    // Only enforce static positions if user hasn't manually adjusted handles
+    
     if (!m_userAdjustedHandles) {
         enforceStaticHandlePositions();
     }
@@ -331,25 +331,25 @@ void MatrixWidget::resizeEvent(QResizeEvent *event)
 
 void MatrixWidget::enforceStaticHandlePositions()
 {
-    // Get current widget dimensions
+    
     int totalHeight = m_outerVerticalSplitter->height();
     int totalWidth = m_outerVerticalSplitter->width();
     
-    // Calculate sizes to keep labels anchored to bottom with minimum spacing from top
-    const int minLabelHeight = 50;
-    const int minTopMargin = 10;  // Minimum space above labels
     
-    // Default: give labels reasonable space
-    int topSectionHeight = LABEL_HEIGHT + 2;  // Use default label height
+    const int minLabelHeight = 50;
+    const int minTopMargin = 10;  
+    
+    
+    int topSectionHeight = LABEL_HEIGHT + 2;  
     int bottomSectionHeight = totalHeight - topSectionHeight - m_outerVerticalSplitter->handleWidth();
     
-    // Ensure bottom section has minimum size
+    
     if (bottomSectionHeight < 100) {
         bottomSectionHeight = 100;
         topSectionHeight = totalHeight - bottomSectionHeight - m_outerVerticalSplitter->handleWidth();
     }
     
-    // Ensure top section has minimum size
+    
     if (topSectionHeight < minLabelHeight + minTopMargin) {
         topSectionHeight = minLabelHeight + minTopMargin;
     }
@@ -358,11 +358,11 @@ void MatrixWidget::enforceStaticHandlePositions()
     verticalSizes << topSectionHeight << bottomSectionHeight;
     m_outerVerticalSplitter->setSizes(verticalSizes);
     
-    // Calculate horizontal splits (same for both top and bottom)
-    int leftSectionWidth = MAX_LABEL_WIDTH;  // Static distance from left
+    
+    int leftSectionWidth = MAX_LABEL_WIDTH;  
     int rightSectionWidth = totalWidth - leftSectionWidth - m_topHorizontalSplitter->handleWidth();
     
-    // Ensure right section doesn't go negative
+    
     if (rightSectionWidth < 100) {
         rightSectionWidth = 100;
         leftSectionWidth = totalWidth - rightSectionWidth - m_topHorizontalSplitter->handleWidth();
@@ -371,7 +371,7 @@ void MatrixWidget::enforceStaticHandlePositions()
     QList<int> horizontalSizes;
     horizontalSizes << leftSectionWidth << rightSectionWidth;
     
-    // Set both horizontal splitters to same width split
+    
     m_topHorizontalSplitter->setSizes(horizontalSizes);
     m_bottomHorizontalSplitter->setSizes(horizontalSizes);
 }
@@ -379,13 +379,13 @@ void MatrixWidget::enforceStaticHandlePositions()
 
 void MatrixWidget::connectScrollSync()
 {
-    // Sync horizontal scrolling: button grid → target header
+    
     connect(m_buttonGridScrollArea->horizontalScrollBar(), &QScrollBar::valueChanged,
             this, [this](int value) {
         m_targetHeaderScrollArea->horizontalScrollBar()->setValue(value);
     });
     
-    // Sync vertical scrolling: button grid → source sidebar
+    
     connect(m_buttonGridScrollArea->verticalScrollBar(), &QScrollBar::valueChanged,
             this, [this](int value) {
         m_sourcesSidebarScrollArea->verticalScrollBar()->setValue(value);
@@ -394,20 +394,20 @@ void MatrixWidget::connectScrollSync()
 
 void MatrixWidget::onTopSplitterMoved(int pos, int index)
 {
-    // User manually moved a handle - remember this
+    
     m_userAdjustedHandles = true;
     
-    // When top splitter moves (corner vs target headers), sync bottom splitter
-    // to maintain same width for corner and source sidebar
-    if (index == 1) {  // Handle between corner and target headers
+    
+    
+    if (index == 1) {  
         QList<int> topSizes = m_topHorizontalSplitter->sizes();
         QList<int> bottomSizes = m_bottomHorizontalSplitter->sizes();
         
-        // Update bottom splitter to match top splitter's left width
+        
         if (topSizes.size() >= 2 && bottomSizes.size() >= 2) {
-            bottomSizes[0] = topSizes[0];  // Match corner width to sidebar width
+            bottomSizes[0] = topSizes[0];  
             
-            // Temporarily block signals to avoid infinite recursion
+            
             m_bottomHorizontalSplitter->blockSignals(true);
             m_bottomHorizontalSplitter->setSizes(bottomSizes);
             m_bottomHorizontalSplitter->blockSignals(false);
@@ -417,20 +417,20 @@ void MatrixWidget::onTopSplitterMoved(int pos, int index)
 
 void MatrixWidget::onBottomSplitterMoved(int pos, int index)
 {
-    // User manually moved a handle - remember this
+    
     m_userAdjustedHandles = true;
     
-    // When bottom splitter moves (sidebar vs button grid), sync top splitter
-    // to maintain same width for corner and source sidebar
-    if (index == 1) {  // Handle between sidebar and button grid
+    
+    
+    if (index == 1) {  
         QList<int> topSizes = m_topHorizontalSplitter->sizes();
         QList<int> bottomSizes = m_bottomHorizontalSplitter->sizes();
         
-        // Update top splitter to match bottom splitter's left width
+        
         if (topSizes.size() >= 2 && bottomSizes.size() >= 2) {
-            topSizes[0] = bottomSizes[0];  // Match corner width to sidebar width
+            topSizes[0] = bottomSizes[0];  
             
-            // Temporarily block signals to avoid infinite recursion
+            
             m_topHorizontalSplitter->blockSignals(true);
             m_topHorizontalSplitter->setSizes(topSizes);
             m_topHorizontalSplitter->blockSignals(false);
@@ -440,15 +440,15 @@ void MatrixWidget::onBottomSplitterMoved(int pos, int index)
 
 void MatrixWidget::onVerticalSplitterMoved(int pos, int index)
 {
-    // User manually moved the vertical handle - remember this
+    
     m_userAdjustedHandles = true;
     
-    // The vertical splitter controls the height of the target label area
-    // When it moves, the labels automatically resize due to their Expanding size policy
-    // and the updateDisplayText() in resizeEvent() will recalculate truncation
     
-    // No additional synchronization needed - labels are in the top section
-    // and will naturally resize to fill the available height
+    
+    
+    
+    
+    
 }
 
 void MatrixWidget::clearLayoutAndWidgets(QLayout *layout)
@@ -478,7 +478,7 @@ void MatrixWidget::setMatrixInfo(const QString &identifier, const QString &descr
     m_targetCount = targetCount;
     m_sourceCount = sourceCount;
     
-    // Update header - show only type and dimensions
+    
     QString typeStr;
     switch (type) {
         case 0: typeStr = "1:N"; break;
@@ -495,10 +495,10 @@ void MatrixWidget::setTargetLabel(int targetNumber, const QString &label)
 {
     m_targetLabels[targetNumber] = label;
     
-    // Track this target number if not already present
+    
     if (!m_targetNumbers.contains(targetNumber)) {
         m_targetNumbers.append(targetNumber);
-        std::sort(m_targetNumbers.begin(), m_targetNumbers.end());  // Keep sorted
+        std::sort(m_targetNumbers.begin(), m_targetNumbers.end());  
     }
 }
 
@@ -506,10 +506,10 @@ void MatrixWidget::setSourceLabel(int sourceNumber, const QString &label)
 {
     m_sourceLabels[sourceNumber] = label;
     
-    // Track this source number if not already present
+    
     if (!m_sourceNumbers.contains(sourceNumber)) {
         m_sourceNumbers.append(sourceNumber);
-        std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());  // Keep sorted
+        std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());  
     }
 }
 
@@ -537,7 +537,7 @@ void MatrixWidget::clearConnections()
 
 void MatrixWidget::clearTargetConnections(int targetNumber)
 {
-    // Remove all connections for this specific target
+    
     QList<std::pair<int, int>> keysToRemove;
     for (auto it = m_connections.begin(); it != m_connections.end(); ++it) {
         if (it.key().first == targetNumber) {
@@ -549,7 +549,7 @@ void MatrixWidget::clearTargetConnections(int targetNumber)
         m_connections.remove(key);
     }
     
-    // Update all buttons for this target to show disconnected state
+    
     for (int sourceNumber : m_sourceNumbers) {
         updateConnectionButton(targetNumber, sourceNumber);
     }
@@ -562,7 +562,7 @@ void MatrixWidget::rebuild()
 
 void MatrixWidget::buildGrid()
 {
-    // If grid already exists, just refresh button states (avoid expensive rebuild)
+    
     if (!m_buttons.isEmpty()) {
         qDebug() << "Grid already built, refreshing button states only";
         for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
@@ -571,13 +571,13 @@ void MatrixWidget::buildGrid()
         return;
     }
     
-    // Clear existing widgets from all sections
+    
     clearLayoutAndWidgets(m_targetHeaderLayout);
     clearLayoutAndWidgets(m_sourcesSidebarLayout);
     clearLayoutAndWidgets(m_buttonGridLayout);
     m_buttons.clear();
     
-    // Check if we have data
+    
     if (m_targetNumbers.isEmpty() || m_sourceNumbers.isEmpty()) {
         auto *emptyLabel = new QLabel("No matrix data", m_buttonGridContainer);
         emptyLabel->setStyleSheet("color: #888;");
@@ -585,7 +585,7 @@ void MatrixWidget::buildGrid()
         return;
     }
     
-    // Build target header (rotated labels)
+    
     for (int col = 0; col < m_targetNumbers.size(); col++) {
         int tgtNum = m_targetNumbers[col];
         QString label = m_targetLabels.value(tgtNum, QString("T%1").arg(tgtNum));
@@ -594,7 +594,7 @@ void MatrixWidget::buildGrid()
         m_targetHeaderLayout->addWidget(rotatedLabel);
     }
     
-    // Build source sidebar (using SourceLabel)
+    
     for (int row = 0; row < m_sourceNumbers.size(); row++) {
         int srcNum = m_sourceNumbers[row];
         QString label = m_sourceLabels.value(srcNum, QString("S%1").arg(srcNum));
@@ -603,7 +603,7 @@ void MatrixWidget::buildGrid()
         m_sourcesSidebarLayout->addWidget(srcLabel);
     }
     
-    // Build button grid (NO labels, just buttons)
+    
     for (int row = 0; row < m_sourceNumbers.size(); row++) {
         int srcNum = m_sourceNumbers[row];
         
@@ -618,22 +618,22 @@ void MatrixWidget::buildGrid()
             std::pair<int, int> key(tgtNum, srcNum);
             m_buttons[key] = btn;
             
-            // Connect button click to emit signal
+            
             connect(btn, &QPushButton::clicked, this, [this, tgtNum, srcNum]() {
                 emit crosspointClicked(m_matrixPath, tgtNum, srcNum);
             });
             
             updateConnectionButton(tgtNum, srcNum);
             
-            m_buttonGridLayout->addWidget(btn, row, col);  // Note: no +1 offset
+            m_buttonGridLayout->addWidget(btn, row, col);  
         }
     }
     
-    // Resize containers to fit content
     
-    // Set container width to match button grid columns exactly
+    
+    
     int targetHeaderWidth = m_targetNumbers.size() * BUTTON_SIZE;
-    // Set container height to match button grid rows exactly
+    
     int sourcesSidebarHeight = m_sourceNumbers.size() * BUTTON_SIZE;
     m_sourcesSidebarContainer->setFixedHeight(sourcesSidebarHeight);
     m_targetHeaderContainer->setFixedWidth(targetHeaderWidth);
@@ -654,13 +654,13 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
     
     QPushButton *btn = m_buttons[key];
     
-    // Use helper functions to get correct style, text, and tooltip
-    // These helpers consider BOTH connection state AND hover state
+    
+    
     btn->setStyleSheet(getButtonStyleSheet(targetNumber, sourceNumber));
     btn->setText(getButtonText(targetNumber, sourceNumber));
     btn->setToolTip(getButtonTooltip(targetNumber, sourceNumber));
     
-    // Handle locked state (disposition 3)
+    
     if (m_connections.contains(key) && m_connections[key].disposition == 3) {
         btn->setEnabled(false);
     } else {
@@ -668,21 +668,21 @@ void MatrixWidget::updateConnectionButton(int targetNumber, int sourceNumber)
     }
 }
 
-// Helper: Check if a button is currently in the hover-highlighted area
+
 bool MatrixWidget::isButtonHovered(int targetNumber, int sourceNumber) const
 {
     if (m_hoverTargetNumber == -1 || m_hoverSourceNumber == -1) {
         return false;
     }
     
-    // Check if button is in the highlighted row (to the left of and including hover position)
+    
     int colIdx = m_targetNumbers.indexOf(targetNumber);
     int hoverColIdx = m_targetNumbers.indexOf(m_hoverTargetNumber);
     if (sourceNumber == m_hoverSourceNumber && colIdx != -1 && hoverColIdx != -1 && colIdx <= hoverColIdx) {
         return true;
     }
     
-    // Check if button is in the highlighted column (above and including hover position)
+    
     int rowIdx = m_sourceNumbers.indexOf(sourceNumber);
     int hoverRowIdx = m_sourceNumbers.indexOf(m_hoverSourceNumber);
     if (targetNumber == m_hoverTargetNumber && rowIdx != -1 && hoverRowIdx != -1 && rowIdx <= hoverRowIdx) {
@@ -692,14 +692,14 @@ bool MatrixWidget::isButtonHovered(int targetNumber, int sourceNumber) const
     return false;
 }
 
-// Helper: Get the appropriate stylesheet for a button based on connection AND hover state
+
 QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) const
 {
     std::pair<int, int> key(targetNumber, sourceNumber);
     bool isConnected = m_connections.contains(key);
     bool isHovered = isButtonHovered(targetNumber, sourceNumber);
     
-    // If not connected and not hovered - default disconnected style
+    
     if (!isConnected && !isHovered) {
         return "QPushButton { "
                "  background-color: #f5f5f5; "
@@ -707,21 +707,21 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
                "}";
     }
     
-    // If not connected but hovered - hover disconnected style
+    
     if (!isConnected && isHovered) {
         return "QPushButton { "
-               "  background-color: #e0e0e0; "  // Darker gray for hover
+               "  background-color: #e0e0e0; "  
                "  border: 2px solid #999; "
                "}";
     }
     
-    // Connected - check disposition
+    
     const ConnectionState &state = m_connections[key];
     
-    // If connected and hovered - lighter/highlighted version of connection color
+    
     if (isHovered) {
         return "QPushButton { "
-               "  background-color: #66BB6A; "  // Lighter green for hover
+               "  background-color: #66BB6A; "  
                "  border: 2px solid #2E7D32; "
                "  font-weight: bold; "
                "  color: white; "
@@ -729,9 +729,9 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
                "}";
     }
     
-    // Connected and not hovered - normal connection style based on disposition
+    
     switch (state.disposition) {
-        case 0:  // Tally
+        case 0:  
             return "QPushButton { "
                    "  background-color: #4CAF50; "
                    "  border: 1px solid #45a049; "
@@ -740,7 +740,7 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
                    "  font-size: 8pt; "
                    "}";
         
-        case 1:  // Modified
+        case 1:  
             return "QPushButton { "
                    "  background-color: #FF9800; "
                    "  border: 1px solid #F57C00; "
@@ -749,7 +749,7 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
                    "  font-size: 8pt; "
                    "}";
         
-        case 2:  // Pending
+        case 2:  
             return "QPushButton { "
                    "  background-color: #FFC107; "
                    "  border: 1px solid #FFA000; "
@@ -758,7 +758,7 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
                    "  font-size: 8pt; "
                    "}";
         
-        case 3:  // Locked
+        case 3:  
             return "QPushButton { "
                    "  background-color: #4CAF50; "
                    "  border: 2px solid #F44336; "
@@ -767,7 +767,7 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
                    "  font-size: 8pt; "
                    "}";
         
-        default:  // Unknown disposition
+        default:  
             return "QPushButton { "
                    "  background-color: #4CAF50; "
                    "  border: 1px solid #45a049; "
@@ -778,7 +778,7 @@ QString MatrixWidget::getButtonStyleSheet(int targetNumber, int sourceNumber) co
     }
 }
 
-// Helper: Get the appropriate button text based on connection state
+
 QString MatrixWidget::getButtonText(int targetNumber, int sourceNumber) const
 {
     std::pair<int, int> key(targetNumber, sourceNumber);
@@ -788,15 +788,15 @@ QString MatrixWidget::getButtonText(int targetNumber, int sourceNumber) const
     
     const ConnectionState &state = m_connections[key];
     switch (state.disposition) {
-        case 0: return "✓";      // Tally
-        case 1: return "~";      // Modified
-        case 2: return "⏳";     // Pending
-        case 3: return "🔒";     // Locked
-        default: return "✓";     // Unknown
+        case 0: return "✓";      
+        case 1: return "~";      
+        case 2: return "⏳";     
+        case 3: return "🔒";     
+        default: return "✓";     
     }
 }
 
-// Helper: Get the appropriate tooltip based on connection state
+
 QString MatrixWidget::getButtonTooltip(int targetNumber, int sourceNumber) const
 {
     std::pair<int, int> key(targetNumber, sourceNumber);
@@ -821,7 +821,7 @@ bool MatrixWidget::eventFilter(QObject *watched, QEvent *event)
         return QWidget::eventFilter(watched, event);
     }
     
-    // Find which target/source this button belongs to
+    
     std::pair<int, int> key(-1, -1);
     for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
         if (it.value() == btn) {
@@ -835,10 +835,10 @@ bool MatrixWidget::eventFilter(QObject *watched, QEvent *event)
     }
     
     if (event->type() == QEvent::Enter) {
-        // Mouse entered button - highlight row and column
+        
         updateHoverHighlight(key.first, key.second);
     } else if (event->type() == QEvent::Leave) {
-        // Mouse left button - clear highlight
+        
         updateHoverHighlight(-1, -1);
     }
     
@@ -847,21 +847,21 @@ bool MatrixWidget::eventFilter(QObject *watched, QEvent *event)
 
 void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
 {
-    // Save previous hover position for clearing
+    
     int prevHoverTargetNumber = m_hoverTargetNumber;
     int prevHoverSourceNumber = m_hoverSourceNumber;
     
-    // Clear previous highlight by setting hover state to "none" FIRST
-    // This ensures isButtonHovered() returns false for all buttons during clearing
+    
+    
     m_hoverTargetNumber = -1;
     m_hoverSourceNumber = -1;
     
-    // Now update all previously hovered buttons (they'll get normal, non-hover styling)
+    
     if (prevHoverTargetNumber != -1 && prevHoverSourceNumber != -1) {
-        // Find the column index of the previously hovered target
+        
         int prevColIdx = m_targetNumbers.indexOf(prevHoverTargetNumber);
         if (prevColIdx != -1) {
-            // Update all buttons to the LEFT of and including the previous column (same row)
+            
             for (int col = 0; col <= prevColIdx; col++) {
                 int tgtNum = m_targetNumbers[col];
                 if (m_buttons.contains(std::pair<int, int>(tgtNum, prevHoverSourceNumber))) {
@@ -870,10 +870,10 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
             }
         }
         
-        // Find the row index of the previously hovered source
+        
         int prevRowIdx = m_sourceNumbers.indexOf(prevHoverSourceNumber);
         if (prevRowIdx != -1) {
-            // Update all buttons ABOVE and including the previous row (same column)
+            
             for (int row = 0; row <= prevRowIdx; row++) {
                 int srcNum = m_sourceNumbers[row];
                 if (m_buttons.contains(std::pair<int, int>(prevHoverTargetNumber, srcNum))) {
@@ -883,17 +883,17 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
         }
     }
     
-    // Set new hover position BEFORE applying highlight
-    // This is critical - the helpers check m_hoverTargetNumber/m_hoverSourceNumber
+    
+    
     m_hoverTargetNumber = targetNumber;
     m_hoverSourceNumber = sourceNumber;
     
-    // Apply new highlight by updating all newly hovered buttons
+    
     if (m_hoverTargetNumber != -1 && m_hoverSourceNumber != -1) {
-        // Find the column index of the current hovered target
+        
         int colIdx = m_targetNumbers.indexOf(m_hoverTargetNumber);
         if (colIdx != -1) {
-            // Update all buttons to the LEFT of and including this column (same row)
+            
             for (int col = 0; col <= colIdx; col++) {
                 int tgtNum = m_targetNumbers[col];
                 if (m_buttons.contains(std::pair<int, int>(tgtNum, m_hoverSourceNumber))) {
@@ -902,10 +902,10 @@ void MatrixWidget::updateHoverHighlight(int targetNumber, int sourceNumber)
             }
         }
         
-        // Find the row index of the current hovered source
+        
         int rowIdx = m_sourceNumbers.indexOf(m_hoverSourceNumber);
         if (rowIdx != -1) {
-            // Update all buttons ABOVE and including this row (same column)
+            
             for (int row = 0; row <= rowIdx; row++) {
                 int srcNum = m_sourceNumbers[row];
                 if (m_buttons.contains(std::pair<int, int>(m_hoverTargetNumber, srcNum))) {
@@ -937,7 +937,7 @@ void MatrixWidget::setCrosspointsEnabled(bool enabled)
 {
     m_crosspointsEnabled = enabled;
     
-    // Update corner button icon based on state
+    
     QIcon icon;
     if (enabled) {
         icon = QIcon(":/lock-open.png");
@@ -949,21 +949,21 @@ void MatrixWidget::setCrosspointsEnabled(bool enabled)
     m_cornerWidget->setIcon(icon);
     m_cornerWidget->setIconSize(QSize(32, 32));
     
-    // Update background color based on state
+    
     if (enabled) {
-        // Pure red with 15% opacity to indicate editing is enabled
-        // Use QPalette to set background color reliably
+        
+        
         QPalette pal = palette();
-        pal.setColor(QPalette::Window, QColor(255, 0, 0, 38));  // Pure red with 15% alpha (0.15 * 255 = 38)
+        pal.setColor(QPalette::Window, QColor(255, 0, 0, 38));  
         setAutoFillBackground(true);
         setPalette(pal);
     } else {
-        // Normal background
+        
         setAutoFillBackground(false);
         setPalette(QPalette());
     }
     
-    // Enable/disable all buttons
+    
     for (QPushButton *btn : m_buttons.values()) {
         btn->setEnabled(enabled);
         if (enabled) {

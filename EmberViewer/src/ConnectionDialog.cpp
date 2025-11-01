@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Connection Dialog Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "ConnectionDialog.h"
 #include <QVBoxLayout>
@@ -33,7 +33,7 @@ void ConnectionDialog::setupUi()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
-    // Form layout for input fields
+    
     QFormLayout *formLayout = new QFormLayout();
 
     m_nameEdit = new QLineEdit(this);
@@ -46,12 +46,12 @@ void ConnectionDialog::setupUi()
 
     m_portSpin = new QSpinBox(this);
     m_portSpin->setRange(1, 65535);
-    m_portSpin->setValue(9092);  // Default Ember+ port
+    m_portSpin->setValue(9092);  
     formLayout->addRow("Port:", m_portSpin);
 
     mainLayout->addLayout(formLayout);
 
-    // Dialog buttons
+    
     QDialogButtonBox *buttonBox = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
         this
@@ -61,7 +61,7 @@ void ConnectionDialog::setupUi()
 
     mainLayout->addWidget(buttonBox);
 
-    // Focus on name field
+    
     m_nameEdit->setFocus();
 }
 

@@ -1,10 +1,10 @@
-/*
-    EmberViewer - macOS Update Manager Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "MacUpdateManager.h"
 #include <QJsonObject>
@@ -45,12 +45,12 @@ QString MacUpdateManager::selectAssetForPlatform(const QJsonObject &release)
 {
     QJsonArray assets = release["assets"].toArray();
 
-    // Look for DMG asset (e.g., "EmberViewer-macOS.dmg" or "EmberViewer.dmg")
+    
     for (const QJsonValue &assetValue : assets) {
         QJsonObject asset = assetValue.toObject();
         QString assetName = asset["name"].toString();
 
-        // Match DMG files
+        
         if (assetName.endsWith(".dmg", Qt::CaseInsensitive)) {
             QString downloadUrl = asset["browser_download_url"].toString();
             qInfo() << "Selected macOS asset:" << assetName;
@@ -72,7 +72,7 @@ void MacUpdateManager::installUpdate(const UpdateInfo &updateInfo)
         return;
     }
 
-    // Create temporary directory for download
+    
     m_tempDir = new QTemporaryDir();
     if (!m_tempDir->isValid()) {
         qWarning() << "Failed to create temporary directory";
@@ -82,7 +82,7 @@ void MacUpdateManager::installUpdate(const UpdateInfo &updateInfo)
         return;
     }
 
-    // Download the DMG
+    
     QString downloadPath = m_tempDir->path() + "/" + updateInfo.assetName;
     m_downloadFile = new QFile(downloadPath);
 
@@ -127,7 +127,7 @@ void MacUpdateManager::onDownloadFinished()
         return;
     }
 
-    // Write any remaining data
+    
     m_downloadFile->write(m_downloadReply->readAll());
     m_downloadFile->close();
 
@@ -154,7 +154,7 @@ void MacUpdateManager::onDownloadFinished()
     delete m_downloadFile;
     m_downloadFile = nullptr;
 
-    // Mount DMG and install
+    
     QString mountPoint;
     if (!mountDMG(downloadPath, mountPoint)) {
         qWarning() << "Failed to mount DMG";
@@ -166,7 +166,7 @@ void MacUpdateManager::onDownloadFinished()
 
     qInfo() << "DMG mounted at:" << mountPoint;
 
-    // Find .app bundle in mount point
+    
     QDir mountDir(mountPoint);
     QStringList appBundles = mountDir.entryList(QStringList() << "*.app", QDir::Dirs);
 
@@ -182,7 +182,7 @@ void MacUpdateManager::onDownloadFinished()
     QString appBundlePath = mountPoint + "/" + appBundles.first();
     qInfo() << "Found app bundle:" << appBundlePath;
 
-    // Copy to Applications folder
+    
     if (!copyAppToApplications(appBundlePath)) {
         qWarning() << "Failed to copy app to Applications";
         unmountDMG(mountPoint);
@@ -192,23 +192,23 @@ void MacUpdateManager::onDownloadFinished()
         return;
     }
 
-    // Unmount DMG
+    
     unmountDMG(mountPoint);
 
     qInfo() << "Update installed successfully - restarting application";
     emit installationFinished(true, "Update installed successfully. Restarting...");
 
-    // Restart the application with a small delay
+    
     QTimer::singleShot(1000, this, &MacUpdateManager::restartApplication);
 }
 
 bool MacUpdateManager::mountDMG(const QString &dmgPath, QString &mountPoint)
 {
-    // Use hdiutil to mount the DMG
+    
     QProcess process;
     process.start("hdiutil", QStringList() << "attach" << dmgPath << "-nobrowse");
     
-    if (!process.waitForFinished(30000)) { // 30 second timeout
+    if (!process.waitForFinished(30000)) { 
         qWarning() << "hdiutil attach timed out";
         return false;
     }
@@ -218,13 +218,13 @@ bool MacUpdateManager::mountDMG(const QString &dmgPath, QString &mountPoint)
         return false;
     }
 
-    // Parse output to find mount point
+    
     QString output = process.readAllStandardOutput();
     QStringList lines = output.split('\n');
     
     for (const QString &line : lines) {
         if (line.contains("/Volumes/")) {
-            // Extract mount point (last column)
+            
             QStringList parts = line.split('\t', Qt::SkipEmptyParts);
             if (!parts.isEmpty()) {
                 mountPoint = parts.last().trimmed();
@@ -242,7 +242,7 @@ bool MacUpdateManager::unmountDMG(const QString &mountPoint)
     QProcess process;
     process.start("hdiutil", QStringList() << "detach" << mountPoint);
     
-    if (!process.waitForFinished(10000)) { // 10 second timeout
+    if (!process.waitForFinished(10000)) { 
         qWarning() << "hdiutil detach timed out";
         return false;
     }
@@ -260,7 +260,7 @@ bool MacUpdateManager::copyAppToApplications(const QString &sourcePath)
 {
     QString applicationsPath = "/Applications/EmberViewer.app";
 
-    // Remove existing installation
+    
     if (QDir(applicationsPath).exists()) {
         qInfo() << "Removing existing installation:" << applicationsPath;
         
@@ -273,13 +273,13 @@ bool MacUpdateManager::copyAppToApplications(const QString &sourcePath)
         }
     }
 
-    // Copy new version using cp -R
+    
     qInfo() << "Copying app bundle to Applications folder";
     
     QProcess copyProcess;
     copyProcess.start("cp", QStringList() << "-R" << sourcePath << applicationsPath);
     
-    if (!copyProcess.waitForFinished(30000)) { // 30 second timeout
+    if (!copyProcess.waitForFinished(30000)) { 
         qWarning() << "Copy operation timed out";
         return false;
     }
@@ -297,10 +297,10 @@ void MacUpdateManager::restartApplication()
 {
     qInfo() << "Restarting application";
 
-    // Get path to the new app bundle
+    
     QString appPath = "/Applications/EmberViewer.app";
 
-    // Verify the app bundle exists
+    
     if (!QDir(appPath).exists()) {
         qCritical() << "Application bundle does not exist:" << appPath;
         emit installationFinished(false, 
@@ -309,13 +309,13 @@ void MacUpdateManager::restartApplication()
         return;
     }
 
-    // Start new instance using open command
+    
     qInfo() << "Launching new instance...";
     bool success = QProcess::startDetached("open", QStringList() << appPath);
 
     if (success) {
         qInfo() << "Successfully launched new instance - exiting current instance";
-        // Exit current instance
+        
         QCoreApplication::quit();
     } else {
         qCritical() << "Failed to launch new instance with open command";

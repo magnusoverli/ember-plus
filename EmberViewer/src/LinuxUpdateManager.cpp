@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Linux Update Manager Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "LinuxUpdateManager.h"
 #include <QJsonObject>
@@ -26,12 +26,12 @@ QString LinuxUpdateManager::selectAssetForPlatform(const QJsonObject &release)
 {
     QJsonArray assets = release["assets"].toArray();
 
-    // Look for AppImage asset (e.g., "EmberViewer-x86_64.AppImage")
+    
     for (const QJsonValue &assetValue : assets) {
         QJsonObject asset = assetValue.toObject();
         QString assetName = asset["name"].toString();
 
-        // Match AppImage files for x86_64 architecture
+        
         if (assetName.contains("AppImage", Qt::CaseInsensitive) &&
             assetName.contains("x86_64", Qt::CaseInsensitive)) {
             QString downloadUrl = asset["browser_download_url"].toString();
@@ -48,13 +48,13 @@ void LinuxUpdateManager::installUpdate(const UpdateInfo &updateInfo)
 {
     qInfo() << "Opening release page for Linux update:" << updateInfo.version;
 
-    // Build the release URL from the version tag
+    
     QString releaseUrl = QString("https://github.com/magnusoverli/ember-plus/releases/tag/%1")
                             .arg(updateInfo.version);
 
     qInfo() << "Opening URL:" << releaseUrl;
     
-    // Open the release page in the default browser
+    
     bool success = QDesktopServices::openUrl(QUrl(releaseUrl));
     
     if (success) {

@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Main application window implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "MainWindow.h"
 #include "EmberConnection.h"
@@ -29,7 +29,7 @@
 #include "SnapshotManager.h"
 #include "FunctionInvoker.h"
 
-// Platform-specific update managers
+
 #ifdef Q_OS_LINUX
 #include "LinuxUpdateManager.h"
 #elif defined(Q_OS_WIN)
@@ -94,8 +94,8 @@ MainWindow::MainWindow(QWidget *parent)
     , m_showOidPath(false)
     , m_enableQtInternalLogging(false)
 {
-    // Initialize connection manager and load saved connections early
-    // (needed before createDockWindows to integrate into layout properly)
+    
+    
     m_connectionManager = new ConnectionManager(this);
     m_connectionManager->loadFromDefaultLocation();
     
@@ -104,10 +104,10 @@ MainWindow::MainWindow(QWidget *parent)
     setupStatusBar();
     createDockWindows();
     
-    // Load saved settings
+    
     loadSettings();
     
-    // Create connection handler
+    
     m_connection = new EmberConnection(this);
     connect(m_connection, &EmberConnection::connected, this, [this]() {
         onConnectionStateChanged(true);
@@ -116,17 +116,17 @@ MainWindow::MainWindow(QWidget *parent)
         onConnectionStateChanged(false);
     });
     
-    // LAZY LOADING OPTIMIZATION: Use direct connections for instant UI updates
-    // With lazy loading, we only receive small batches of children at a time,
-    // so there's no risk of UI freeze. User sees real-time tree population.
-    // (Previously disabled for aggressive enumeration with 100+ items at once)
     
-    // Connect tree population signals (delegates to TreeViewController)
+    
+    
+    
+    
+    
     connect(m_connection, &EmberConnection::nodeReceived, this, &MainWindow::onNodeReceived);
     connect(m_connection, &EmberConnection::parameterReceived, this, &MainWindow::onParameterReceived);
     connect(m_connection, &EmberConnection::streamValueReceived, this, &MainWindow::onStreamValueReceived);
     
-    // Tree fetch progress now handled by SnapshotManager
+    
     connect(m_connection, &EmberConnection::matrixReceived, this, &MainWindow::onMatrixReceived);
     connect(m_connection, &EmberConnection::matrixTargetReceived, this, &MainWindow::onMatrixTargetReceived);
     connect(m_connection, &EmberConnection::matrixSourceReceived, this, &MainWindow::onMatrixSourceReceived);
@@ -134,9 +134,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connection, &EmberConnection::matrixConnectionsCleared, this, &MainWindow::onMatrixConnectionsCleared);
     connect(m_connection, &EmberConnection::matrixTargetConnectionsCleared, this, &MainWindow::onMatrixTargetConnectionsCleared);
     connect(m_connection, &EmberConnection::functionReceived, this, &MainWindow::onFunctionReceived);
-    // Invocation results now handled by FunctionInvoker
     
-    // Initialize manager classes
+    
+    
     m_treeViewController = new TreeViewController(m_treeWidget, m_connection, this);
     m_subscriptionManager = new SubscriptionManager(m_connection, this);
     m_matrixManager = new MatrixManager(m_connection, this);
@@ -144,25 +144,25 @@ MainWindow::MainWindow(QWidget *parent)
     m_functionInvoker = new FunctionInvoker(m_connection, this);
     m_snapshotManager = new SnapshotManager(m_treeWidget, m_connection, m_matrixManager, m_functionInvoker, this);
     
-    // Install event filter on application to detect user activity (for crosspoint tracker)
+    
     qApp->installEventFilter(m_activityTracker);
     
-    // Connect manager signals
+    
     connect(m_activityTracker, &CrosspointActivityTracker::timeout, this, &MainWindow::onActivityTimeout);
     
-    // Connect tree signals directly to managers
+    
     connect(m_treeWidget, &QTreeWidget::itemExpanded, m_treeViewController, &TreeViewController::onItemExpanded);
     connect(m_treeWidget, &QTreeWidget::itemExpanded, m_subscriptionManager, &SubscriptionManager::onItemExpanded);
     connect(m_treeWidget, &QTreeWidget::itemCollapsed, m_subscriptionManager, &SubscriptionManager::onItemCollapsed);
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
-    // Explicitly set window icon (especially important for Wayland)
-    // This reinforces the application-level icon for this specific window
+    
+    
     QIcon windowIcon = QIcon::fromTheme("emberviewer", QIcon(":/icon.png"));
     setWindowIcon(windowIcon);
     
-    // Initialize update manager (platform-specific)
+    
 #ifdef Q_OS_LINUX
     m_updateManager = new LinuxUpdateManager(this);
 #elif defined(Q_OS_WIN)
@@ -179,28 +179,28 @@ MainWindow::MainWindow(QWidget *parent)
         connect(m_updateManager, &UpdateManager::updateCheckFailed, 
                 this, &MainWindow::onUpdateCheckFailed);
         
-        // Auto-check for updates on launch (2 second delay)
+        
         QTimer::singleShot(2000, this, &MainWindow::onCheckForUpdates);
     }
     
-    // Set default window size (1300x700) - will be overridden by saved settings if they exist
+    
     resize(1300, 700);
     
-    // Set splitter sizes after window is resized
-    // Main splitter: 55% tree+console, 45% properties
+    
+    
     int leftWidth = width() * 0.55;
     int rightWidth = width() * 0.45;
     m_mainSplitter->setSizes(QList<int>() << leftWidth << rightWidth);
     
-    // Vertical splitter: most space for tree, 150px for console
+    
     int treeHeight = height() - 150;
     m_verticalSplitter->setSizes(QList<int>() << treeHeight << 150);
     
-    // Log startup message directly to console since globalMainWindow isn't set yet during construction
+    
     QString startupMsg = QString("[%1] EmberViewer started. Ready to connect.")
         .arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz"));
     appendToConsole(startupMsg);
-    // Also log via qInfo for stderr and log file
+    
     qInfo().noquote() << "EmberViewer started. Ready to connect.";
 }
 
@@ -217,22 +217,22 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
-    // Handle Enter key on port spin box to trigger connection
+    
     if (watched == m_portSpin && event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
-            // Only trigger if not already connected
+            
             if (m_connectButton->isEnabled()) {
                 onConnectClicked();
-                return true;  // Event handled
+                return true;  
             }
         }
     }
     
-    // Reset activity timer on any user interaction (handled by activity tracker's eventFilter)
-    // The activity tracker is installed on qApp and will handle this
     
-    // Handle click on update status label
+    
+    
+    
     if (watched == m_updateStatusLabel && event->type() == QEvent::MouseButtonPress) {
         if (m_updateDialog) {
             m_updateDialog->show();
@@ -247,37 +247,37 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 void MainWindow::setupUi()
 {
-    // Create central widget with custom tree view (handles arrow clicks differently)
+    
     m_treeWidget = new EmberTreeWidget(this);
     m_treeWidget->setHeaderLabels(QStringList() << "Path" << "Type" << "Value");
     m_treeWidget->setColumnCount(3);
-    m_treeWidget->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);  // Path column auto-resizes
-    m_treeWidget->header()->setSectionResizeMode(1, QHeaderView::Fixed);  // Type column fixed
-    m_treeWidget->setColumnWidth(1, 130);  // Type column width
-    m_treeWidget->header()->setStretchLastSection(true);  // Value column stretches to fill
+    m_treeWidget->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);  
+    m_treeWidget->header()->setSectionResizeMode(1, QHeaderView::Fixed);  
+    m_treeWidget->setColumnWidth(1, 130);  
+    m_treeWidget->header()->setStretchLastSection(true);  
     m_treeWidget->setAlternatingRowColors(true);
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     
-    // OPTIMIZATION: Remove expand/collapse delay for instant responsiveness
-    // 1. autoExpandDelay: Default is ~1000ms to prevent accidental expansions during drag-and-drop
-    //    We set to 0 for instant collapse/re-expand with no delay
-    // 2. animated: Default animations add visual delay (250-300ms per expand/collapse)
-    //    We disable for instant visual response
-    // 3. uniformRowHeights: Tells Qt all rows are same height, allows faster rendering/layout
-    //    Eliminates ~300ms delay after collapse before next expand is allowed
-    // 4. allColumnsShowFocus: Improves click responsiveness by simplifying focus handling
-    // Device load protection is handled by m_fetchedPaths and m_requestedPaths caching
+    
+    
+    
+    
+    
+    
+    
+    
+    
     m_treeWidget->setAutoExpandDelay(0);
     m_treeWidget->setAnimated(false);
     m_treeWidget->setUniformRowHeights(true);
     m_treeWidget->setAllColumnsShowFocus(false);
     
-    // INVESTIGATION: Check system double-click interval
+    
     int doubleClickInterval = QApplication::doubleClickInterval();
     qDebug() << "System double-click interval:" << doubleClickInterval << "ms";
     
-    // Set comfortable double-click interval for item text (arrow clicks are instant via EmberTreeWidget)
-    QApplication::setDoubleClickInterval(250);  // Comfortable timing for double-clicking items
+    
+    QApplication::setDoubleClickInterval(250);  
     qDebug() << "Set double-click interval to: 250ms";
     
     connect(m_treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::onTreeSelectionChanged);
@@ -311,21 +311,21 @@ void MainWindow::setupUi()
         }
     });
     
-    // Install path column delegate for extra padding
+    
     PathColumnDelegate *pathDelegate = new PathColumnDelegate(this);
-    m_treeWidget->setItemDelegateForColumn(0, pathDelegate);  // Path column
+    m_treeWidget->setItemDelegateForColumn(0, pathDelegate);  
     
-    // Install parameter delegate for inline editing
+    
     ParameterDelegate *delegate = new ParameterDelegate(this);
-    m_treeWidget->setItemDelegateForColumn(2, delegate);  // Value column
+    m_treeWidget->setItemDelegateForColumn(2, delegate);  
     
-    // Enable editing on double-click
+    
     m_treeWidget->setEditTriggers(QAbstractItemView::DoubleClicked);
     
-    // Connect delegate value changes to send parameter updates
+    
     connect(delegate, &ParameterDelegate::valueChanged, this, [this](const QString &path, const QString &newValue) {
-        // Find the item to get its type
-        // Use cached item lookup O(log n) instead of O(n) iteration
+        
+        
         QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
         if (item) {
             int type = item->data(0, Qt::UserRole + 1).toInt();
@@ -333,14 +333,14 @@ void MainWindow::setupUi()
         }
     });
     
-    // Connection controls
+    
     QWidget *connectionWidget = new QWidget(this);
     QHBoxLayout *connLayout = new QHBoxLayout(connectionWidget);
     
     connLayout->addWidget(new QLabel("Host:"));
     m_hostEdit = new QLineEdit("localhost");
     m_hostEdit->setMaximumWidth(200);
-    // Connect Enter key to trigger connection
+    
     connect(m_hostEdit, &QLineEdit::returnPressed, this, &MainWindow::onConnectClicked);
     connLayout->addWidget(m_hostEdit);
     
@@ -349,7 +349,7 @@ void MainWindow::setupUi()
     m_portSpin->setRange(1, 65535);
     m_portSpin->setValue(DEFAULT_EMBER_PORT);
     m_portSpin->setMaximumWidth(80);
-    // Install event filter to catch Enter key on spin box
+    
     m_portSpin->installEventFilter(this);
     connLayout->addWidget(m_portSpin);
     
@@ -367,27 +367,27 @@ void MainWindow::setupUi()
     
     connLayout->addStretch();
     
-    // Will be set up in createDockWindows() with splitters
-    // Store connection widget for later
+    
+    
     QWidget *tempWidget = new QWidget(this);
     QVBoxLayout *tempLayout = new QVBoxLayout(tempWidget);
     tempLayout->addWidget(connectionWidget);
     tempLayout->setContentsMargins(0, 0, 0, 0);
     
-    // Create tree container with connection controls
+    
     QWidget *treeContainer = new QWidget(this);
     QVBoxLayout *treeLayout = new QVBoxLayout(treeContainer);
     treeLayout->addWidget(connectionWidget);
     treeLayout->addWidget(m_treeWidget);
     treeLayout->setContentsMargins(0, 0, 0, 0);
     
-    // Store for use in createDockWindows
+    
     setCentralWidget(treeContainer);
 }
 
 void MainWindow::setupMenu()
 {
-    // File menu
+    
     QMenu *fileMenu = menuBar()->addMenu("&File");
     
     QAction *connectAction = fileMenu->addAction("&Connect");
@@ -422,7 +422,7 @@ void MainWindow::setupMenu()
     exitAction->setShortcut(QKeySequence("Ctrl+Q"));
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
     
-    // Edit menu
+    
     QMenu *editMenu = menuBar()->addMenu("&Edit");
     
     m_enableCrosspointsAction = editMenu->addAction("Enable &Crosspoints");
@@ -431,7 +431,7 @@ void MainWindow::setupMenu()
     m_enableCrosspointsAction->setChecked(false);
     connect(m_enableCrosspointsAction, &QAction::toggled, this, &MainWindow::onEnableCrosspointsToggled);
     
-    // Tools menu
+    
     QMenu *toolsMenu = menuBar()->addMenu("&Tools");
     
     QAction *emulatorAction = toolsMenu->addAction("Open &Emulator...");
@@ -453,7 +453,7 @@ void MainWindow::setupMenu()
     qtInternalLoggingAction->setChecked(m_enableQtInternalLogging);
     connect(qtInternalLoggingAction, &QAction::toggled, this, &MainWindow::setQtInternalLoggingEnabled);
     
-    // Help menu
+    
     QMenu *helpMenu = menuBar()->addMenu("&Help");
     
     QAction *checkUpdatesAction = helpMenu->addAction("Check for &Updates...");
@@ -481,19 +481,19 @@ void MainWindow::setupMenu()
 
 void MainWindow::setupStatusBar()
 {
-    // Create path label on the left side of status bar (permanent widget)
+    
     m_pathLabel = new QLabel("No selection");
     m_pathLabel->setStyleSheet("QLabel { padding: 2px 8px; }");
     m_pathLabel->setMinimumWidth(200);
-    statusBar()->addPermanentWidget(m_pathLabel, 1);  // Stretch factor 1 to take available space
+    statusBar()->addPermanentWidget(m_pathLabel, 1);  
     
-    // Add crosspoints status label (initially hidden)
+    
     m_crosspointsStatusLabel = new QLabel("");
     m_crosspointsStatusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #c62828; font-weight: bold; }");
     m_crosspointsStatusLabel->setVisible(false);
     statusBar()->addPermanentWidget(m_crosspointsStatusLabel);
     
-    // Add update status label (initially hidden)
+    
     m_updateStatusLabel = new QLabel("");
     m_updateStatusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #1976d2; cursor: pointer; }");
     m_updateStatusLabel->setVisible(false);
@@ -501,24 +501,24 @@ void MainWindow::setupStatusBar()
     m_updateStatusLabel->installEventFilter(this);
     statusBar()->addPermanentWidget(m_updateStatusLabel);
     
-    // Add toggle checkbox for path display mode
+    
     QCheckBox *pathToggle = new QCheckBox("Show OID Path");
     pathToggle->setChecked(false);
     connect(pathToggle, &QCheckBox::toggled, this, [this](bool checked) {
         m_showOidPath = checked;
-        onTreeSelectionChanged();  // Refresh display
+        onTreeSelectionChanged();  
     });
     statusBar()->addPermanentWidget(pathToggle);
     
-    // No need for statusBar()->showMessage() - we use permanent widgets instead
+    
 }
 
 void MainWindow::createDockWindows()
 {
-    // Get the tree container from central widget
+    
     QWidget *treeContainer = centralWidget();
     
-    // Create console group box
+    
     m_consoleGroup = new QGroupBox("Console", this);
     QVBoxLayout *consoleLayout = new QVBoxLayout(m_consoleGroup);
     m_consoleLog = new QTextEdit();
@@ -526,7 +526,7 @@ void MainWindow::createDockWindows()
     consoleLayout->addWidget(m_consoleLog);
     consoleLayout->setContentsMargins(5, 5, 5, 5);
     
-    // Create property group box
+    
     m_propertyGroup = new QGroupBox("Properties", this);
     QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
     m_propertyPanel = new QWidget();
@@ -536,17 +536,17 @@ void MainWindow::createDockWindows()
     propLayout->addWidget(m_propertyPanel);
     propLayout->setContentsMargins(5, 5, 5, 5);
     
-    // Create vertical splitter (tree + console)
+    
     m_verticalSplitter = new QSplitter(Qt::Vertical, this);
     m_verticalSplitter->addWidget(treeContainer);
     m_verticalSplitter->addWidget(m_consoleGroup);
     
-    // Create main horizontal splitter (left side + properties)
+    
     m_mainSplitter = new QSplitter(Qt::Horizontal, this);
     m_mainSplitter->addWidget(m_verticalSplitter);
     m_mainSplitter->addWidget(m_propertyGroup);
     
-    // Create connections tree widget (if connection manager is initialized)
+    
     if (m_connectionManager) {
         m_connectionsTree = new ConnectionsTreeWidget(m_connectionManager, this);
         m_connectionsTree->setMinimumWidth(200);
@@ -554,15 +554,15 @@ void MainWindow::createDockWindows()
         connect(m_connectionsTree, &ConnectionsTreeWidget::connectionDoubleClicked,
                 this, &MainWindow::onSavedConnectionDoubleClicked);
         
-        // Create outer splitter with connections tree on the left
+        
         QSplitter *outerSplitter = new QSplitter(Qt::Horizontal, this);
         outerSplitter->addWidget(m_connectionsTree);
         outerSplitter->addWidget(m_mainSplitter);
         
-        // Set the outer splitter as central widget (only one setCentralWidget call)
+        
         setCentralWidget(outerSplitter);
     } else {
-        // Fallback: just use main splitter if connection manager not initialized
+        
         setCentralWidget(m_mainSplitter);
     }
 }
@@ -572,8 +572,8 @@ void MainWindow::onConnectClicked()
     QString host = m_hostEdit->text();
     int port = m_portSpin->value();
     
-    // Don't clear console - keep history across connections
-    // m_consoleLog->clear();
+    
+    
     
     qInfo().noquote() << QString("Connecting to %1:%2...").arg(host).arg(port);
     m_connection->connectToHost(host, port);
@@ -598,19 +598,19 @@ void MainWindow::onConnectionStateChanged(bool connected)
         m_statusLabel->setStyleSheet("QLabel { color: green; font-weight: bold; }");
         logMessage("Connected successfully!");
         
-        // OPTIMIZATION: With lazy loading, tree updates are no longer disabled
-        // We only receive small batches of children at a time (5-20 items max)
-        // so there's no risk of UI freeze. User sees real-time tree population.
-        // (Previously disabled for aggressive enumeration with 100+ items at once)
+        
+        
+        
+        
     } else {
         m_statusLabel->setText("Not connected");
         m_statusLabel->setStyleSheet("QLabel { color: red; }");
         qInfo().noquote() << "Disconnected";
         
-        // If we're currently showing a matrix, remove it from the property panel first
+        
         MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);
         if (currentMatrix) {
-            // Remove old layout and widget
+            
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *item;
@@ -620,7 +620,7 @@ void MainWindow::onConnectionStateChanged(bool connected)
                 delete oldLayout;
             }
             
-            // Reset to default property panel
+            
             m_propertyPanel = new QWidget();
             QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
             propContentLayout->addWidget(new QLabel("Not connected"));
@@ -633,7 +633,7 @@ void MainWindow::onConnectionStateChanged(bool connected)
         
         m_treeWidget->clear();
         
-        // Clear all manager state
+        
         m_treeViewController->clear();
         m_subscriptionManager->clear();
         m_matrixManager->clear();
@@ -642,7 +642,7 @@ void MainWindow::onConnectionStateChanged(bool connected)
 
 void MainWindow::onNodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline)
 {
-    // Delegate to TreeViewController
+    
     m_treeViewController->onNodeReceived(path, identifier, description, isOnline);
 }
 
@@ -650,36 +650,36 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier)
 {
-    // Track stream identifiers for StreamCollection routing (used in onStreamValueReceived)
+    
     if (streamIdentifier > 0) {
         m_streamIdToPath[streamIdentifier] = path;
     }
     
-    // Check if this parameter is actually a matrix label
-    // Pattern: matrixPath.666999666.1.N (targets) or matrixPath.666999666.2.N (sources)
+    
+    
     QStringList pathParts = path.split('.');
     if (pathParts.size() >= 4 && pathParts[pathParts.size() - 3] == QString::number(MATRIX_LABEL_PATH_MARKER)) {
-        // This is a label! Extract matrix path and target/source info
-        QString labelType = pathParts[pathParts.size() - 2];  // "1" for targets, "2" for sources
+        
+        QString labelType = pathParts[pathParts.size() - 2];  
         int labelNumber = pathParts.last().toInt();
         
-        // Matrix path is everything except the last 3 segments
+        
         QStringList matrixPathParts = pathParts.mid(0, pathParts.size() - 3);
         QString matrixPath = matrixPathParts.join('.');
         
-        // Route label to MatrixManager
+        
         if (labelType == "1") {
-            // Target label
+            
             m_matrixManager->onMatrixTargetReceived(matrixPath, labelNumber, value);
         } else if (labelType == "2") {
-            // Source label
+            
             m_matrixManager->onMatrixSourceReceived(matrixPath, labelNumber, value);
         }
         
-        // Still create the tree item for the label (for completeness)
+        
     }
     
-    // Delegate to TreeViewController for tree item creation
+    
     m_treeViewController->onParameterReceived(path, number, identifier, value, access, type, 
                                              minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier);
 }
@@ -687,10 +687,10 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
 void MainWindow::onMatrixReceived(const QString &path, int number, const QString &identifier, 
                                    const QString &description, int type, int targetCount, int sourceCount)
 {
-    // Delegate to TreeViewController for tree item creation
+    
     m_treeViewController->onMatrixReceived(path, number, identifier, description, type, targetCount, sourceCount);
     
-    // Delegate to MatrixManager for widget management  
+    
     m_matrixManager->onMatrixReceived(path, number, identifier, description, type, targetCount, sourceCount);
 }
 
@@ -724,7 +724,7 @@ void MainWindow::onTreeSelectionChanged()
     
     if (selected.isEmpty()) {
         m_pathLabel->setText("No selection");
-        // Disable crosspoints when nothing is selected
+        
         if (m_activityTracker && m_activityTracker->isEnabled()) {
             m_enableCrosspointsAction->setChecked(false);
         }
@@ -735,16 +735,16 @@ void MainWindow::onTreeSelectionChanged()
     QString oidPath = item->data(0, Qt::UserRole).toString();
     QString type = item->text(1);
     
-    // Update path label
+    
     if (m_showOidPath) {
-        // Show OID path mode
+        
         if (!oidPath.isEmpty()) {
             m_pathLabel->setText(QString("%1  [%2]").arg(oidPath).arg(type));
         } else {
             m_pathLabel->setText(QString("(no path)  [%1]").arg(type));
         }
     } else {
-        // Show breadcrumb path mode
+        
         QStringList breadcrumbs;
         QTreeWidgetItem *current = item;
         
@@ -760,27 +760,27 @@ void MainWindow::onTreeSelectionChanged()
         m_pathLabel->setText(QString("%1  [%2]").arg(breadcrumbPath).arg(type));
     }
     
-    // Update property panel based on type
+    
     if (type == "Parameter") {
-        // Check if this is a meter parameter (must have streamIdentifier > 0)
+        
         int streamIdentifier = item->data(0, Qt::UserRole + 9).toInt();
         int paramType = item->data(0, Qt::UserRole + 1).toInt();
         bool isAudioMeter = (streamIdentifier > 0) && (paramType == 1 || paramType == 2);
         
         if (isAudioMeter) {
-            // This is an audio meter parameter - show meter widget
             
-            // Clean up old meter
+            
+            
             if (m_activeMeter) {
-                m_activeMeter = nullptr;  // Will be deleted with old panel
+                m_activeMeter = nullptr;  
             }
             
-            // Disable crosspoints if active
+            
             if (m_activityTracker && m_activityTracker->isEnabled()) {
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Remove old layout
+            
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *layoutItem;
@@ -790,11 +790,11 @@ void MainWindow::onTreeSelectionChanged()
                 delete oldLayout;
             }
             
-            // Create meter widget
+            
             m_activeMeter = new MeterWidget();
             
-            // Get parameter info from item data
-            QString identifier = item->text(0).replace("📊 ", "");  // Remove icon
+            
+            QString identifier = item->text(0).replace("📊 ", "");  
             QVariant minVar = item->data(0, Qt::UserRole + 3);
             QVariant maxVar = item->data(0, Qt::UserRole + 4);
             
@@ -804,7 +804,7 @@ void MainWindow::onTreeSelectionChanged()
             m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue);
             m_activeMeter->setStreamIdentifier(streamIdentifier);
             
-            // Set initial value from current parameter value
+            
             QString currentValue = item->text(2);
             bool ok;
             double val = currentValue.toDouble(&ok);
@@ -812,11 +812,11 @@ void MainWindow::onTreeSelectionChanged()
                 m_activeMeter->updateValue(val);
             }
             
-            // Create layout with meter and parameter properties
+            
             QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
             propLayout->addWidget(m_activeMeter);
             
-            // Add parameter info section
+            
             QLabel *infoLabel = new QLabel(QString("Path: %1\nMin: %2\nMax: %3\nStream ID: %4")
                 .arg(oidPath).arg(minValue).arg(maxValue).arg(streamIdentifier));
             infoLabel->setStyleSheet("padding: 10px; background-color: #f0f0f0; border-radius: 5px;");
@@ -827,24 +827,24 @@ void MainWindow::onTreeSelectionChanged()
         }
     }
     else if (type == "Matrix") {
-        // Show matrix widget in property panel
+        
         MatrixWidget *matrixWidget = m_matrixManager->getMatrix(oidPath);
         if (matrixWidget) {
-            // Rebuild the grid to ensure it's up to date with all labels and connections
+            
             matrixWidget->rebuild();
             
-            // Clear old property panel content
+            
             QWidget *oldWidget = m_propertyPanel;
             if (oldWidget) {
-                // If the old widget is a MatrixWidget, don't delete it (it's stored in m_matrixWidgets)
+                
                 MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldWidget);
                 if (!oldMatrix) {
-                    // Only delete non-matrix widgets
+                    
                     oldWidget->deleteLater();
                 }
             }
             
-            // Remove old layout
+            
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *item;
@@ -854,25 +854,25 @@ void MainWindow::onTreeSelectionChanged()
                 delete oldLayout;
             }
             
-            // Directly show the matrix widget (it has internal scroll areas now)
+            
             QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
             propLayout->addWidget(matrixWidget);
             propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = matrixWidget;
             
-            // Update background based on crosspoints state
+            
         }
     } else {
-        // For non-matrix items, show the default property panel
-        // Check if we need to restore the default panel
+        
+        
         MatrixWidget *currentMatrix = qobject_cast<MatrixWidget*>(m_propertyPanel);
         if (currentMatrix) {
-            // Disable crosspoints BEFORE we remove the matrix widget
+            
             if (m_activityTracker && m_activityTracker->isEnabled()) {
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Remove old layout
+            
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *item;
@@ -882,7 +882,7 @@ void MainWindow::onTreeSelectionChanged()
                 delete oldLayout;
             }
             
-            // Create new default property panel
+            
             m_propertyPanel = new QWidget();
             QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
             propContentLayout->addWidget(new QLabel("Select an item to view properties"));
@@ -899,14 +899,14 @@ void MainWindow::loadSettings()
 {
     QSettings settings("EmberViewer", "EmberViewer");
     
-    // Load connection settings only
+    
     QString host = settings.value("connection/host", "localhost").toString();
     int port = settings.value("connection/port", DEFAULT_PORT_FALLBACK).toInt();
     
     m_hostEdit->setText(host);
     m_portSpin->setValue(port);
     
-    // Load Qt internal logging setting (defaults to false/disabled)
+    
     m_enableQtInternalLogging = settings.value("logging/qtInternal", false).toBool();
 }
 
@@ -914,14 +914,14 @@ void MainWindow::saveSettings()
 {
     QSettings settings("EmberViewer", "EmberViewer");
     
-    // Save connection settings only (don't save window geometry or dock state)
+    
     settings.setValue("connection/host", m_hostEdit->text());
     settings.setValue("connection/port", m_portSpin->value());
     
-    // Save Qt internal logging setting
+    
     settings.setValue("logging/qtInternal", m_enableQtInternalLogging);
     
-    // Force immediate write to disk
+    
     settings.sync();
 }
 
@@ -930,7 +930,7 @@ void MainWindow::setQtInternalLoggingEnabled(bool enabled)
     m_enableQtInternalLogging = enabled;
     saveSettings();
     
-    // Log the change
+    
     if (enabled) {
         qInfo() << "Qt internal logging enabled";
     } else {
@@ -952,7 +952,7 @@ void MainWindow::appendToConsole(const QString &message)
 
 void MainWindow::onActivityTimeout()
 {
-    // Timeout reached - disable crosspoints
+    
     m_enableCrosspointsAction->setChecked(false);
     logMessage("Crosspoint editing auto-disabled after 60 seconds of inactivity");
 }
@@ -960,16 +960,16 @@ void MainWindow::onActivityTimeout()
 void MainWindow::onEnableCrosspointsToggled(bool enabled)
 {
     if (enabled) {
-        // Enable crosspoint editing via activity tracker
+        
         m_activityTracker->enable();
         logMessage("Crosspoint editing ENABLED (60 second timeout)");
     } else {
-        // Disable crosspoint editing via activity tracker
+        
         m_activityTracker->disable();
         logMessage("Crosspoint editing DISABLED");
     }
     
-    // Update only the currently displayed matrix widget (if any)
+    
     MatrixWidget *matrixWidget = qobject_cast<MatrixWidget*>(m_propertyPanel);
     if (matrixWidget) {
         matrixWidget->setCrosspointsEnabled(enabled);
@@ -985,7 +985,7 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
         return;
     }
     
-    // Reset activity timer on crosspoint interaction
+    
     m_activityTracker->resetTimer();
     
     MatrixWidget *matrixWidget = m_matrixManager->getMatrix(matrixPath);
@@ -1002,11 +1002,11 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
     else if (matrixType == 1) typeStr = "1:1";
     else typeStr = "N:N";
     
-    // For all matrix types, clicking toggles the connection
-    // The Ember+ device will handle the matrix type rules (disconnecting other sources, etc.)
+    
+    
     bool newState = !currentlyConnected;
     
-    // Get labels for more readable log messages
+    
     QString targetLabel = matrixWidget->getTargetLabel(targetNumber);
     QString sourceLabel = matrixWidget->getSourceLabel(sourceNumber);
     
@@ -1018,36 +1018,36 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
                    .arg(targetLabel, QString::number(targetNumber));
     }
     
-    // **OPTIMISTIC UPDATE**: Update UI immediately for instant feedback (use Pending disposition)
+    
     matrixWidget->setConnection(targetNumber, sourceNumber, newState, 2);
     
-    // Send command to EmberConnection
+    
     m_connection->setMatrixConnection(matrixPath, targetNumber, sourceNumber, newState);
     
-    // Note: With subscription enabled, we'll receive automatic updates from the provider
-    // No need to manually request matrix connections anymore
+    
+    
 }
 
 void MainWindow::onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
                                    const QStringList &argNames, const QList<int> &argTypes,
                                    const QStringList &resultNames, const QList<int> &resultTypes)
 {
-    // Register function with FunctionInvoker
+    
     m_functionInvoker->registerFunction(path, identifier, description, argNames, argTypes, resultNames, resultTypes);
     
-    // Delegate tree item creation to TreeViewController
+    
     m_treeViewController->onFunctionReceived(path, identifier, description, argNames, argTypes, resultNames, resultTypes);
 }
 
-// onInvocationResultReceived now handled by FunctionInvoker
+
 
 void MainWindow::onStreamValueReceived(int streamIdentifier, double value)
 {
-    // Handle StreamCollection updates - route to active meter if it matches
+    
     if (m_activeMeter && m_activeMeter->streamIdentifier() == streamIdentifier) {
         m_activeMeter->updateValue(value);
         
-        // Also update the tree item value for consistency
+        
         QString path = m_streamIdToPath.value(streamIdentifier);
         if (!path.isEmpty()) {
             QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
@@ -1066,7 +1066,7 @@ void MainWindow::onSaveEmberDevice()
         return;
     }
     
-    // Delegate to SnapshotManager
+    
     m_snapshotManager->saveSnapshot(m_hostEdit, m_portSpin);
 }
 
@@ -1075,10 +1075,10 @@ void MainWindow::onSaveEmberDevice()
 void MainWindow::onOpenEmulator()
 {
     if (!m_emulatorWindow) {
-        // Create as independent window (no parent) so it doesn't stay on top
+        
         m_emulatorWindow = new EmulatorWindow(nullptr);
         
-        // Connect destroyed signal to clean up pointer
+        
         connect(m_emulatorWindow, &QObject::destroyed, this, [this]() {
             m_emulatorWindow = nullptr;
         });
@@ -1107,18 +1107,18 @@ void MainWindow::onUpdateAvailable(const UpdateManager::UpdateInfo &updateInfo)
 {
     qInfo() << "Update available:" << updateInfo.version;
     
-    // Show notification in status bar
+    
     m_updateStatusLabel->setText(QString("⬇ Update to v%1 available - Click to install").arg(updateInfo.version));
     m_updateStatusLabel->setVisible(true);
     
-    // Create update dialog (don't show immediately, user can click status bar)
+    
     if (m_updateDialog) {
         delete m_updateDialog;
     }
     
     m_updateDialog = new UpdateDialog(updateInfo, this);
     
-    // Connect update dialog signals
+    
     connect(m_updateDialog, &UpdateDialog::updateNowClicked, this, [this, updateInfo]() {
         qInfo() << "User chose to update now";
         m_updateManager->installUpdate(updateInfo);
@@ -1135,7 +1135,7 @@ void MainWindow::onUpdateAvailable(const UpdateManager::UpdateInfo &updateInfo)
         m_updateStatusLabel->setVisible(false);
     });
     
-    // Connect installation progress signals
+    
     connect(m_updateManager, &UpdateManager::downloadProgress, m_updateDialog, &UpdateDialog::setDownloadProgress);
     connect(m_updateManager, &UpdateManager::installationStarted, this, [this]() {
         qInfo() << "Installation started";
@@ -1150,7 +1150,7 @@ void MainWindow::onUpdateAvailable(const UpdateManager::UpdateInfo &updateInfo)
         }
     });
     
-    // Show dialog immediately (auto-check scenario)
+    
     m_updateDialog->show();
 }
 
@@ -1176,14 +1176,14 @@ void MainWindow::onSaveCurrentConnection()
         return;
     }
 
-    // Get device name from first root node
+    
     QString deviceName;
     if (m_treeWidget->topLevelItemCount() > 0) {
         QTreeWidgetItem* firstRoot = m_treeWidget->topLevelItem(0);
         deviceName = firstRoot->text(0);
     }
 
-    // Fall back to hostname if no device name
+    
     if (deviceName.isEmpty()) {
         deviceName = m_hostEdit->text();
     }
@@ -1191,13 +1191,13 @@ void MainWindow::onSaveCurrentConnection()
     QString host = m_hostEdit->text();
     int port = m_portSpin->value();
 
-    // Ask where to save it (which folder)
+    
     QStringList folderNames;
-    folderNames.append("(Root Level)");  // Option for root
+    folderNames.append("(Root Level)");  
     
     QList<ConnectionManager::Folder> folders = m_connectionManager->getAllFolders();
-    QMap<QString, QString> folderNameToId;  // name -> id
-    folderNameToId["(Root Level)"] = QString();  // Empty string = root
+    QMap<QString, QString> folderNameToId;  
+    folderNameToId["(Root Level)"] = QString();  
     
     for (const ConnectionManager::Folder &folder : folders) {
         folderNames.append(folder.name);
@@ -1232,7 +1232,7 @@ void MainWindow::onImportConnections()
         return;
     }
 
-    // Ask merge or replace
+    
     ImportExportDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
         bool merge = dialog.shouldMerge();
@@ -1272,7 +1272,7 @@ void MainWindow::onExportConnections()
 
 void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QString &host, int port)
 {
-    // Check if already connected
+    
     if (m_isConnected) {
         QMessageBox::StandardButton reply = QMessageBox::question(this, 
             "Already Connected",
@@ -1286,15 +1286,15 @@ void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QStri
             return;
         }
         
-        // Disconnect first
+        
         m_connection->disconnect();
     }
 
-    // Set connection parameters
+    
     m_hostEdit->setText(host);
     m_portSpin->setValue(port);
 
-    // Connect
+    
     qInfo() << "Connecting to saved connection:" << name << "(" << host << ":" << port << ")";
     onConnectClicked();
 }

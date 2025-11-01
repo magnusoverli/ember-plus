@@ -2,7 +2,7 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
-// We'll test path parsing logic independently
+
 class TestPathParsing : public QObject
 {
     Q_OBJECT
@@ -51,7 +51,7 @@ private slots:
         QString path = "1.2.3.";
         QStringList parts = path.split('.', Qt::SkipEmptyParts);
         
-        QCOMPARE(parts.size(), 3); // Trailing dot should be ignored
+        QCOMPARE(parts.size(), 3); 
     }
     
     void testPathConstruction()
@@ -74,15 +74,15 @@ private slots:
     
     void testMatrixLabelPathPattern()
     {
-        // Test matrix label path pattern: matrixPath.666999666.1.N (targets)
+        
         QString targetPath = "1.2.666999666.1.5";
         QStringList parts = targetPath.split('.');
         
         QCOMPARE(parts.size(), 5);
         QCOMPARE(parts[2], QString("666999666"));
-        QCOMPARE(parts[3], QString("1")); // 1 = targets
+        QCOMPARE(parts[3], QString("1")); 
         
-        // Extract matrix path (everything except last 3 segments)
+        
         QStringList matrixParts = parts.mid(0, parts.size() - 3);
         QString matrixPath = matrixParts.join('.');
         QCOMPARE(matrixPath, QString("1.2"));

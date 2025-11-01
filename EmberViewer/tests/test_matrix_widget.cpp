@@ -8,13 +8,13 @@ class TestMatrixWidget : public QObject
 private slots:
     void initTestCase()
     {
-        // Qt Test needs a QApplication for widgets
+        
     }
     
     void testMatrixWidgetCreation()
     {
         MatrixWidget widget;
-        QVERIFY(widget.getMatrixType() == 2); // Default to N:N
+        QVERIFY(widget.getMatrixType() == 2); 
     }
     
     void testSetMatrixInfo()
@@ -51,7 +51,7 @@ private slots:
     {
         MatrixWidget widget;
         
-        // Labels for non-existent entries should return defaults
+        
         QString label = widget.getTargetLabel(99);
         QVERIFY(label.contains("99"));
         QVERIFY(label.contains("Target"));
@@ -65,14 +65,14 @@ private slots:
     {
         MatrixWidget widget;
         
-        // Initially not connected
+        
         QVERIFY(!widget.isConnected(0, 0));
         
-        // Set connection
-        widget.setConnection(0, 0, true, 0); // Tally disposition
+        
+        widget.setConnection(0, 0, true, 0); 
         QVERIFY(widget.isConnected(0, 0));
         
-        // Clear connection
+        
         widget.setConnection(0, 0, false, 0);
         QVERIFY(!widget.isConnected(0, 0));
     }
@@ -81,7 +81,7 @@ private slots:
     {
         MatrixWidget widget;
         
-        // Set multiple connections
+        
         widget.setConnection(0, 0, true, 0);
         widget.setConnection(0, 1, true, 0);
         widget.setConnection(1, 0, true, 0);
@@ -96,14 +96,14 @@ private slots:
     {
         MatrixWidget widget;
         
-        // Set some connections
+        
         widget.setConnection(0, 0, true, 0);
         widget.setConnection(1, 1, true, 0);
         
         QVERIFY(widget.isConnected(0, 0));
         QVERIFY(widget.isConnected(1, 1));
         
-        // Clear all
+        
         widget.clearConnections();
         
         QVERIFY(!widget.isConnected(0, 0));
@@ -114,17 +114,17 @@ private slots:
     {
         MatrixWidget widget;
         
-        // Test different dispositions don't affect connection state
-        widget.setConnection(0, 0, true, 0); // Tally
+        
+        widget.setConnection(0, 0, true, 0); 
         QVERIFY(widget.isConnected(0, 0));
         
-        widget.setConnection(0, 1, true, 1); // Modified
+        widget.setConnection(0, 1, true, 1); 
         QVERIFY(widget.isConnected(0, 1));
         
-        widget.setConnection(0, 2, true, 2); // Pending
+        widget.setConnection(0, 2, true, 2); 
         QVERIFY(widget.isConnected(0, 2));
         
-        widget.setConnection(0, 3, true, 3); // Locked
+        widget.setConnection(0, 3, true, 3); 
         QVERIFY(widget.isConnected(0, 3));
     }
     
@@ -132,11 +132,11 @@ private slots:
     {
         MatrixWidget widget;
         
-        // Default should be disabled
+        
         widget.setCrosspointsEnabled(true);
         widget.setCrosspointsEnabled(false);
         
-        // Just verify it doesn't crash
+        
         QVERIFY(true);
     }
 };

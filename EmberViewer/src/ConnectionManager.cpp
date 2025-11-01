@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Connection Manager Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "ConnectionManager.h"
 #include <QFile>
@@ -40,7 +40,7 @@ QString ConnectionManager::addConnection(const QString &name, const QString &hos
 
     m_connections[conn.id] = conn;
 
-    // Add to parent folder's children list
+    
     if (!folderId.isEmpty() && m_folders.contains(folderId)) {
         m_folders[folderId].childIds.append(conn.id);
     }
@@ -77,7 +77,7 @@ bool ConnectionManager::deleteConnection(const QString &id)
 
     Connection conn = m_connections[id];
     
-    // Remove from parent folder's children list
+    
     if (!conn.folderId.isEmpty() && m_folders.contains(conn.folderId)) {
         m_folders[conn.folderId].childIds.removeAll(id);
     }
@@ -121,7 +121,7 @@ QString ConnectionManager::addFolder(const QString &name, const QString &parentI
 
     m_folders[folder.id] = folder;
 
-    // Add to parent folder's children list
+    
     if (!parentId.isEmpty() && m_folders.contains(parentId)) {
         m_folders[parentId].childIds.append(folder.id);
     }
@@ -156,12 +156,12 @@ bool ConnectionManager::deleteFolder(const QString &id)
 
     Folder folder = m_folders[id];
     
-    // Remove from parent folder's children list
+    
     if (!folder.parentId.isEmpty() && m_folders.contains(folder.parentId)) {
         m_folders[folder.parentId].childIds.removeAll(id);
     }
 
-    // Recursively delete all children
+    
     removeFolderRecursive(id);
 
     emit folderDeleted(id);
@@ -179,19 +179,19 @@ void ConnectionManager::removeFolderRecursive(const QString &folderId)
 
     Folder folder = m_folders[folderId];
 
-    // Delete all children (folders and connections)
+    
     for (const QString &childId : folder.childIds) {
         if (m_folders.contains(childId)) {
-            // It's a folder - recurse
+            
             removeFolderRecursive(childId);
         } else if (m_connections.contains(childId)) {
-            // It's a connection - delete
+            
             m_connections.remove(childId);
             emit connectionDeleted(childId);
         }
     }
 
-    // Delete the folder itself
+    
     m_folders.remove(folderId);
 }
 
@@ -236,12 +236,12 @@ bool ConnectionManager::moveConnection(const QString &connectionId, const QStrin
     Connection &conn = m_connections[connectionId];
     QString oldFolderId = conn.folderId;
 
-    // Remove from old folder's children
+    
     if (!oldFolderId.isEmpty() && m_folders.contains(oldFolderId)) {
         m_folders[oldFolderId].childIds.removeAll(connectionId);
     }
 
-    // Add to new folder's children
+    
     if (!newFolderId.isEmpty() && m_folders.contains(newFolderId)) {
         m_folders[newFolderId].childIds.append(connectionId);
     }
@@ -261,7 +261,7 @@ bool ConnectionManager::moveFolder(const QString &folderId, const QString &newPa
         return false;
     }
 
-    // Prevent moving a folder into itself or its descendants
+    
     QString checkId = newParentId;
     while (!checkId.isEmpty()) {
         if (checkId == folderId) {
@@ -278,12 +278,12 @@ bool ConnectionManager::moveFolder(const QString &folderId, const QString &newPa
     Folder &folder = m_folders[folderId];
     QString oldParentId = folder.parentId;
 
-    // Remove from old parent's children
+    
     if (!oldParentId.isEmpty() && m_folders.contains(oldParentId)) {
         m_folders[oldParentId].childIds.removeAll(folderId);
     }
 
-    // Add to new parent's children
+    
     if (!newParentId.isEmpty() && m_folders.contains(newParentId)) {
         m_folders[newParentId].childIds.append(folderId);
     }
@@ -312,7 +312,7 @@ bool ConnectionManager::loadFromDefaultLocation()
     
     if (!file.exists()) {
         qInfo() << "No saved connections file found at:" << filePath;
-        return true;  // Not an error - just no saved connections yet
+        return true;  
     }
 
     return loadFromFile(filePath);
@@ -334,7 +334,7 @@ bool ConnectionManager::loadFromFile(const QString &filePath)
     QByteArray data = file.readAll();
     file.close();
 
-    return loadFromJson(data, false);  // Replace existing data
+    return loadFromJson(data, false);  
 }
 
 bool ConnectionManager::saveToFile(const QString &filePath) const
@@ -389,13 +389,13 @@ bool ConnectionManager::loadFromJson(const QByteArray &jsonData, bool merge)
 
     QJsonObject root = doc.object();
 
-    // Clear existing data if not merging
+    
     if (!merge) {
         m_connections.clear();
         m_folders.clear();
     }
 
-    // Load folders
+    
     QJsonArray foldersArray = root["folders"].toArray();
     for (const QJsonValue &folderValue : foldersArray) {
         QJsonObject folderObj = folderValue.toObject();
@@ -413,7 +413,7 @@ bool ConnectionManager::loadFromJson(const QByteArray &jsonData, bool merge)
         m_folders[folder.id] = folder;
     }
 
-    // Load connections
+    
     QJsonArray connectionsArray = root["connections"].toArray();
     for (const QJsonValue &connValue : connectionsArray) {
         QJsonObject connObj = connValue.toObject();
@@ -439,7 +439,7 @@ QByteArray ConnectionManager::saveToJson() const
     QJsonObject root;
     root["version"] = "1.0";
 
-    // Save folders
+    
     QJsonArray foldersArray;
     for (const Folder &folder : m_folders.values()) {
         QJsonObject folderObj;
@@ -457,7 +457,7 @@ QByteArray ConnectionManager::saveToJson() const
     }
     root["folders"] = foldersArray;
 
-    // Save connections
+    
     QJsonArray connectionsArray;
     for (const Connection &conn : m_connections.values()) {
         QJsonObject connObj;

@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Ember+ Device Emulator Window
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "EmulatorWindow.h"
 #include "EmberProvider.h"
@@ -41,10 +41,10 @@ EmulatorWindow::EmulatorWindow(QWidget *parent)
     setupUi();
     setupMenu();
     
-    // Create provider
+    
     m_provider = new EmberProvider(this);
     
-    // Connect signals
+    
     connect(m_provider, &EmberProvider::serverStateChanged, this, &EmulatorWindow::onServerStateChanged);
     connect(m_provider, &EmberProvider::clientConnected, this, &EmulatorWindow::onClientConnected);
     connect(m_provider, &EmberProvider::clientDisconnected, this, &EmulatorWindow::onClientDisconnected);
@@ -63,11 +63,11 @@ EmulatorWindow::~EmulatorWindow()
 
 void EmulatorWindow::setupUi()
 {
-    // Central widget with main splitter
+    
     m_mainSplitter = new QSplitter(Qt::Horizontal, this);
     setCentralWidget(m_mainSplitter);
     
-    // Left panel - Device tree
+    
     m_deviceGroup = new QGroupBox("Emulated Device", this);
     QVBoxLayout *deviceLayout = new QVBoxLayout(m_deviceGroup);
     
@@ -81,25 +81,25 @@ void EmulatorWindow::setupUi()
     m_deviceTree->setColumnWidth(1, 100);
     deviceLayout->addWidget(m_deviceTree);
     
-    // Load button
+    
     m_loadButton = new QPushButton("Load Snapshot...", this);
     connect(m_loadButton, &QPushButton::clicked, this, &EmulatorWindow::onLoadSnapshot);
     deviceLayout->addWidget(m_loadButton);
     
     m_mainSplitter->addWidget(m_deviceGroup);
     
-    // Right panel - Server status and activity
+    
     QWidget *rightPanel = new QWidget(this);
     QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
     
-    // Server status group
+    
     m_statusGroup = new QGroupBox("Server Status", this);
     QVBoxLayout *statusLayout = new QVBoxLayout(m_statusGroup);
     
     m_statusLabel = new QLabel("Status: Stopped", this);
     statusLayout->addWidget(m_statusLabel);
     
-    // Port control
+    
     QHBoxLayout *portLayout = new QHBoxLayout();
     portLayout->addWidget(new QLabel("Port:", this));
     m_portSpin = new QSpinBox(this);
@@ -109,7 +109,7 @@ void EmulatorWindow::setupUi()
     portLayout->addStretch();
     statusLayout->addLayout(portLayout);
     
-    // Start/Stop buttons
+    
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     m_startButton = new QPushButton("Start Server", this);
     m_stopButton = new QPushButton("Stop Server", this);
@@ -120,7 +120,7 @@ void EmulatorWindow::setupUi()
     buttonLayout->addWidget(m_stopButton);
     statusLayout->addLayout(buttonLayout);
     
-    // Connected clients
+    
     statusLayout->addWidget(new QLabel("Connected Clients:", this));
     m_clientList = new QListWidget(this);
     m_clientList->setMaximumHeight(100);
@@ -128,7 +128,7 @@ void EmulatorWindow::setupUi()
     
     rightLayout->addWidget(m_statusGroup);
     
-    // Activity log group
+    
     m_activityGroup = new QGroupBox("Activity Log", this);
     QVBoxLayout *activityLayout = new QVBoxLayout(m_activityGroup);
     
@@ -140,7 +140,7 @@ void EmulatorWindow::setupUi()
     
     m_mainSplitter->addWidget(rightPanel);
     
-    // Set splitter sizes (60% left, 40% right)
+    
     m_mainSplitter->setSizes(QList<int>() << 600 << 400);
 }
 
@@ -149,7 +149,7 @@ void EmulatorWindow::setupMenu()
     QMenuBar *menuBar = new QMenuBar(this);
     setMenuBar(menuBar);
     
-    // File menu
+    
     QMenu *fileMenu = menuBar->addMenu("&File");
     
     QAction *loadAction = fileMenu->addAction("&Load Snapshot...");
@@ -162,7 +162,7 @@ void EmulatorWindow::setupMenu()
     closeAction->setShortcut(QKeySequence("Ctrl+W"));
     connect(closeAction, &QAction::triggered, this, &QWidget::close);
     
-    // Server menu
+    
     QMenu *serverMenu = menuBar->addMenu("&Server");
     
     QAction *startServerAction = serverMenu->addAction("&Start Server");
@@ -173,7 +173,7 @@ void EmulatorWindow::setupMenu()
     stopServerAction->setShortcut(QKeySequence("Ctrl+T"));
     connect(stopServerAction, &QAction::triggered, this, &EmulatorWindow::onStopServer);
     
-    // View menu
+    
     QMenu *viewMenu = menuBar->addMenu("&View");
     
     QAction *clearLogAction = viewMenu->addAction("&Clear Activity Log");
@@ -183,7 +183,7 @@ void EmulatorWindow::setupMenu()
         logActivity("Activity log cleared");
     });
     
-    // Help menu
+    
     QMenu *helpMenu = menuBar->addMenu("&Help");
     
     QAction *aboutAction = helpMenu->addAction("&About");
@@ -215,7 +215,7 @@ void EmulatorWindow::onLoadSnapshot()
         m_loadedSnapshotPath = filePath;
         logActivity(QString("Loaded snapshot: %1").arg(filePath));
         
-        // Update device name
+        
         m_deviceName = snapshot.deviceName;
         if (m_deviceName.isEmpty()) {
             m_deviceName = "Unknown Device";
@@ -233,22 +233,22 @@ void EmulatorWindow::loadSnapshotData(const DeviceSnapshot &snapshot)
 {
     m_deviceTree->clear();
     
-    // Load the snapshot into the provider
+    
     if (m_provider) {
         m_provider->loadDeviceTree(snapshot);
     }
     
-    // Build tree view for display
+    
     QMap<QString, QTreeWidgetItem*> pathToItem;
     
-    // Add nodes
+    
     for (const NodeData &node : snapshot.nodes) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
         item->setText(0, node.path);
         item->setText(1, "Node");
         item->setText(2, node.identifier);
         
-        // Find parent or add to root
+        
         QStringList pathParts = node.path.split('.');
         if (pathParts.size() == 1) {
             m_deviceTree->addTopLevelItem(item);
@@ -265,14 +265,14 @@ void EmulatorWindow::loadSnapshotData(const DeviceSnapshot &snapshot)
         pathToItem[node.path] = item;
     }
     
-    // Add parameters
+    
     for (const ParameterData &param : snapshot.parameters) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
         item->setText(0, param.path);
         item->setText(1, "Parameter");
         item->setText(2, QString("%1 = %2").arg(param.identifier).arg(param.value));
         
-        // Find parent
+        
         QStringList pathParts = param.path.split('.');
         if (pathParts.size() > 1) {
             pathParts.removeLast();
@@ -289,7 +289,7 @@ void EmulatorWindow::loadSnapshotData(const DeviceSnapshot &snapshot)
         pathToItem[param.path] = item;
     }
     
-    // Add matrices
+    
     for (const MatrixData &matrix : snapshot.matrices) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
         item->setText(0, matrix.path);
@@ -297,7 +297,7 @@ void EmulatorWindow::loadSnapshotData(const DeviceSnapshot &snapshot)
         item->setText(2, QString("%1 (%2x%3)").arg(matrix.identifier)
             .arg(matrix.targetCount).arg(matrix.sourceCount));
         
-        // Find parent
+        
         QStringList pathParts = matrix.path.split('.');
         if (pathParts.size() > 1) {
             pathParts.removeLast();
@@ -314,14 +314,14 @@ void EmulatorWindow::loadSnapshotData(const DeviceSnapshot &snapshot)
         pathToItem[matrix.path] = item;
     }
     
-    // Add functions
+    
     for (const FunctionData &func : snapshot.functions) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
         item->setText(0, func.path);
         item->setText(1, "Function");
         item->setText(2, func.identifier);
         
-        // Find parent
+        
         QStringList pathParts = func.path.split('.');
         if (pathParts.size() > 1) {
             pathParts.removeLast();
@@ -381,7 +381,7 @@ void EmulatorWindow::onServerStateChanged(bool running)
     m_isRunning = running;
     updateServerStatus();
     
-    // Enable/disable controls
+    
     m_startButton->setEnabled(!running);
     m_stopButton->setEnabled(running);
     m_portSpin->setEnabled(!running);
@@ -395,7 +395,7 @@ void EmulatorWindow::onClientConnected(const QString &address)
 
 void EmulatorWindow::onClientDisconnected(const QString &address)
 {
-    // Find and remove the client from the list
+    
     for (int i = 0; i < m_clientList->count(); ++i) {
         if (m_clientList->item(i)->text() == address) {
             delete m_clientList->takeItem(i);

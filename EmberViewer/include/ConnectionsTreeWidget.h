@@ -1,14 +1,3 @@
-/*
-    EmberViewer - Connections Tree Widget
-    
-    Tree widget for managing saved Ember+ connections.
-    Displays folders and connections in a hierarchical structure.
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
-
 #ifndef CONNECTIONSTREEWIDGET_H
 #define CONNECTIONSTREEWIDGET_H
 
@@ -49,7 +38,6 @@ private:
     bool isFolder(QTreeWidgetItem *item) const;
     bool isConnection(QTreeWidgetItem *item) const;
     
-    // Context menu actions
     void showFolderContextMenu(const QPoint &pos, QTreeWidgetItem *item);
     void showConnectionContextMenu(const QPoint &pos, QTreeWidgetItem *item);
     void showRootContextMenu(const QPoint &pos);
@@ -63,8 +51,8 @@ private:
     void connectToDevice(const QString &connectionId);
 
     ConnectionManager *m_manager;
-    QMap<QString, QTreeWidgetItem*> m_itemMap;  // id -> tree item
-    QSet<QString> m_expandedFolders;  // Remember expanded state
+    QMap<QString, QTreeWidgetItem*> m_itemMap;
+    QSet<QString> m_expandedFolders;
 };
 
-#endif // CONNECTIONSTREEWIDGET_H
+#endif

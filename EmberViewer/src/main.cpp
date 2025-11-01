@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Cross-platform Ember+ Protocol Viewer
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include <QApplication>
 #include <QFile>
@@ -40,28 +40,28 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
     QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
     QString logLine = QString("[%1] [%2] %3").arg(timestamp).arg(level).arg(msg);
     
-    // Determine if this is an application message or a Qt internal message
-    // Use Qt's category system (proper way to filter)
+    
+    
     QString category = context.category ? QString(context.category) : QString("default");
     bool isQtInternal = category.startsWith("qt.");
     
-    // Check if we should filter out Qt internal messages
+    
     bool shouldLog = !isQtInternal || (globalMainWindow && globalMainWindow->isQtInternalLoggingEnabled());
     
-    // LOG FILE: Write filtered messages (Debug, Info, Warning, Error, Fatal)
+    
     if (logFile && logFile->isOpen() && shouldLog) {
         QTextStream stream(logFile);
         stream << logLine << "\n";
         stream.flush();
     }
     
-    // GUI CONSOLE: Show WARNING+ application messages only (filter Qt internals and Debug/Info)
+    
     if (globalMainWindow && type >= QtWarningMsg && type != QtInfoMsg && !isQtInternal) {
         QString guiMessage = QString("[%1] %2").arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz")).arg(msg);
         QMetaObject::invokeMethod(globalMainWindow, "appendToConsole", Qt::DirectConnection, Q_ARG(QString, guiMessage));
     }
     
-    // STDERR: Write INFO+ filtered messages
+    
     if (type >= QtInfoMsg && shouldLog) {
         fprintf(stderr, "%s\n", logLine.toUtf8().constData());
     }
@@ -71,35 +71,35 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     
-    // Set application metadata
+    
     QApplication::setApplicationName("EmberViewer");
     QApplication::setApplicationVersion(EMBERVIEWER_VERSION_STRING);
     QApplication::setOrganizationName("Magnus Overli");
     QApplication::setOrganizationDomain("github.com/magnusoverli");
     
-    // Set desktop file name for Wayland (helps window managers find the correct icon)
-    // Must match the desktop file name (without .desktop extension)
+    
+    
     QApplication::setDesktopFileName("EmberViewer.desktop");
     
-    // Set application icon (used for window decorations and taskbar)
-    // Try to load from Qt resources first (embedded in binary)
+    
+    
     QIcon appIcon(":/icon.png");
     if (!appIcon.isNull() && !appIcon.availableSizes().isEmpty()) {
         QApplication::setWindowIcon(appIcon);
     } else {
-        // Fallback: try to load from system theme (for installed applications)
+        
         appIcon = QIcon::fromTheme("emberviewer");
         if (!appIcon.isNull()) {
             QApplication::setWindowIcon(appIcon);
         }
     }
     
-    // Set up logging infrastructure
-    // Log routing:
-    //   - Log file: ALL messages (debug, info, warning, error, fatal)
-    //   - stderr: INFO+ messages (info, warning, error, fatal) 
-    //   - GUI console: WARNING+ application messages only (warning, error, fatal, no Qt internals)
-    // This provides complete logs for troubleshooting while keeping UI clean
+    
+    
+    
+    
+    
+    
     
     QString logDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/EmberViewer/logs";
     QDir().mkpath(logDir);
@@ -108,13 +108,13 @@ int main(int argc, char *argv[])
     QString logPath = logDir + "/emberviewer_" + timestamp + ".log";
     logFile = new QFile(logPath);
     
-    // Set Qt logging filter rules BEFORE opening log file or installing handler
-    // This prevents Qt internal debug spam from being output
+    
+    
     QLoggingCategory::setFilterRules(
-        "qt.*.debug=false\n"        // Disable ALL Qt internal debug categories
-        "qt.*.info=false\n"         // Disable ALL Qt internal info categories  
-        "*.warning=true\n"          // Enable warnings
-        "*.critical=true"           // Enable critical/fatal
+        "qt.*.debug=false\n"        
+        "qt.*.info=false\n"         
+        "*.warning=true\n"          
+        "*.critical=true"           
     );
     
     if (logFile->open(QIODevice::WriteOnly | QIODevice::Text)) {

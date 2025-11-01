@@ -22,7 +22,7 @@ private slots:
     void testConstantsArePositive()
     {
         QVERIFY(MainWindow::DEFAULT_EMBER_PORT > 0);
-        QVERIFY(MainWindow::DEFAULT_EMBER_PORT < 65536); // Valid port range
+        QVERIFY(MainWindow::DEFAULT_EMBER_PORT < 65536); 
         QVERIFY(EmberConnection::CONNECTION_TIMEOUT_MS > 0);
     }
 };

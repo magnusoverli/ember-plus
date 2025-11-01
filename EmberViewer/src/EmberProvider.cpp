@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Ember+ Provider (Device Emulator)
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "EmberProvider.h"
 #include "DeviceSnapshot.h"
@@ -26,7 +26,7 @@
 #include <s101/PackageFlag.hpp>
 #include <QDebug>
 
-// Static dispatch function for S101 decoder
+
 static void s101MessageDispatch(libs101::StreamDecoder<unsigned char>::const_iterator first,
                                 libs101::StreamDecoder<unsigned char>::const_iterator last,
                                 ClientConnection* state)
@@ -34,7 +34,7 @@ static void s101MessageDispatch(libs101::StreamDecoder<unsigned char>::const_ite
     state->handleS101Message(first, last);
 }
 
-// ========== ClientConnection Implementation ==========
+
 
 ClientConnection::ClientConnection(QTcpSocket *socket, EmberProvider *provider)
     : QObject(provider)
@@ -88,24 +88,24 @@ void ClientConnection::handleS101Message(
     libs101::StreamDecoder<unsigned char>::const_iterator first,
     libs101::StreamDecoder<unsigned char>::const_iterator last)
 {
-    // Parse S101 frame
-    first++;  // Skip slot
-    auto message = *first++;  // Message type
+    
+    first++;  
+    auto message = *first++;  
     
     if (message == libs101::MessageType::EmBER) {
-        auto command = *first++;  // Command
-        first++;  // Version
-        auto flags = libs101::PackageFlag(*first++);  // Flags
-        first++;  // DTD
+        auto command = *first++;  
+        first++;  
+        auto flags = libs101::PackageFlag(*first++);  
+        first++;  
         
         if (command == libs101::CommandType::EmBER) {
-            // Skip app bytes
+            
             auto appbytes = *first++;
             while (appbytes-- > 0) {
                 ++first;
             }
             
-            // Feed to DOM reader
+            
             try {
                 m_domReader->read(first, last);
                 
@@ -122,7 +122,7 @@ void ClientConnection::handleS101Message(
     }
 }
 
-// ========== DomReader Implementation ==========
+
 
 DomReader::DomReader(ClientConnection* client)
     : libember::dom::AsyncDomReader(libember::glow::GlowNodeFactory::getFactory())
@@ -143,7 +143,7 @@ void DomReader::rootReady(libember::dom::Node* root)
     delete root;
 }
 
-// ========== EmberProvider Implementation ==========
+
 
 EmberProvider::EmberProvider(QObject *parent)
     : QObject(parent)
@@ -161,7 +161,7 @@ EmberProvider::~EmberProvider()
 bool EmberProvider::startListening(quint16 port)
 {
     if (m_server && m_server->isListening()) {
-        return true;  // Already listening
+        return true;  
     }
     
     m_server = new QTcpServer(this);
@@ -187,7 +187,7 @@ void EmberProvider::stopListening()
         m_server = nullptr;
     }
     
-    // Disconnect all clients
+    
     for (ClientConnection *client : m_clients) {
         delete client;
     }
@@ -203,10 +203,10 @@ void EmberProvider::loadDeviceTree(const DeviceSnapshot &snapshot)
     m_matrices = snapshot.matrices;
     m_functions = snapshot.functions;
     
-    // Use root paths from snapshot to preserve order
+    
     m_rootPaths = snapshot.rootPaths;
     
-    // Fallback: if rootPaths is empty (old format), extract from nodes
+    
     if (m_rootPaths.isEmpty()) {
         for (const QString &path : m_nodes.keys()) {
             if (!path.contains('.')) {
@@ -246,17 +246,17 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
         return;
     }
     
-    // Process all elements in the root collection
+    
     for (auto it = rootCollection->begin(); it != rootCollection->end(); ++it) {
         if (auto command = dynamic_cast<libember::glow::GlowCommand*>(&(*it))) {
             processCommand(command, client);
         }
         else if (auto qualNode = dynamic_cast<libember::glow::GlowQualifiedNode*>(&(*it))) {
-            // Process qualified node (usually contains commands)
+            
             if (qualNode->children()) {
                 for (auto childIt = qualNode->children()->begin(); childIt != qualNode->children()->end(); ++childIt) {
                     if (auto cmd = dynamic_cast<libember::glow::GlowCommand*>(&(*childIt))) {
-                        // Extract path from qualified node
+                        
                         QString path;
                         for (int val : qualNode->path()) {
                             if (!path.isEmpty()) path += ".";
@@ -283,7 +283,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
             processQualifiedParameter(qualParam, client);
         }
         else if (auto qualMatrix = dynamic_cast<libember::glow::GlowQualifiedMatrix*>(&(*it))) {
-            // Handle matrix connection commands
+            
             if (qualMatrix->connections()) {
                 QString path;
                 for (int val : qualMatrix->path()) {
@@ -291,21 +291,21 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                     path += QString::number(val);
                 }
                 
-                // Process connection changes
+                
                 for (auto connIt = qualMatrix->connections()->begin(); connIt != qualMatrix->connections()->end(); ++connIt) {
                     if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*connIt))) {
                         int targetNumber = connection->target();
                         libember::ber::ObjectIdentifier sources = connection->sources();
                         
-                        // Get operation type (Absolute=0, Connect=1, Disconnect=2)
+                        
                         int operation = connection->operation().value();
                         
-                        // Update matrix connections in our tree
+                        
                         if (m_matrices.contains(path)) {
                             auto& matrix = m_matrices[path];
                             
                             if (operation == libember::glow::ConnectionOperation::Absolute) {
-                                // Absolute: Clear all connections for this target, then add new ones
+                                
                                 for (auto it = matrix.connections.begin(); it != matrix.connections.end(); ) {
                                     if (it.key().first == targetNumber) {
                                         it = matrix.connections.erase(it);
@@ -314,7 +314,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                     }
                                 }
                                 
-                                // Add new connections
+                                
                                 for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                     int sourceNumber = *srcIt;
                                     matrix.connections[{targetNumber, sourceNumber}] = true;
@@ -323,14 +323,14 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                 emit requestReceived(path, QString("Matrix Absolute: Target %1").arg(targetNumber));
                             }
                             else if (operation == libember::glow::ConnectionOperation::Connect) {
-                                // Connect: Add specified connections
                                 
-                                // For OneToN (0): Each target can have only one source
-                                // For OneToOne (1): Each target AND each source can have only one connection
-                                // For NToN (2): Multiple sources per target allowed
                                 
-                                if (matrix.type == 0) {  // OneToN
-                                    // Clear existing connections for this target
+                                
+                                
+                                
+                                
+                                if (matrix.type == 0) {  
+                                    
                                     for (auto it = matrix.connections.begin(); it != matrix.connections.end(); ) {
                                         if (it.key().first == targetNumber) {
                                             it = matrix.connections.erase(it);
@@ -339,12 +339,12 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                         }
                                     }
                                 }
-                                else if (matrix.type == 1) {  // OneToOne
-                                    // Clear connections for this target AND for the new sources
+                                else if (matrix.type == 1) {  
+                                    
                                     for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                         int sourceNumber = *srcIt;
                                         
-                                        // Clear any target connected to this source
+                                        
                                         for (auto it = matrix.connections.begin(); it != matrix.connections.end(); ) {
                                             if (it.key().second == sourceNumber || it.key().first == targetNumber) {
                                                 it = matrix.connections.erase(it);
@@ -354,9 +354,9 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                         }
                                     }
                                 }
-                                // For NToN (type == 2), don't clear anything - just add
                                 
-                                // Add new connections
+                                
+                                
                                 for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                     int sourceNumber = *srcIt;
                                     matrix.connections[{targetNumber, sourceNumber}] = true;
@@ -365,7 +365,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                 emit requestReceived(path, QString("Matrix Connect: Target %1").arg(targetNumber));
                             }
                             else if (operation == libember::glow::ConnectionOperation::Disconnect) {
-                                // Disconnect: Remove specified connections
+                                
                                 for (auto srcIt = sources.begin(); srcIt != sources.end(); ++srcIt) {
                                     int sourceNumber = *srcIt;
                                     matrix.connections.remove({targetNumber, sourceNumber});
@@ -374,7 +374,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
                                 emit requestReceived(path, QString("Matrix Disconnect: Target %1").arg(targetNumber));
                             }
                             
-                            // Send updated matrix state back
+                            
                             sendMatrixResponse(path, client);
                         }
                     }
@@ -387,7 +387,7 @@ void EmberProvider::processRoot(libember::dom::Node* root, ClientConnection *cli
 void EmberProvider::processCommand(libember::glow::GlowCommand* command, ClientConnection *client)
 {
     if (command->number().value() == libember::glow::CommandType::GetDirectory) {
-        // Root GetDirectory - send all root nodes
+        
         sendGetDirectoryResponse("", client);
         emit requestReceived("", "GetDirectory (root)");
     }
@@ -395,17 +395,17 @@ void EmberProvider::processCommand(libember::glow::GlowCommand* command, ClientC
 
 void EmberProvider::processQualifiedParameter(libember::glow::GlowQualifiedParameter* param, ClientConnection *client)
 {
-    // Extract path
+    
     QString path;
     for (int val : param->path()) {
         if (!path.isEmpty()) path += ".";
         path += QString::number(val);
     }
     
-    // Check if this is a value update
+    
     if (param->contains(libember::glow::ParameterProperty::Value)) {
         if (m_parameters.contains(path)) {
-            // Update parameter value in our tree
+            
             auto value = param->value();
             QString valueStr;
             
@@ -432,12 +432,12 @@ void EmberProvider::processQualifiedParameter(libember::glow::GlowQualifiedParam
             
             emit requestReceived(path, QString("SetValue: %1").arg(valueStr));
             
-            // Send updated parameter to all subscribers
+            
             sendParameterResponse(path, client);
         }
     }
     
-    // Process commands in qualified parameter
+    
     if (param->children()) {
         for (auto it = param->children()->begin(); it != param->children()->end(); ++it) {
             if (auto cmd = dynamic_cast<libember::glow::GlowCommand*>(&(*it))) {
@@ -457,43 +457,43 @@ void EmberProvider::processQualifiedParameter(libember::glow::GlowQualifiedParam
 void EmberProvider::sendGetDirectoryResponse(const QString &path, ClientConnection *client)
 {
     if (path.isEmpty()) {
-        // Send all root elements in order
+        
         for (const QString &rootPath : m_rootPaths) {
             if (m_nodes.contains(rootPath)) {
                 sendNodeResponse(rootPath, client);
             }
         }
     } else {
-        // Send children using the pre-ordered childPaths list from NodeData
-        // This preserves the original device's tree order
+        
+        
         if (m_nodes.contains(path)) {
             const NodeData &node = m_nodes[path];
             
             for (const QString &childPath : node.childPaths) {
-                // Determine child type and send appropriate response
+                
                 if (m_nodes.contains(childPath)) {
                     sendNodeResponse(childPath, client);
                 } else if (m_parameters.contains(childPath)) {
                     sendParameterResponse(childPath, client);
                 } else if (m_matrices.contains(childPath)) {
                     sendMatrixResponse(childPath, client);
-                    // Also send label container node if matrix has labels
+                    
                     sendMatrixLabelNode(childPath, client);
                 } else if (m_functions.contains(childPath)) {
                     sendFunctionResponse(childPath, client);
                 }
             }
         }
-        // Check if this is a matrix label container (matrixPath.666999666)
+        
         else if (path.endsWith(".666999666")) {
-            QString matrixPath = path.left(path.length() - 10); // Remove ".666999666"
+            QString matrixPath = path.left(path.length() - 10); 
             if (m_matrices.contains(matrixPath)) {
-                // Send target and source type nodes
-                sendMatrixLabelTypeNode(path, "1", client); // targets
-                sendMatrixLabelTypeNode(path, "2", client); // sources
+                
+                sendMatrixLabelTypeNode(path, "1", client); 
+                sendMatrixLabelTypeNode(path, "2", client); 
             }
         }
-        // Check if this is a target/source label type node (matrixPath.666999666.1 or .2)
+        
         else if (path.contains(".666999666.")) {
             QStringList parts = path.split('.');
             if (parts.size() >= 2) {
@@ -508,7 +508,7 @@ void EmberProvider::sendGetDirectoryResponse(const QString &path, ClientConnecti
     }
 }
 
-// Helper: Parse path string to OID
+
 static libember::ber::ObjectIdentifier pathToOid(const QString &path)
 {
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
@@ -527,7 +527,7 @@ void EmberProvider::sendNodeResponse(const QString &path, ClientConnection *clie
     
     const NodeData &node = m_nodes[path];
     
-    // Create and populate qualified node
+    
     auto qualNode = new libember::glow::GlowQualifiedNode(pathToOid(path));
     qualNode->setIdentifier(node.identifier.toStdString());
     if (!node.description.isEmpty()) {
@@ -535,7 +535,7 @@ void EmberProvider::sendNodeResponse(const QString &path, ClientConnection *clie
     }
     qualNode->setIsOnline(node.isOnline);
     
-    // Send
+    
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), qualNode);
     sendEncodedMessage(root, client);
@@ -550,22 +550,22 @@ void EmberProvider::sendParameterResponse(const QString &path, ClientConnection 
     
     const ParameterData &param = m_parameters[path];
     
-    // Create and populate qualified parameter
+    
     auto qualParam = new libember::glow::GlowQualifiedParameter(pathToOid(path));
     qualParam->setIdentifier(param.identifier.toStdString());
     
-    // Set value based on type
+    
     switch (param.type) {
-        case 1:  // Integer
+        case 1:  
             qualParam->setValue(static_cast<long>(param.value.toLongLong()));
             break;
-        case 2:  // Real
+        case 2:  
             qualParam->setValue(param.value.toDouble());
             break;
-        case 3:  // String
+        case 3:  
             qualParam->setValue(param.value.toStdString());
             break;
-        case 4:  // Boolean
+        case 4:  
             qualParam->setValue(param.value == "true" || param.value == "1");
             break;
         default:
@@ -575,7 +575,7 @@ void EmberProvider::sendParameterResponse(const QString &path, ClientConnection 
     
     qualParam->setAccess(static_cast<libember::glow::Access::_Domain>(param.access));
     
-    // Set min/max if available
+    
     if (!param.minimum.isNull()) {
         qualParam->setMinimum(static_cast<long>(param.minimum.toLongLong()));
     }
@@ -583,7 +583,7 @@ void EmberProvider::sendParameterResponse(const QString &path, ClientConnection 
         qualParam->setMaximum(static_cast<long>(param.maximum.toLongLong()));
     }
     
-    // Set enum options if available
+    
     if (!param.enumOptions.isEmpty()) {
         std::vector<std::pair<std::string, int>> enumMap;
         for (int i = 0; i < param.enumOptions.size(); ++i) {
@@ -595,7 +595,7 @@ void EmberProvider::sendParameterResponse(const QString &path, ClientConnection 
     
     qualParam->setIsOnline(param.isOnline);
     
-    // Send
+    
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), qualParam);
     sendEncodedMessage(root, client);
@@ -610,7 +610,7 @@ void EmberProvider::sendMatrixResponse(const QString &path, ClientConnection *cl
     
     const MatrixData &matrix = m_matrices[path];
     
-    // Create and populate qualified matrix
+    
     auto qualMatrix = new libember::glow::GlowQualifiedMatrix(pathToOid(path));
     qualMatrix->setIdentifier(matrix.identifier.toStdString());
     
@@ -618,12 +618,12 @@ void EmberProvider::sendMatrixResponse(const QString &path, ClientConnection *cl
         qualMatrix->setDescription(matrix.description.toStdString());
     }
     
-    // Set matrix type and dimensions
+    
     qualMatrix->setType(static_cast<libember::glow::MatrixType::_Domain>(matrix.type));
     qualMatrix->setTargetCount(matrix.targetCount);
     qualMatrix->setSourceCount(matrix.sourceCount);
     
-    // Add targets - send only the targets that actually exist
+    
     if (!matrix.targetNumbers.isEmpty()) {
         auto targetsSeq = qualMatrix->targets();
         for (int targetNumber : matrix.targetNumbers) {
@@ -632,7 +632,7 @@ void EmberProvider::sendMatrixResponse(const QString &path, ClientConnection *cl
         }
     }
     
-    // Add sources - send only the sources that actually exist
+    
     if (!matrix.sourceNumbers.isEmpty()) {
         auto sourcesSeq = qualMatrix->sources();
         for (int sourceNumber : matrix.sourceNumbers) {
@@ -641,10 +641,10 @@ void EmberProvider::sendMatrixResponse(const QString &path, ClientConnection *cl
         }
     }
     
-    // Add connections - group by target
+    
     QMap<int, QList<int>> targetToSources;
     for (auto it = matrix.connections.begin(); it != matrix.connections.end(); ++it) {
-        if (it.value()) {  // Only connected crosspoints
+        if (it.value()) {  
             int target = it.key().first;
             int source = it.key().second;
             targetToSources[target].append(source);
@@ -657,21 +657,21 @@ void EmberProvider::sendMatrixResponse(const QString &path, ClientConnection *cl
             int targetNumber = it.key();
             auto connection = new libember::glow::GlowConnection(targetNumber);
             
-            // Set sources for this target
+            
             libember::ber::ObjectIdentifier sources;
             for (int sourceNumber : it.value()) {
                 sources.push_back(sourceNumber);
             }
             connection->setSources(sources);
             
-            // Set disposition (0 = Tally, actual connection state)
+            
             connection->setDisposition(libember::glow::ConnectionDisposition::Tally);
             
             connectionsSeq->insert(connectionsSeq->end(), connection);
         }
     }
     
-    // Send
+    
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), qualMatrix);
     sendEncodedMessage(root, client);
@@ -686,7 +686,7 @@ void EmberProvider::sendFunctionResponse(const QString &path, ClientConnection *
     
     const FunctionData &func = m_functions[path];
     
-    // Create and populate qualified function
+    
     auto qualFunc = new libember::glow::GlowQualifiedFunction(pathToOid(path));
     qualFunc->setIdentifier(func.identifier.toStdString());
     
@@ -694,7 +694,7 @@ void EmberProvider::sendFunctionResponse(const QString &path, ClientConnection *
         qualFunc->setDescription(func.description.toStdString());
     }
     
-    // Add arguments
+    
     if (!func.argNames.isEmpty()) {
         auto argsSeq = qualFunc->arguments();
         for (int i = 0; i < func.argNames.size(); ++i) {
@@ -704,7 +704,7 @@ void EmberProvider::sendFunctionResponse(const QString &path, ClientConnection *
         }
     }
     
-    // Add results
+    
     if (!func.resultNames.isEmpty()) {
         auto resultsSeq = qualFunc->result();
         for (int i = 0; i < func.resultNames.size(); ++i) {
@@ -714,7 +714,7 @@ void EmberProvider::sendFunctionResponse(const QString &path, ClientConnection *
         }
     }
     
-    // Send
+    
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), qualFunc);
     sendEncodedMessage(root, client);
@@ -739,37 +739,37 @@ void EmberProvider::handleUnsubscribe(const QString &path, ClientConnection *cli
 
 void EmberProvider::sendEncodedMessage(const libember::glow::GlowContainer *container, ClientConnection *client)
 {
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     container->encode(stream);
     
-    // Encode to S101 and send
+    
     QByteArray frame = m_s101Protocol->encodeEmberData(stream);
     client->sendData(frame);
 }
 
 void EmberProvider::sendMatrixLabelNode(const QString &matrixPath, ClientConnection *client)
 {
-    // Check if matrix has any labels
+    
     if (!m_matrices.contains(matrixPath)) {
         return;
     }
     
     const MatrixData &matrix = m_matrices[matrixPath];
     if (matrix.targetLabels.isEmpty() && matrix.sourceLabels.isEmpty()) {
-        return; // No labels to send
+        return; 
     }
     
-    // Create virtual label container node at matrixPath.666999666
+    
     QString labelContainerPath = matrixPath + ".666999666";
     
-    // Create qualified node for label container
+    
     auto qualNode = new libember::glow::GlowQualifiedNode(pathToOid(labelContainerPath));
     qualNode->setIdentifier("labels");
     qualNode->setDescription("Matrix Labels");
     qualNode->setIsOnline(true);
     
-    // Send
+    
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), qualNode);
     sendEncodedMessage(root, client);
@@ -778,7 +778,7 @@ void EmberProvider::sendMatrixLabelNode(const QString &matrixPath, ClientConnect
 
 void EmberProvider::sendMatrixLabelTypeNode(const QString &containerPath, const QString &labelType, ClientConnection *client)
 {
-    // Extract matrix path from container path (remove .666999666)
+    
     QString matrixPath = containerPath.left(containerPath.length() - 10);
     
     if (!m_matrices.contains(matrixPath)) {
@@ -787,7 +787,7 @@ void EmberProvider::sendMatrixLabelTypeNode(const QString &containerPath, const 
     
     const MatrixData &matrix = m_matrices[matrixPath];
     
-    // Check if this type has labels
+    
     if (labelType == "1" && matrix.targetLabels.isEmpty()) {
         return;
     }
@@ -795,16 +795,16 @@ void EmberProvider::sendMatrixLabelTypeNode(const QString &containerPath, const 
         return;
     }
     
-    // Create type node path: containerPath.1 or containerPath.2
+    
     QString typePath = containerPath + "." + labelType;
     
-    // Create qualified node
+    
     auto qualNode = new libember::glow::GlowQualifiedNode(pathToOid(typePath));
     qualNode->setIdentifier(labelType == "1" ? "targets" : "sources");
     qualNode->setDescription(labelType == "1" ? "Target Labels" : "Source Labels");
     qualNode->setIsOnline(true);
     
-    // Send
+    
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), qualNode);
     sendEncodedMessage(root, client);
@@ -824,15 +824,15 @@ void EmberProvider::sendMatrixLabelParameters(const QString &matrixPath, const Q
         return;
     }
     
-    // Send a parameter for each label
+    
     for (auto it = labels.begin(); it != labels.end(); ++it) {
         int number = it.key();
         QString label = it.value();
         
-        // Create parameter path: matrixPath.666999666.labelType.number
+        
         QString paramPath = QString("%1.666999666.%2.%3").arg(matrixPath).arg(labelType).arg(number);
         
-        // Create qualified parameter
+        
         auto qualParam = new libember::glow::GlowQualifiedParameter(pathToOid(paramPath));
         qualParam->setIdentifier(QString::number(number).toStdString());
         qualParam->setValue(label.toStdString());
@@ -840,7 +840,7 @@ void EmberProvider::sendMatrixLabelParameters(const QString &matrixPath, const Q
         qualParam->setAccess(libember::glow::Access::ReadOnly);
         qualParam->setIsOnline(true);
         
-        // Send
+        
         auto root = new libember::glow::GlowRootElementCollection();
         root->insert(root->end(), qualParam);
         sendEncodedMessage(root, client);

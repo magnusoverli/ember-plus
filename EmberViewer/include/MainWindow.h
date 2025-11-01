@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Main application window
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
@@ -104,7 +104,7 @@ private:
     
     void logMessage(const QString &message);
     
-    // Widgets
+    
     EmberTreeWidget *m_treeWidget;
     QWidget *m_propertyPanel;
     QTextEdit *m_consoleLog;
@@ -113,7 +113,7 @@ private:
     QSplitter *m_mainSplitter;
     QSplitter *m_verticalSplitter;
     
-    // Connection controls
+    
     QLineEdit *m_hostEdit;
     QSpinBox *m_portSpin;
     QPushButton *m_connectButton;
@@ -121,10 +121,10 @@ private:
     QLabel *m_statusLabel;
     QLabel *m_pathLabel;
     
-    // Ember+ connection
+    
     EmberConnection *m_connection;
     
-    // Manager classes
+    
     TreeViewController *m_treeViewController;
     SubscriptionManager *m_subscriptionManager;
     MatrixManager *m_matrixManager;
@@ -132,41 +132,41 @@ private:
     SnapshotManager *m_snapshotManager;
     FunctionInvoker *m_functionInvoker;
     
-    // Meter widget (only one active at a time)
+    
     MeterWidget *m_activeMeter;
     
-    // Stream identifier tracking (streamId -> parameter path)
+    
     QMap<int, QString> m_streamIdToPath;
     
-    // Complete tree fetch progress tracking - now handled by SnapshotManager
-    // Function metadata storage - now handled by FunctionInvoker
     
-    // State
+    
+    
+    
     bool m_isConnected;
     bool m_showOidPath;
     bool m_enableQtInternalLogging;
 
-    // Crosspoint editing
+    
     QAction *m_enableCrosspointsAction;
     QLabel *m_crosspointsStatusLabel;
     
-    // Emulator window
+    
     EmulatorWindow *m_emulatorWindow;
     
-    // Update system
+    
     UpdateManager *m_updateManager;
     UpdateDialog *m_updateDialog;
     QLabel *m_updateStatusLabel;
     
-    // Saved connections
+    
     ConnectionManager *m_connectionManager;
     ConnectionsTreeWidget *m_connectionsTree;
 
 public:
-    // Constants
+    
     static constexpr int MATRIX_LABEL_PATH_MARKER = 666999666;
     static constexpr int DEFAULT_EMBER_PORT = 9092;
-    static constexpr int DEFAULT_PORT_FALLBACK = 9000;  // For settings
+    static constexpr int DEFAULT_PORT_FALLBACK = 9000;  
 };
 
-#endif // MAINWINDOW_H
+#endif 

@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Ember+ Provider (Device Emulator)
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #ifndef EMBERPROVIDER_H
 #define EMBERPROVIDER_H
@@ -25,7 +25,7 @@ struct ParameterData;
 struct MatrixData;
 struct FunctionData;
 
-// Forward declarations
+
 namespace libember {
     namespace dom {
         class Node;
@@ -39,12 +39,12 @@ namespace libember {
     }
 }
 
-// Forward declarations
+
 class EmberProvider;
 class DomReader;
 class S101Protocol;
 
-// Client connection handler (must be outside EmberProvider for Qt MOC)
+
 class ClientConnection : public QObject
 {
     Q_OBJECT
@@ -59,7 +59,7 @@ public:
     void handleS101Message(libs101::StreamDecoder<unsigned char>::const_iterator first,
                           libs101::StreamDecoder<unsigned char>::const_iterator last);
     
-    // Subscription tracking
+    
     QSet<QString> subscriptions;
 
 signals:
@@ -81,7 +81,7 @@ private:
     friend class DomReader;
 };
 
-// DOM Reader for parsing incoming requests
+
 class DomReader : public libember::dom::AsyncDomReader
 {
 public:
@@ -109,7 +109,7 @@ public:
     
     void loadDeviceTree(const DeviceSnapshot &snapshot);
     
-    // Methods needed by ClientConnection and DomReader
+    
     void processRoot(libember::dom::Node* root, ClientConnection *client);
     void sendKeepAliveResponse(ClientConnection *client);
 
@@ -134,7 +134,7 @@ private:
     void sendMatrixResponse(const QString &path, ClientConnection *client);
     void sendFunctionResponse(const QString &path, ClientConnection *client);
     
-    // Matrix label virtual node helpers
+    
     void sendMatrixLabelNode(const QString &matrixPath, ClientConnection *client);
     void sendMatrixLabelTypeNode(const QString &containerPath, const QString &labelType, ClientConnection *client);
     void sendMatrixLabelParameters(const QString &matrixPath, const QString &labelType, ClientConnection *client);
@@ -148,14 +148,14 @@ private:
     QList<ClientConnection*> m_clients;
     S101Protocol *m_s101Protocol;
     
-    // Device tree data (loaded from snapshot)
+    
     QMap<QString, NodeData> m_nodes;
     QMap<QString, ParameterData> m_parameters;
     QMap<QString, MatrixData> m_matrices;
     QMap<QString, FunctionData> m_functions;
     
-    // Root paths tracking
+    
     QStringList m_rootPaths;
 };
 
-#endif // EMBERPROVIDER_H
+#endif 

@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Tree Fetch Service Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "TreeFetchService.h"
 
@@ -36,12 +36,12 @@ void TreeFetchService::startFetch(const QStringList &initialNodePaths)
     m_activePaths.clear();
     m_totalEstimate = initialNodePaths.size();
     
-    // Add all initial nodes to pending queue
+    
     for (const QString &path : initialNodePaths) {
-        QString type = path.split('|').value(1);  // Format: "path|type"
+        QString type = path.split('|').value(1);  
         QString nodePath = path.split('|').value(0);
         
-        // Only fetch nodes (they have children), skip parameters/matrices/functions
+        
         if (type == "Node") {
             m_pendingPaths.insert(nodePath);
         }
@@ -53,7 +53,7 @@ void TreeFetchService::startFetch(const QStringList &initialNodePaths)
         return;
     }
     
-    // Start processing the queue
+    
     m_timer->start();
     processQueue();
 }
@@ -79,7 +79,7 @@ void TreeFetchService::onNodeReceived(const QString &nodePath)
         return;
     }
     
-    // Add this new node to pending fetch queue (to fetch its children)
+    
     if (!m_completedPaths.contains(nodePath) && 
         !m_activePaths.contains(nodePath) &&
         !m_pendingPaths.contains(nodePath)) {
@@ -87,8 +87,8 @@ void TreeFetchService::onNodeReceived(const QString &nodePath)
         m_totalEstimate++;
     }
     
-    // Mark parent path as completed (we received its child)
-    // The parent is complete when we receive at least one child from it
+    
+    
     if (!nodePath.isEmpty()) {
         QStringList parts = nodePath.split('.');
         if (parts.size() > 1) {
@@ -99,7 +99,7 @@ void TreeFetchService::onNodeReceived(const QString &nodePath)
                 m_completedPaths.insert(parentPath);
             }
         } else {
-            // Root level node received - root request is complete
+            
             if (m_activePaths.contains("")) {
                 m_activePaths.remove("");
                 m_completedPaths.insert("");
@@ -120,21 +120,21 @@ void TreeFetchService::processQueue()
         return;
     }
     
-    // Send new requests if we have capacity
+    
     while (m_activePaths.size() < MAX_PARALLEL_REQUESTS && !m_pendingPaths.isEmpty()) {
-        // Take a path from pending queue
+        
         QString path = *m_pendingPaths.begin();
         m_pendingPaths.remove(path);
         m_activePaths.insert(path);
         
-        // Send GetDirectory request via callback
+        
         if (m_sendCallback) {
             bool isRoot = path.isEmpty();
             m_sendCallback(path, isRoot);
         }
     }
     
-    // Check if we're done
+    
     if (m_pendingPaths.isEmpty() && m_activePaths.isEmpty()) {
         int fetchedCount = m_completedPaths.size();
         
@@ -145,7 +145,7 @@ void TreeFetchService::processQueue()
         emit fetchCompleted(true, QString("Fetched %1 nodes").arg(fetchedCount));
     }
     else {
-        // Update progress
+        
         int total = m_completedPaths.size() + m_activePaths.size() + m_pendingPaths.size();
         emit progressUpdated(m_completedPaths.size(), total);
     }

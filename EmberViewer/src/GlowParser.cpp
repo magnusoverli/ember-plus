@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Glow Message Parser Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "GlowParser.h"
 #include <ember/glow/GlowNodeFactory.hpp>
@@ -39,11 +39,11 @@ GlowParser::~GlowParser()
 void GlowParser::parseEmberData(const QByteArray& data)
 {
     try {
-        // Feed data to DOM reader
+        
         const unsigned char* bytes = reinterpret_cast<const unsigned char*>(data.constData());
         m_domReader->read(bytes, bytes + data.size());
         
-        // Check for complete tree
+        
         if (m_domReader->isRootReady()) {
             auto root = m_domReader->detachRoot();
             processRoot(root);
@@ -76,7 +76,7 @@ void GlowParser::processElementCollection(libember::glow::GlowContainer* contain
     for (auto it = container->begin(); it != container->end(); ++it) {
         auto element = &(*it);
         
-        // Try each element type
+        
         if (auto qnode = dynamic_cast<libember::glow::GlowQualifiedNode*>(element)) {
             processQualifiedNode(qnode);
         }
@@ -114,14 +114,14 @@ void GlowParser::processQualifiedNode(libember::glow::GlowQualifiedNode* node, b
 {
     EmberData::NodeInfo info;
     
-    // Extract path
+    
     auto path = node->path();
     for (auto num : path) {
         info.path += QString::number(num) + ".";
     }
-    info.path.chop(1);  // Remove trailing dot
+    info.path.chop(1);  
     
-    // Extract properties
+    
     info.hasIdentifier = node->contains(libember::glow::NodeProperty::Identifier);
     info.identifier = info.hasIdentifier
         ? QString::fromStdString(node->identifier()) 
@@ -136,8 +136,8 @@ void GlowParser::processQualifiedNode(libember::glow::GlowQualifiedNode* node, b
         ? node->isOnline()
         : true;
     
-    // Don't re-emit if we already have this node with a valid identifier
-    // and the new data lacks an identifier (device sent stub/reference)
+    
+    
     bool hadIdentifier = m_nodesWithIdentifier.value(info.path, false);
     bool shouldEmit = true;
     
@@ -147,7 +147,7 @@ void GlowParser::processQualifiedNode(libember::glow::GlowQualifiedNode* node, b
         shouldEmit = false;
     }
     
-    // Track nodes with identifiers
+    
     if (info.hasIdentifier) {
         m_nodesWithIdentifier[info.path] = true;
     }
@@ -159,7 +159,7 @@ void GlowParser::processQualifiedNode(libember::glow::GlowQualifiedNode* node, b
         emit nodeReceived(info);
     }
     
-    // Process children if present
+    
     if (node->children()) {
         processElementCollection(node->children(), info.path);
     }
@@ -188,8 +188,8 @@ void GlowParser::processNode(libember::glow::GlowNode* node, const QString& pare
         ? node->isOnline()
         : true;
     
-    // Don't re-emit if we already have this node with a valid identifier
-    // and the new data lacks an identifier (device sent stub/reference)
+    
+    
     bool hadIdentifier = m_nodesWithIdentifier.value(info.path, false);
     bool shouldEmit = true;
     
@@ -199,7 +199,7 @@ void GlowParser::processNode(libember::glow::GlowNode* node, const QString& pare
         shouldEmit = false;
     }
     
-    // Track nodes with identifiers
+    
     if (info.hasIdentifier) {
         m_nodesWithIdentifier[info.path] = true;
     }
@@ -211,7 +211,7 @@ void GlowParser::processNode(libember::glow::GlowNode* node, const QString& pare
         emit nodeReceived(info);
     }
     
-    // Process children if present
+    
     if (node->children()) {
         processElementCollection(node->children(), info.path);
     }
@@ -221,7 +221,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
 {
     EmberData::ParameterInfo info;
     
-    // Extract path
+    
     auto path = param->path();
     for (auto num : path) {
         info.path += QString::number(num) + ".";
@@ -230,12 +230,12 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.number = path.back();
     
-    // Extract identifier
+    
     info.identifier = param->contains(libember::glow::ParameterProperty::Identifier)
         ? QString::fromStdString(param->identifier())
         : QString("Parameter %1").arg(info.number);
     
-    // Extract value
+    
     if (param->contains(libember::glow::ParameterProperty::Value)) {
         auto value = param->value();
         if (value.type().value() == libember::glow::ParameterType::Integer) {
@@ -249,7 +249,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
         }
     }
     
-    // Extract metadata
+    
     info.access = param->contains(libember::glow::ParameterProperty::Access)
         ? param->access().value()
         : 3;
@@ -276,7 +276,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
         }
     }
     
-    // Extract enum info
+    
     if (param->contains(libember::glow::ParameterProperty::EnumMap)) {
         auto enumMap = param->enumerationMap();
         for (auto it = enumMap.begin(); it != enumMap.end(); ++it) {
@@ -298,7 +298,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.streamIdentifier = param->streamIdentifier();
     
-    // Debug: Log parameters with streamIdentifier
+    
     if (info.streamIdentifier > 0) {
         qDebug() << "[GlowParser] PPM Parameter (qualified):" << info.path 
                  << "identifier=" << info.identifier 
@@ -319,12 +319,12 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
         ? QString::number(info.number) 
         : QString("%1.%2").arg(parentPath).arg(info.number);
     
-    // Extract identifier
+    
     info.identifier = param->contains(libember::glow::ParameterProperty::Identifier)
         ? QString::fromStdString(param->identifier())
         : QString("Parameter %1").arg(info.number);
     
-    // Extract value
+    
     if (param->contains(libember::glow::ParameterProperty::Value)) {
         auto value = param->value();
         if (value.type().value() == libember::glow::ParameterType::Integer) {
@@ -338,7 +338,7 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
         }
     }
     
-    // Extract metadata
+    
     info.access = param->contains(libember::glow::ParameterProperty::Access)
         ? param->access().value()
         : 3;
@@ -365,7 +365,7 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
         }
     }
     
-    // Extract enum info
+    
     if (param->contains(libember::glow::ParameterProperty::EnumMap)) {
         auto enumMap = param->enumerationMap();
         for (auto it = enumMap.begin(); it != enumMap.end(); ++it) {
@@ -387,7 +387,7 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     
     info.streamIdentifier = param->streamIdentifier();
     
-    // Debug: Log parameters with streamIdentifier
+    
     if (info.streamIdentifier > 0) {
         qDebug() << "[GlowParser] PPM Parameter (unqualified):" << info.path 
                  << "identifier=" << info.identifier 
@@ -401,7 +401,7 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
 
 void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* matrix)
 {
-    // Extract path
+    
     auto path = matrix->path();
     QString pathStr;
     for (auto num : path) {
@@ -411,7 +411,7 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
     
     int number = path.back();
     
-    // Check if this is a full matrix message or just a connection update
+    
     bool hasMetadata = matrix->contains(libember::glow::MatrixProperty::Identifier) ||
                        matrix->contains(libember::glow::MatrixProperty::Description) ||
                        matrix->contains(libember::glow::MatrixProperty::Type) ||
@@ -433,7 +433,7 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
         
         info.type = matrix->contains(libember::glow::MatrixProperty::Type)
             ? matrix->type().value()
-            : 2;  // Default to NToN
+            : 2;  
         
         info.targetCount = matrix->contains(libember::glow::MatrixProperty::TargetCount)
             ? matrix->targetCount()
@@ -446,7 +446,7 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
         emit matrixReceived(info);
     }
     
-    // Process targets
+    
     if (matrix->targets()) {
         for (auto it = matrix->targets()->begin(); it != matrix->targets()->end(); ++it) {
             if (auto target = dynamic_cast<libember::glow::GlowTarget*>(&(*it))) {
@@ -460,7 +460,7 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
         }
     }
     
-    // Process sources
+    
     if (matrix->sources()) {
         for (auto it = matrix->sources()->begin(); it != matrix->sources()->end(); ++it) {
             if (auto source = dynamic_cast<libember::glow::GlowSource*>(&(*it))) {
@@ -474,16 +474,16 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
         }
     }
     
-    // Process connections
+    
     if (matrix->connections()) {
         for (auto it = matrix->connections()->begin(); it != matrix->connections()->end(); ++it) {
             if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*it))) {
                 int targetNumber = connection->target();
                 
-                // Clear this target's connections first
+                
                 emit matrixTargetConnectionsCleared(pathStr, targetNumber);
                 
-                // Get all sources for this connection
+                
                 libember::ber::ObjectIdentifier sources = connection->sources();
                 
                 if (!sources.empty()) {
@@ -504,7 +504,7 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
         }
     }
     
-    // Process children if present
+    
     if (matrix->children()) {
         processElementCollection(matrix->children(), pathStr);
     }
@@ -517,7 +517,7 @@ void GlowParser::processMatrix(libember::glow::GlowMatrix* matrix, const QString
         ? QString::number(number) 
         : QString("%1.%2").arg(parentPath).arg(number);
     
-    // Check if this is a full matrix message
+    
     bool hasMetadata = matrix->contains(libember::glow::MatrixProperty::Identifier) ||
                        matrix->contains(libember::glow::MatrixProperty::Description) ||
                        matrix->contains(libember::glow::MatrixProperty::Type) ||
@@ -552,7 +552,7 @@ void GlowParser::processMatrix(libember::glow::GlowMatrix* matrix, const QString
         emit matrixReceived(info);
     }
     
-    // Process targets
+    
     if (matrix->targets()) {
         for (auto it = matrix->targets()->begin(); it != matrix->targets()->end(); ++it) {
             if (auto target = dynamic_cast<libember::glow::GlowTarget*>(&(*it))) {
@@ -566,7 +566,7 @@ void GlowParser::processMatrix(libember::glow::GlowMatrix* matrix, const QString
         }
     }
     
-    // Process sources
+    
     if (matrix->sources()) {
         for (auto it = matrix->sources()->begin(); it != matrix->sources()->end(); ++it) {
             if (auto source = dynamic_cast<libember::glow::GlowSource*>(&(*it))) {
@@ -580,16 +580,16 @@ void GlowParser::processMatrix(libember::glow::GlowMatrix* matrix, const QString
         }
     }
     
-    // Process connections
+    
     if (matrix->connections()) {
         for (auto it = matrix->connections()->begin(); it != matrix->connections()->end(); ++it) {
             if (auto connection = dynamic_cast<libember::glow::GlowConnection*>(&(*it))) {
                 int targetNumber = connection->target();
                 
-                // Clear this target's connections first
+                
                 emit matrixTargetConnectionsCleared(pathStr, targetNumber);
                 
-                // Get all sources for this connection
+                
                 libember::ber::ObjectIdentifier sources = connection->sources();
                 
                 if (!sources.empty()) {
@@ -610,7 +610,7 @@ void GlowParser::processMatrix(libember::glow::GlowMatrix* matrix, const QString
         }
     }
     
-    // Process children if present
+    
     if (matrix->children()) {
         processElementCollection(matrix->children(), pathStr);
     }
@@ -620,7 +620,7 @@ void GlowParser::processQualifiedFunction(libember::glow::GlowQualifiedFunction*
 {
     EmberData::FunctionInfo info;
     
-    // Extract path
+    
     auto path = function->path();
     for (auto num : path) {
         info.path += QString::number(num) + ".";
@@ -635,7 +635,7 @@ void GlowParser::processQualifiedFunction(libember::glow::GlowQualifiedFunction*
         ? QString::fromStdString(function->description())
         : "";
     
-    // Extract arguments and results
+    
     if (function->contains(libember::glow::FunctionProperty::Arguments)) {
         auto args = function->arguments();
         for (auto it = args->begin(); it != args->end(); ++it) {
@@ -658,7 +658,7 @@ void GlowParser::processQualifiedFunction(libember::glow::GlowQualifiedFunction*
     
     emit functionReceived(info);
     
-    // Process children if present
+    
     if (function->children()) {
         processElementCollection(function->children(), info.path);
     }
@@ -681,7 +681,7 @@ void GlowParser::processFunction(libember::glow::GlowFunction* function, const Q
         ? QString::fromStdString(function->description())
         : "";
     
-    // Extract arguments and results
+    
     if (function->contains(libember::glow::FunctionProperty::Arguments)) {
         auto args = function->arguments();
         for (auto it = args->begin(); it != args->end(); ++it) {
@@ -704,7 +704,7 @@ void GlowParser::processFunction(libember::glow::GlowFunction* function, const Q
     
     emit functionReceived(info);
     
-    // Process children if present
+    
     if (function->children()) {
         processElementCollection(function->children(), info.path);
     }
@@ -717,7 +717,7 @@ void GlowParser::processInvocationResult(libember::dom::Node* result)
         info.invocationId = invResult->invocationId();
         info.success = invResult->success();
         
-        // Extract result values if present
+        
         if (invResult->result()) {
             std::vector<libember::glow::Value> values;
             invResult->typedResult(std::back_inserter(values));
@@ -756,9 +756,9 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
             EmberData::StreamValue info;
             info.streamIdentifier = streamEntry->streamIdentifier();
             
-            // Extract numeric value from Glow::Value
-            // IMPORTANT: Per Ember+ spec, GlowStreamEntry values are in 1/32 dB steps
-            // Must convert to actual dB by dividing by 32.0
+            
+            
+            
             auto value = streamEntry->value();
             double rawValue = 0.0;
             
@@ -774,7 +774,7 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
                     break;
             }
             
-            // Convert from 1/32 dB steps to dB
+            
             info.value = rawValue / 32.0;
             
             qDebug() << "[GlowParser] StreamEntry: streamId=" << info.streamIdentifier 

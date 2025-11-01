@@ -1,12 +1,12 @@
-/*
-    EmberViewer - Snapshot Manager
-    
-    Handles device snapshot capture and tree fetch orchestration
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
+
+
 
 #ifndef SNAPSHOTMANAGER_H
 #define SNAPSHOTMANAGER_H
@@ -35,10 +35,10 @@ public:
                             QWidget* parent = nullptr);
     ~SnapshotManager();
 
-    // Initiate snapshot save with optional tree fetch
+    
     void saveSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin);
     
-    // Capture current tree state as snapshot
+    
     DeviceSnapshot captureSnapshot(QLineEdit* hostEdit, QSpinBox* portSpin);
 
 signals:
@@ -60,9 +60,9 @@ private:
     FunctionInvoker* m_functionInvoker;
     QProgressDialog* m_treeFetchProgress;
     
-    // Store host/port for use after tree fetch
+    
     QLineEdit* m_hostEdit;
     QSpinBox* m_portSpin;
 };
 
-#endif // SNAPSHOTMANAGER_H
+#endif 

@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Windows Update Manager Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "WindowsUpdateManager.h"
 #include <QJsonObject>
@@ -51,12 +51,12 @@ QString WindowsUpdateManager::selectAssetForPlatform(const QJsonObject &release)
 {
     QJsonArray assets = release["assets"].toArray();
 
-    // Look for Windows installer (e.g., "EmberViewer-Setup.exe" or "EmberViewer-x64-Setup.exe")
+    
     for (const QJsonValue &assetValue : assets) {
         QJsonObject asset = assetValue.toObject();
         QString assetName = asset["name"].toString();
 
-        // Match Windows installer files
+        
         if (assetName.contains("Setup", Qt::CaseInsensitive) &&
             assetName.endsWith(".exe", Qt::CaseInsensitive)) {
             QString downloadUrl = asset["browser_download_url"].toString();
@@ -79,7 +79,7 @@ void WindowsUpdateManager::installUpdate(const UpdateInfo &updateInfo)
         return;
     }
 
-    // Create temporary directory for download
+    
     m_tempDir = new QTemporaryDir();
     if (!m_tempDir->isValid()) {
         qWarning() << "Failed to create temporary directory";
@@ -89,7 +89,7 @@ void WindowsUpdateManager::installUpdate(const UpdateInfo &updateInfo)
         return;
     }
 
-    // Download the installer
+    
     QString downloadPath = m_tempDir->path() + "/" + updateInfo.assetName;
     m_downloadFile = new QFile(downloadPath);
 
@@ -134,7 +134,7 @@ void WindowsUpdateManager::onDownloadFinished()
         return;
     }
 
-    // Write any remaining data
+    
     m_downloadFile->write(m_downloadReply->readAll());
     m_downloadFile->close();
 
@@ -161,7 +161,7 @@ void WindowsUpdateManager::onDownloadFinished()
     delete m_downloadFile;
     m_downloadFile = nullptr;
 
-    // Execute the installer
+    
     executeInstaller(downloadPath);
 }
 
@@ -169,7 +169,7 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
 {
     qInfo() << "Executing installer:" << installerPath;
 
-    // Verify the installer file exists and is readable
+    
     QFile installerFile(installerPath);
     if (!installerFile.exists()) {
         qWarning() << "Installer file does not exist:" << installerPath;
@@ -177,13 +177,13 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
         return;
     }
 
-    // Copy installer to a persistent location to avoid temp directory cleanup issues
+    
     QString persistentPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) 
                            + "/EmberViewer-Update-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + ".exe";
     
     qInfo() << "Copying installer to persistent location:" << persistentPath;
     
-    // Remove existing file if present
+    
     if (QFile::exists(persistentPath)) {
         qInfo() << "Removing existing update file at persistent location";
         QFile::remove(persistentPath);
@@ -192,12 +192,12 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
     if (!QFile::copy(installerPath, persistentPath)) {
         qWarning() << "Failed to copy installer to persistent location. Using original path instead.";
         qWarning() << "Original path:" << installerPath;
-        // Fall back to original path
+        
         persistentPath = installerPath;
     } else {
         qInfo() << "Installer copied successfully to persistent location";
         
-        // Verify the copied file
+        
         QFile copiedFile(persistentPath);
         if (!copiedFile.exists()) {
             qWarning() << "Copied installer file does not exist! Falling back to original path.";
@@ -207,23 +207,23 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
         }
     }
 
-    // Run installer with /S (silent) and /UPDATE (auto-update mode) flags
-    // /UPDATE tells the installer to wait for the app to close gracefully
+    
+    
     QStringList arguments;
     arguments << "/S" << "/UPDATE";
     
     qInfo() << "Starting installer with arguments:" << arguments;
 
 #ifdef Q_OS_WIN
-    // Use Windows API for better UAC handling and process launching
-    // Convert QString to wide string for Windows API
+    
+    
     std::wstring installerPathW = persistentPath.toStdWString();
     std::wstring argumentsW = arguments.join(" ").toStdWString();
     
-    // Use ShellExecuteEx for proper UAC elevation
+    
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
     sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
-    sei.lpVerb = L"runas";  // Request elevation
+    sei.lpVerb = L"runas";  
     sei.lpFile = installerPathW.c_str();
     sei.lpParameters = argumentsW.c_str();
     sei.nShow = SW_SHOWNORMAL;
@@ -238,8 +238,8 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
             
             emit installationFinished(true, "Installer started. The application will now close.");
             
-            // Signal success and quit the application
-            // The installer will wait for us to close (via /UPDATE flag)
+            
+            
             QTimer::singleShot(500, []() {
                 qInfo() << "Closing application for update installation";
                 QCoreApplication::quit();
@@ -252,7 +252,7 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
         DWORD error = GetLastError();
         QString errorMsg;
         
-        // Provide user-friendly error messages
+        
         switch (error) {
             case ERROR_FILE_NOT_FOUND:
                 errorMsg = "Installer file not found.";
@@ -270,7 +270,7 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
         
         qWarning() << "ShellExecuteEx failed:" << errorMsg << "(error code:" << error << ")";
         
-        // Fall back to QProcess if ShellExecuteEx fails
+        
         qInfo() << "Falling back to QProcess::startDetached";
         QProcess process;
         process.setProgram(persistentPath);
@@ -295,7 +295,7 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
         }
     }
 #else
-    // Non-Windows platform (shouldn't happen in WindowsUpdateManager, but for safety)
+    
     QProcess process;
     process.setProgram(persistentPath);
     process.setArguments(arguments);
@@ -316,6 +316,6 @@ void WindowsUpdateManager::executeInstaller(const QString &installerPath)
     }
 #endif
 
-    // Don't cleanup temp directory here - the copied installer will remain accessible
-    // The installer will clean itself up after completion
+    
+    
 }

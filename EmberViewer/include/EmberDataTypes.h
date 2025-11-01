@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Data Transfer Objects for Ember+ protocol
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #ifndef EMBERDATATYPES_H
 #define EMBERDATATYPES_H
@@ -16,7 +16,7 @@
 
 namespace EmberData {
 
-// Node information
+
 struct NodeInfo {
     QString path;
     QString identifier;
@@ -26,7 +26,7 @@ struct NodeInfo {
     bool hasDescription;
 };
 
-// Parameter information
+
 struct ParameterInfo {
     QString path;
     int number;
@@ -42,7 +42,7 @@ struct ParameterInfo {
     int streamIdentifier;
 };
 
-// Matrix information
+
 struct MatrixInfo {
     QString path;
     int number;
@@ -53,21 +53,21 @@ struct MatrixInfo {
     int sourceCount;
 };
 
-// Matrix target information
+
 struct MatrixTargetInfo {
     QString matrixPath;
     int targetNumber;
     QString label;
 };
 
-// Matrix source information
+
 struct MatrixSourceInfo {
     QString matrixPath;
     int sourceNumber;
     QString label;
 };
 
-// Matrix connection information
+
 struct MatrixConnectionInfo {
     QString matrixPath;
     int targetNumber;
@@ -76,7 +76,7 @@ struct MatrixConnectionInfo {
     int disposition;
 };
 
-// Function information
+
 struct FunctionInfo {
     QString path;
     QString identifier;
@@ -87,19 +87,19 @@ struct FunctionInfo {
     QList<int> resultTypes;
 };
 
-// Invocation result
+
 struct InvocationResult {
     int invocationId;
     bool success;
     QList<QVariant> results;
 };
 
-// Stream value update
+
 struct StreamValue {
     int streamIdentifier;
     double value;
 };
 
-} // namespace EmberData
+} 
 
-#endif // EMBERDATATYPES_H
+#endif 

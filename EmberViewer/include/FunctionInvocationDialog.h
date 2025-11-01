@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Function invocation dialog
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #ifndef FUNCTIONINVOCATIONDIALOG_H
 #define FUNCTIONINVOCATIONDIALOG_H
@@ -40,4 +40,4 @@ private:
     QDialogButtonBox *m_buttonBox;
 };
 
-#endif // FUNCTIONINVOCATIONDIALOG_H
+#endif 

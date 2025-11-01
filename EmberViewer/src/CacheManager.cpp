@@ -1,14 +1,14 @@
-/*
-    EmberViewer - Cache Manager Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "CacheManager.h"
 
-// Static device cache initialization
+
 QMap<QString, CacheManager::DeviceCache> CacheManager::s_deviceCache;
 
 CacheManager::CacheManager(QObject *parent)
@@ -20,7 +20,7 @@ CacheManager::~CacheManager()
 {
 }
 
-// Parameter cache management
+
 void CacheManager::cacheParameter(const QString &path, const QString &identifier, int access, int type)
 {
     ParameterCache cache;
@@ -45,7 +45,7 @@ void CacheManager::clearParameterCache()
     m_parameterCache.clear();
 }
 
-// Root node management
+
 void CacheManager::setRootNode(const QString &path, const QString &displayName, bool isGeneric, const QString &identityPath)
 {
     RootNodeInfo info;
@@ -91,7 +91,7 @@ void CacheManager::clearRootNodes()
     m_rootNodes.clear();
 }
 
-// Device cache management (static)
+
 void CacheManager::cacheDevice(const QString &hostPort, const QString &deviceName, const QString &rootPath, const QString &identityPath)
 {
     DeviceCache cache;
@@ -108,7 +108,7 @@ CacheManager::DeviceCache CacheManager::getDeviceCache(const QString &hostPort)
     if (s_deviceCache.contains(hostPort)) {
         DeviceCache &cache = s_deviceCache[hostPort];
         
-        // Check if cache is expired
+        
         QDateTime now = QDateTime::currentDateTime();
         qint64 hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
         
@@ -119,7 +119,7 @@ CacheManager::DeviceCache CacheManager::getDeviceCache(const QString &hostPort)
         return cache;
     }
     
-    // Return invalid cache
+    
     DeviceCache invalid;
     invalid.isValid = false;
     return invalid;
@@ -136,7 +136,7 @@ void CacheManager::clearDeviceCache(const QString &hostPort)
     s_deviceCache.remove(hostPort);
 }
 
-// Clear all caches
+
 void CacheManager::clear()
 {
     m_parameterCache.clear();

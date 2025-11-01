@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Audio Level Meter Widget
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "MeterWidget.h"
 #include <QPainter>
@@ -23,11 +23,11 @@ MeterWidget::MeterWidget(QWidget *parent)
     , m_needsRedraw(false)
     , m_lastUpdateTime(0)
 {
-    // Create layout
+    
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(10, 10, 10, 10);
     
-    // Title and value display
+    
     QHBoxLayout *headerLayout = new QHBoxLayout();
     m_valueLabel = new QLabel("-- dB", this);
     m_valueLabel->setAlignment(Qt::AlignCenter);
@@ -39,7 +39,7 @@ MeterWidget::MeterWidget(QWidget *parent)
     mainLayout->addLayout(headerLayout);
     mainLayout->addStretch();
     
-    // Setup update timer for 50fps
+    
     m_updateTimer = new QTimer(this);
     m_updateTimer->setInterval(UPDATE_INTERVAL_MS);
     connect(m_updateTimer, &QTimer::timeout, this, &MeterWidget::onUpdateTimer);
@@ -60,7 +60,7 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
     m_minValue = minValue;
     m_maxValue = maxValue;
     
-    // Reset state
+    
     m_currentValue = minValue;
     m_displayValue = minValue;
     m_peakValue = minValue;
@@ -72,9 +72,9 @@ void MeterWidget::updateValue(double value)
 {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     
-    // Frame dropping: if updates come faster than our display rate, just take the latest
+    
     if (now - m_lastUpdateTime < UPDATE_INTERVAL_MS / 2) {
-        // Still accept the value but don't force immediate redraw
+        
         m_currentValue = value;
         m_needsRedraw = true;
         return;
@@ -84,28 +84,28 @@ void MeterWidget::updateValue(double value)
     m_lastUpdateTime = now;
     m_needsRedraw = true;
     
-    // Update peak hold
+    
     updatePeakHold();
     
-    // Update numeric display
+    
     m_valueLabel->setText(formatValue(value));
 }
 
 void MeterWidget::onUpdateTimer()
 {
     if (m_needsRedraw) {
-        // Smooth the display value (simple exponential smoothing)
-        double alpha = 0.3;  // Smoothing factor (0 = no change, 1 = instant)
+        
+        double alpha = 0.3;  
         m_displayValue = alpha * m_currentValue + (1.0 - alpha) * m_displayValue;
         
-        update();  // Trigger paintEvent
+        update();  
         m_needsRedraw = false;
     }
     
-    // Check if peak hold expired
+    
     if (m_peakTime.isValid() && 
         m_peakTime.msecsTo(QDateTime::currentDateTime()) > PEAK_HOLD_MS) {
-        update();  // Redraw to clear expired peak
+        update();  
     }
 }
 
@@ -130,17 +130,17 @@ double MeterWidget::normalizeValue(double value) const
 QColor MeterWidget::getColorForLevel(double normalizedLevel) const
 {
     if (normalizedLevel >= YELLOW_THRESHOLD) {
-        return QColor(255, 0, 0);  // Red (clipping zone)
+        return QColor(255, 0, 0);  
     } else if (normalizedLevel >= GREEN_THRESHOLD) {
-        return QColor(255, 200, 0);  // Yellow/Orange
+        return QColor(255, 200, 0);  
     } else {
-        return QColor(0, 200, 0);  // Green
+        return QColor(0, 200, 0);  
     }
 }
 
 QString MeterWidget::formatValue(double value) const
 {
-    // Format as dB if the range suggests dB values (negative values, typical audio range)
+    
     if (m_minValue < 0 && m_maxValue <= 20) {
         return QString("%1 dB").arg(value, 0, 'f', 1);
     } else {
@@ -160,36 +160,36 @@ void MeterWidget::paintEvent(QPaintEvent *event)
 
 void MeterWidget::drawMeter(QPainter &painter)
 {
-    // Calculate meter rectangle (centered, below the header)
-    int meterHeight = height() - 80;  // Leave space for header and margins
+    
+    int meterHeight = height() - 80;  
     int meterX = (width() - METER_WIDTH) / 2;
     int meterY = 60;
     
     QRect meterRect(meterX, meterY, METER_WIDTH, meterHeight);
     
-    // Draw background
+    
     painter.fillRect(meterRect, QColor(40, 40, 40));
     painter.setPen(QColor(100, 100, 100));
     painter.drawRect(meterRect);
     
-    // Calculate fill height based on current value
+    
     double normalizedValue = normalizeValue(m_displayValue);
     int fillHeight = static_cast<int>(normalizedValue * meterHeight);
     
-    // Calculate color zone boundaries (needed for both drawing and zone lines)
+    
     int greenHeight = static_cast<int>(GREEN_THRESHOLD * meterHeight);
     int yellowHeight = static_cast<int>((YELLOW_THRESHOLD - GREEN_THRESHOLD) * meterHeight);
     int redHeight = meterHeight - greenHeight - yellowHeight;
     
     if (fillHeight > 0) {
-        // Draw meter fill with color zones
+        
         int fillY = meterY + meterHeight - fillHeight;
         
-        // Draw from bottom up
+        
         int currentY = meterY + meterHeight;
         int remainingHeight = fillHeight;
         
-        // Green zone
+        
         if (remainingHeight > 0) {
             int drawHeight = qMin(remainingHeight, greenHeight);
             QRect greenRect(meterX, currentY - drawHeight, METER_WIDTH, drawHeight);
@@ -198,7 +198,7 @@ void MeterWidget::drawMeter(QPainter &painter)
             remainingHeight -= drawHeight;
         }
         
-        // Yellow zone
+        
         if (remainingHeight > 0) {
             int drawHeight = qMin(remainingHeight, yellowHeight);
             QRect yellowRect(meterX, currentY - drawHeight, METER_WIDTH, drawHeight);
@@ -207,7 +207,7 @@ void MeterWidget::drawMeter(QPainter &painter)
             remainingHeight -= drawHeight;
         }
         
-        // Red zone
+        
         if (remainingHeight > 0) {
             int drawHeight = remainingHeight;
             QRect redRect(meterX, currentY - drawHeight, METER_WIDTH, drawHeight);
@@ -215,7 +215,7 @@ void MeterWidget::drawMeter(QPainter &painter)
         }
     }
     
-    // Draw peak hold indicator
+    
     if (m_peakTime.isValid() && 
         m_peakTime.msecsTo(QDateTime::currentDateTime()) <= PEAK_HOLD_MS) {
         double normalizedPeak = normalizeValue(m_peakValue);
@@ -225,7 +225,7 @@ void MeterWidget::drawMeter(QPainter &painter)
         painter.drawLine(meterX, peakY, meterX + METER_WIDTH, peakY);
     }
     
-    // Draw zone dividers (subtle lines)
+    
     painter.setPen(QPen(QColor(80, 80, 80), 1, Qt::DashLine));
     int greenLine = meterY + meterHeight - greenHeight;
     int yellowLine = meterY + meterHeight - greenHeight - yellowHeight;

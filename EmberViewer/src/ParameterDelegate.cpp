@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Custom delegate for inline parameter editing
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "ParameterDelegate.h"
 #include <QSpinBox>
@@ -16,7 +16,7 @@
 #include <QDebug>
 #include <QDebug>
 
-// Parameter type enum values (matching libember::glow::ParameterType)
+
 namespace ParameterType {
     enum {
         None = 0,
@@ -39,28 +39,28 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
 {
     Q_UNUSED(option);
 
-    // Only allow editing in the Value column (column 2)
+    
     if (index.column() != 2) {
         return nullptr;
     }
 
-    // Get parameter metadata from column 0 (where it's stored)
+    
     QModelIndex metadataIndex = index.sibling(index.row(), 0);
     int type = metadataIndex.data(TypeRole).toInt();
     int access = metadataIndex.data(AccessRole).toInt();
     bool isOnline = metadataIndex.data(Qt::UserRole + 8).toBool();
 
-    // Check if parameter is offline - prevent editing
+    
     if (!isOnline) {
         return nullptr;
     }
 
-    // Check if parameter is writable (Access: WriteOnly=2 or ReadWrite=3)
+    
     if (access != 2 && access != 3) {
-        return nullptr; // Not editable
+        return nullptr; 
     }
     
-    // If type is None (0), try to infer from the value
+    
     if (type == ParameterType::None) {
         QString value = index.model()->data(index, Qt::DisplayRole).toString().toLower();
         
@@ -83,12 +83,12 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
         }
     }
 
-    // Create appropriate editor based on type
+    
     switch (type) {
         case ParameterType::Integer: {
             QSpinBox *editor = new QSpinBox(parent);
             
-            // Set range if available
+            
             if (metadataIndex.data(MinimumRole).isValid()) {
                 editor->setMinimum(metadataIndex.data(MinimumRole).toInt());
             } else {
@@ -109,7 +109,7 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
             QDoubleSpinBox *editor = new QDoubleSpinBox(parent);
             editor->setDecimals(3);
             
-            // Set range if available
+            
             if (metadataIndex.data(MinimumRole).isValid()) {
                 editor->setMinimum(metadataIndex.data(MinimumRole).toDouble());
             } else {
@@ -133,8 +133,8 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
         }
 
         case ParameterType::Boolean: {
-            // For boolean, we'll use a combobox with True/False
-            // (Checkbox doesn't work well with delegates)
+            
+            
             QComboBox *editor = new QComboBox(parent);
             editor->addItem("false");
             editor->addItem("true");
@@ -145,7 +145,7 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
         case ParameterType::Enum: {
             QComboBox *editor = new QComboBox(parent);
             
-            // Populate with enum options
+            
             QStringList options = metadataIndex.data(EnumOptionsRole).toStringList();
             if (!options.isEmpty()) {
                 editor->addItems(options);
@@ -158,8 +158,8 @@ QWidget* ParameterDelegate::createEditor(QWidget *parent, const QStyleOptionView
         }
 
         case ParameterType::Trigger: {
-            // Triggers are actions, not editable values
-            // We could show a button, but it's simpler to handle via context menu
+            
+            
             return nullptr;
         }
 
@@ -202,7 +202,7 @@ void ParameterDelegate::setEditorData(QWidget *editor, const QModelIndex &index)
         case ParameterType::Boolean: {
             QComboBox *comboBox = qobject_cast<QComboBox*>(editor);
             if (comboBox) {
-                // Match "true"/"false" string
+                
                 QString lower = value.toLower();
                 if (lower == "true" || lower == "1") {
                     comboBox->setCurrentIndex(1);
@@ -216,12 +216,12 @@ void ParameterDelegate::setEditorData(QWidget *editor, const QModelIndex &index)
         case ParameterType::Enum: {
             QComboBox *comboBox = qobject_cast<QComboBox*>(editor);
             if (comboBox) {
-                // Try to match current value to an option
+                
                 int idx = comboBox->findText(value);
                 if (idx >= 0) {
                     comboBox->setCurrentIndex(idx);
                 } else {
-                    // Try to match by index if value is a number
+                    
                     bool ok;
                     int numIdx = value.toInt(&ok);
                     if (ok && numIdx >= 0 && numIdx < comboBox->count()) {
@@ -268,7 +268,7 @@ void ParameterDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
         case ParameterType::Boolean: {
             QComboBox *comboBox = qobject_cast<QComboBox*>(editor);
             if (comboBox) {
-                newValue = comboBox->currentText(); // "true" or "false"
+                newValue = comboBox->currentText(); 
             }
             break;
         }
@@ -276,14 +276,14 @@ void ParameterDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
         case ParameterType::Enum: {
             QComboBox *comboBox = qobject_cast<QComboBox*>(editor);
             if (comboBox) {
-                // For enums, send the index as the value
+                
                 QList<QVariant> enumValues = metadataIndex.data(EnumValuesRole).toList();
                 int currentIdx = comboBox->currentIndex();
                 
                 if (!enumValues.isEmpty() && currentIdx >= 0 && currentIdx < enumValues.size()) {
                     newValue = QString::number(enumValues[currentIdx].toInt());
                 } else {
-                    // Fallback: send index if no value mapping
+                    
                     newValue = QString::number(currentIdx);
                 }
             }
@@ -295,11 +295,11 @@ void ParameterDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
     }
 
     if (!newValue.isEmpty()) {
-        // Update the model (tree view display)
+        
         model->setData(index, newValue, Qt::DisplayRole);
 
-        // Emit signal to send value to device
-        QString path = metadataIndex.data(Qt::UserRole).toString(); // Path stored in UserRole on column 0
+        
+        QString path = metadataIndex.data(Qt::UserRole).toString(); 
         emit valueChanged(path, newValue);
     }
 }

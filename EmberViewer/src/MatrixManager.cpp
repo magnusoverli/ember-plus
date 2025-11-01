@@ -1,12 +1,12 @@
-/*
-    EmberViewer - Matrix Manager Implementation
-    
-    Manages MatrixWidget lifecycle, matrix metadata, and label/connection updates.
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
+
+
 
 #include "MatrixManager.h"
 #include "MatrixWidget.h"
@@ -35,10 +35,10 @@ void MatrixManager::clear()
     m_matrixWidgets.clear();
 }
 
-void MatrixManager::onMatrixReceived(const QString &path, int /* number */, const QString &identifier, 
+void MatrixManager::onMatrixReceived(const QString &path, int , const QString &identifier, 
                                      const QString &description, int type, int targetCount, int sourceCount)
 {
-    // Create or update the matrix widget
+    
     MatrixWidget *matrixWidget = m_matrixWidgets.value(path, nullptr);
     if (!matrixWidget) {
         matrixWidget = new MatrixWidget();

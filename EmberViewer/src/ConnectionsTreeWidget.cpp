@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Connections Tree Widget Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "ConnectionsTreeWidget.h"
 #include "ConnectionDialog.h"
@@ -48,7 +48,7 @@ void ConnectionsTreeWidget::refreshTree()
 
 void ConnectionsTreeWidget::buildTree()
 {
-    // Save expanded state
+    
     QTreeWidgetItemIterator it(this);
     while (*it) {
         if ((*it)->isExpanded() && isFolder(*it)) {
@@ -61,10 +61,10 @@ void ConnectionsTreeWidget::buildTree()
     clear();
     m_itemMap.clear();
 
-    // Add root folders
+    
     QList<ConnectionManager::Folder> rootFolders = m_manager->getRootFolders();
     
-    // Sort folders alphabetically
+    
     std::sort(rootFolders.begin(), rootFolders.end(), 
         [](const ConnectionManager::Folder &a, const ConnectionManager::Folder &b) {
             return a.name.toLower() < b.name.toLower();
@@ -74,14 +74,14 @@ void ConnectionsTreeWidget::buildTree()
         addFolderToTree(folder.id, nullptr);
     }
 
-    // Add root connections
+    
     QList<QString> rootConnectionIds = m_manager->getRootConnectionIds();
     QList<ConnectionManager::Connection> rootConnections;
     for (const QString &id : rootConnectionIds) {
         rootConnections.append(m_manager->getConnection(id));
     }
 
-    // Sort connections alphabetically by name
+    
     std::sort(rootConnections.begin(), rootConnections.end(),
         [](const ConnectionManager::Connection &a, const ConnectionManager::Connection &b) {
             return a.name.toLower() < b.name.toLower();
@@ -91,7 +91,7 @@ void ConnectionsTreeWidget::buildTree()
         addConnectionToTree(conn.id, nullptr);
     }
 
-    // Restore expanded state
+    
     for (const QString &folderId : m_expandedFolders) {
         QTreeWidgetItem *item = m_itemMap.value(folderId, nullptr);
         if (item) {
@@ -116,12 +116,12 @@ void ConnectionsTreeWidget::addFolderToTree(const QString &folderId, QTreeWidget
 
     item->setText(0, folder.name);
     item->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
-    item->setData(0, Qt::UserRole, folderId);  // Store folder ID
-    item->setData(0, Qt::UserRole + 1, "folder");  // Store type
+    item->setData(0, Qt::UserRole, folderId);  
+    item->setData(0, Qt::UserRole + 1, "folder");  
 
     m_itemMap[folderId] = item;
 
-    // Add child folders
+    
     QList<ConnectionManager::Folder> childFolders;
     for (const QString &childId : folder.childIds) {
         if (m_manager->hasFolder(childId)) {
@@ -129,7 +129,7 @@ void ConnectionsTreeWidget::addFolderToTree(const QString &folderId, QTreeWidget
         }
     }
 
-    // Sort child folders alphabetically
+    
     std::sort(childFolders.begin(), childFolders.end(),
         [](const ConnectionManager::Folder &a, const ConnectionManager::Folder &b) {
             return a.name.toLower() < b.name.toLower();
@@ -139,7 +139,7 @@ void ConnectionsTreeWidget::addFolderToTree(const QString &folderId, QTreeWidget
         addFolderToTree(childFolder.id, item);
     }
 
-    // Add child connections
+    
     QList<ConnectionManager::Connection> childConnections;
     for (const QString &childId : folder.childIds) {
         if (m_manager->hasConnection(childId)) {
@@ -147,7 +147,7 @@ void ConnectionsTreeWidget::addFolderToTree(const QString &folderId, QTreeWidget
         }
     }
 
-    // Sort child connections alphabetically by name
+    
     std::sort(childConnections.begin(), childConnections.end(),
         [](const ConnectionManager::Connection &a, const ConnectionManager::Connection &b) {
             return a.name.toLower() < b.name.toLower();
@@ -174,8 +174,8 @@ void ConnectionsTreeWidget::addConnectionToTree(const QString &connectionId, QTr
 
     item->setText(0, conn.name);
     item->setIcon(0, style()->standardIcon(QStyle::SP_DriveNetIcon));
-    item->setData(0, Qt::UserRole, connectionId);  // Store connection ID
-    item->setData(0, Qt::UserRole + 1, "connection");  // Store type
+    item->setData(0, Qt::UserRole, connectionId);  
+    item->setData(0, Qt::UserRole + 1, "connection");  
     item->setToolTip(0, QString("%1:%2").arg(conn.host).arg(conn.port));
 
     m_itemMap[connectionId] = item;
@@ -227,9 +227,9 @@ void ConnectionsTreeWidget::showRootContextMenu(const QPoint &pos)
 
     QAction *selected = menu.exec(pos);
     if (selected == newFolderAction) {
-        createNewFolder(QString());  // Root level
+        createNewFolder(QString());  
     } else if (selected == newConnectionAction) {
-        createNewConnection(QString());  // Root level
+        createNewConnection(QString());  
     }
 }
 
@@ -406,7 +406,7 @@ void ConnectionsTreeWidget::mouseDoubleClickEvent(QMouseEvent *event)
         QString connectionId = getItemId(item);
         connectToDevice(connectionId);
     } else {
-        // Default behavior for folders (expand/collapse)
+        
         QTreeWidget::mouseDoubleClickEvent(event);
     }
 }
@@ -423,21 +423,21 @@ void ConnectionsTreeWidget::dropEvent(QDropEvent *event)
     QString draggedId = getItemId(draggedItem);
     QString targetId = targetItem ? getItemId(targetItem) : QString();
 
-    // Determine new parent
+    
     QString newParentId;
     if (targetItem && isFolder(targetItem)) {
-        // Dropped onto a folder
+        
         newParentId = targetId;
     } else if (targetItem && isConnection(targetItem)) {
-        // Dropped onto a connection - use its parent
+        
         ConnectionManager::Connection targetConn = m_manager->getConnection(targetId);
         newParentId = targetConn.folderId;
     } else {
-        // Dropped on empty space - root level
+        
         newParentId = QString();
     }
 
-    // Move the item
+    
     if (isConnection(draggedItem)) {
         m_manager->moveConnection(draggedId, newParentId);
         m_manager->saveToDefaultLocation();

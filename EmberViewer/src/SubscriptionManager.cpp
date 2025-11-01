@@ -1,13 +1,13 @@
-/*
-    EmberViewer - Subscription Manager Implementation
-    
-    Manages Ember+ parameter and node subscriptions, tracking subscription state
-    and handling automatic subscription/unsubscription based on tree visibility.
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
+
+
+
 
 #include "SubscriptionManager.h"
 #include "EmberConnection.h"
@@ -45,11 +45,11 @@ void SubscriptionManager::onItemExpanded(QTreeWidgetItem *item)
         return;
     }
     
-    // OPTIMIZATION: Batch subscription - collect all subscriptions needed
-    // Subscribe to the expanded item + all visible children in one network packet
+    
+    
     QList<EmberConnection::SubscriptionRequest> subscriptions;
     
-    // Subscribe to the expanded item itself
+    
     if (!m_subscribedPaths.contains(path) && !type.isEmpty()) {
         subscriptions.append({path, type});
         m_subscribedPaths.insert(path);
@@ -59,7 +59,7 @@ void SubscriptionManager::onItemExpanded(QTreeWidgetItem *item)
         m_subscriptionStates[path] = state;
     }
     
-    // Subscribe to all immediate children (they're now visible)
+    
     for (int i = 0; i < item->childCount(); i++) {
         QTreeWidgetItem *child = item->child(i);
         QString childPath = child->data(0, Qt::UserRole).toString();
@@ -67,7 +67,7 @@ void SubscriptionManager::onItemExpanded(QTreeWidgetItem *item)
         
         if (!childPath.isEmpty() && !childType.isEmpty() && 
             !m_subscribedPaths.contains(childPath) &&
-            childType != "Loading...") {  // Skip placeholder items
+            childType != "Loading...") {  
             
             subscriptions.append({childPath, childType});
             m_subscribedPaths.insert(childPath);
@@ -78,10 +78,10 @@ void SubscriptionManager::onItemExpanded(QTreeWidgetItem *item)
         }
     }
     
-    // Send all subscriptions in one batch
+    
     if (!subscriptions.isEmpty()) {
         if (subscriptions.size() == 1) {
-            // Single subscription - use existing methods for code simplicity
+            
             const auto& req = subscriptions.first();
             if (req.type == "Node") {
                 m_connection->subscribeToNode(req.path, true);
@@ -91,7 +91,7 @@ void SubscriptionManager::onItemExpanded(QTreeWidgetItem *item)
                 m_connection->subscribeToMatrix(req.path, true);
             }
         } else {
-            // Multiple subscriptions - use batch API for efficiency
+            
             qDebug().noquote() << QString("Batch subscribing to %1 paths (expanded: %2)")
                 .arg(subscriptions.size()).arg(path);
             m_connection->sendBatchSubscribe(subscriptions);
@@ -105,10 +105,10 @@ void SubscriptionManager::onItemCollapsed(QTreeWidgetItem *item)
     QString type = item->text(1);
     
     if (path.isEmpty() || !m_subscribedPaths.contains(path)) {
-        return;  // Not subscribed
+        return;  
     }
     
-    // Only auto-unsubscribe if it was auto-subscribed
+    
     if (m_subscriptionStates.contains(path) && m_subscriptionStates[path].autoSubscribed) {
         if (type == "Node") {
             m_connection->unsubscribeFromNode(path);
@@ -125,9 +125,9 @@ void SubscriptionManager::onItemCollapsed(QTreeWidgetItem *item)
 
 void SubscriptionManager::subscribeToExpandedItems(QTreeWidget *treeWidget)
 {
-    // OPTIMIZATION: Tree updates no longer disabled with lazy loading
-    // This function now only handles subscriptions for expanded items
-    // Using batch subscription for better performance
+    
+    
+    
     
     QList<EmberConnection::SubscriptionRequest> subscriptions;
     

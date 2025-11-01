@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Function Invoker Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "FunctionInvoker.h"
 #include "EmberConnection.h"
@@ -14,7 +14,7 @@ FunctionInvoker::FunctionInvoker(EmberConnection* connection, QObject* parent)
     : QObject(parent)
     , m_connection(connection)
 {
-    // Connect to invocation result signal
+    
     connect(m_connection, &EmberConnection::invocationResultReceived,
             this, &FunctionInvoker::onInvocationResult);
 }
@@ -58,13 +58,13 @@ void FunctionInvoker::invokeFunction(const QString& path, const QList<QVariant>&
         return;
     }
     
-    // Get the next invocation ID from the connection
+    
     int invocationId = m_connection->property("nextInvocationId").toInt();
     
-    // Track this invocation
+    
     m_pendingInvocations[invocationId] = path;
     
-    // Send the invocation request
+    
     m_connection->invokeFunction(path, arguments);
     
     qInfo() << "Invoked function:" << m_functions[path].identifier 
@@ -95,7 +95,7 @@ void FunctionInvoker::onInvocationResult(int invocationId, bool success, const Q
         resultText = QString("❌ Function '%1' invocation failed").arg(funcInfo.identifier);
     }
     
-    // Show result dialog (parent will be the MainWindow)
+    
     QWidget* parentWidget = qobject_cast<QWidget*>(parent());
     if (parentWidget) {
         QMessageBox msgBox(parentWidget);

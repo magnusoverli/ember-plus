@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Ember+ Device Emulator Window
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #ifndef EMULATORWINDOW_H
 #define EMULATORWINDOW_H
@@ -47,7 +47,7 @@ private:
     void updateServerStatus();
     void logActivity(const QString &message);
     
-    // Widgets
+    
     QTreeWidget *m_deviceTree;
     QTextEdit *m_activityLog;
     QListWidget *m_clientList;
@@ -56,7 +56,7 @@ private:
     QGroupBox *m_statusGroup;
     QGroupBox *m_activityGroup;
     
-    // Controls
+    
     QPushButton *m_loadButton;
     QPushButton *m_startButton;
     QPushButton *m_stopButton;
@@ -64,16 +64,16 @@ private:
     QLabel *m_statusLabel;
     QLabel *m_deviceNameLabel;
     
-    // Provider
+    
     EmberProvider *m_provider;
     
-    // State
+    
     bool m_isRunning;
     QString m_loadedSnapshotPath;
     QString m_deviceName;
     
-    // Constants
+    
     static constexpr int DEFAULT_EMULATOR_PORT = 9099;
 };
 
-#endif // EMULATORWINDOW_H
+#endif 

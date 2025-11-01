@@ -1,12 +1,12 @@
-/*
-    EmberViewer - Glow Message Parser
-    
-    Parses Ember+ Glow DOM structures into data transfer objects.
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
+
+
 
 #ifndef GLOWPARSER_H
 #define GLOWPARSER_H
@@ -15,7 +15,7 @@
 #include "EmberDataTypes.h"
 #include <ember/dom/AsyncDomReader.hpp>
 
-// Forward declarations
+
 namespace libember {
     namespace dom {
         class Node;
@@ -41,11 +41,11 @@ public:
     explicit GlowParser(QObject *parent = nullptr);
     ~GlowParser();
 
-    // Parse Ember+ data into DOM and extract elements
+    
     void parseEmberData(const QByteArray& data);
 
 signals:
-    // Parsed element signals
+    
     void nodeReceived(const EmberData::NodeInfo& node);
     void parameterReceived(const EmberData::ParameterInfo& param);
     void matrixReceived(const EmberData::MatrixInfo& matrix);
@@ -76,9 +76,9 @@ private:
     
     libember::dom::AsyncDomReader *m_domReader;
     
-    // Track nodes that have been received with identifiers
-    // to avoid emitting stub nodes that would overwrite good data
+    
+    
     QMap<QString, bool> m_nodesWithIdentifier;
 };
 
-#endif // GLOWPARSER_H
+#endif 

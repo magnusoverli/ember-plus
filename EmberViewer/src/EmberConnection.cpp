@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Ember+ protocol communication handler
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "EmberConnection.h"
 #include "TreeFetchService.h"
@@ -45,7 +45,7 @@
 
 
 
-// EmberConnection implementation
+
 EmberConnection::EmberConnection(QObject *parent)
     : QObject(parent)
     , m_socket(new QTcpSocket(this))
@@ -59,11 +59,11 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_protocolTimer(nullptr)
     , m_nextInvocationId(1)
 {
-    // Socket connections
+    
     connect(m_socket, &QTcpSocket::connected, this, &EmberConnection::onSocketConnected);
     connect(m_socket, &QTcpSocket::disconnected, this, &EmberConnection::onSocketDisconnected);
     
-    // Use errorOccurred instead of deprecated error signal (Qt 5.15+)
+    
     #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
     connect(m_socket, &QAbstractSocket::errorOccurred, this, &EmberConnection::onSocketError);
     #else
@@ -73,7 +73,7 @@ EmberConnection::EmberConnection(QObject *parent)
     
     connect(m_socket, &QTcpSocket::readyRead, this, &EmberConnection::onDataReceived);
     
-    // Protocol layer connections: Socket -> S101Protocol -> GlowParser -> EmberConnection
+    
     connect(m_s101Protocol, &S101Protocol::messageReceived, this, &EmberConnection::onS101MessageReceived);
     connect(m_s101Protocol, &S101Protocol::keepAliveReceived, this, &EmberConnection::onKeepAliveReceived);
     connect(m_s101Protocol, &S101Protocol::protocolError, this, [this](const QString& error) {
@@ -81,12 +81,12 @@ EmberConnection::EmberConnection(QObject *parent)
         disconnect();
     });
     
-    // Parser signal connections
+    
     connect(m_glowParser, &GlowParser::nodeReceived, this, &EmberConnection::onParserNodeReceived);
     connect(m_glowParser, &GlowParser::parameterReceived, this, &EmberConnection::onParserParameterReceived);
     connect(m_glowParser, &GlowParser::matrixReceived, this, &EmberConnection::onParserMatrixReceived);
     
-    // Forward parser signals directly to our signals
+    
     connect(m_glowParser, &GlowParser::matrixTargetReceived, this, 
             [this](const EmberData::MatrixTargetInfo& target) {
                 emit matrixTargetReceived(target.matrixPath, target.targetNumber, target.label);
@@ -123,13 +123,13 @@ EmberConnection::EmberConnection(QObject *parent)
         disconnect();
     });
     
-    // Initialize connection timeout timer (5 seconds)
+    
     m_connectionTimer = new QTimer(this);
     m_connectionTimer->setSingleShot(true);
     m_connectionTimer->setInterval(CONNECTION_TIMEOUT_MS);
     connect(m_connectionTimer, &QTimer::timeout, this, &EmberConnection::onConnectionTimeout);
     
-    // Initialize protocol timeout timer (10 seconds)
+    
     m_protocolTimer = new QTimer(this);
     m_protocolTimer->setSingleShot(true);
     m_protocolTimer->setInterval(PROTOCOL_TIMEOUT_MS);
@@ -148,12 +148,12 @@ EmberConnection::~EmberConnection()
 
 void EmberConnection::connectToHost(const QString &host, int port)
 {
-    // Check if already connected or connecting
+    
     QAbstractSocket::SocketState state = m_socket->state();
     if (state != QAbstractSocket::UnconnectedState) {
         qWarning().noquote() << QString("Cannot connect: socket is already in state %1").arg(static_cast<int>(state));
         
-        // If we're connecting or connected to a different host/port, abort first
+        
         if (state == QAbstractSocket::ConnectingState || 
             state == QAbstractSocket::HostLookupState) {
             qInfo().noquote() << "Aborting previous connection attempt...";
@@ -163,7 +163,7 @@ void EmberConnection::connectToHost(const QString &host, int port)
             qInfo().noquote() << "Already connected";
             return;
         } else {
-            // For other states (closing, etc), just return
+            
             return;
         }
     }
@@ -171,26 +171,26 @@ void EmberConnection::connectToHost(const QString &host, int port)
     m_host = host;
     m_port = port;
     
-    // Clear request tracking from any previous connection attempts
+    
     m_requestedPaths.clear();
     
-    // OPTIMIZATION 1: Configure socket for low-latency real-time protocol
-    // TCP_NODELAY disables Nagle's algorithm to eliminate 40-200ms buffering delays
-    // This is critical for request/response protocols like Ember+
+    
+    
+    
     m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
     
-    // TCP_KEEPALIVE maintains connection and detects broken connections faster
+    
     m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
     
-    // OPTIMIZATION 2: Increase socket buffer sizes for better throughput
-    // Larger buffers (64KB vs default 8KB) reduce latency for large tree responses
-    // and improve performance when receiving bursts of data
+    
+    
+    
     m_socket->setSocketOption(QAbstractSocket::SendBufferSizeSocketOption, 65536);
     m_socket->setSocketOption(QAbstractSocket::ReceiveBufferSizeSocketOption, 65536);
     
     qInfo().noquote() << QString("Connecting to %1:%2...").arg(host).arg(port);
     
-    // Start connection timeout timer
+    
     m_connectionTimer->start();
     
     m_socket->connectToHost(host, port);
@@ -198,7 +198,7 @@ void EmberConnection::connectToHost(const QString &host, int port)
 
 void EmberConnection::disconnect()
 {
-    // Stop timers
+    
     m_connectionTimer->stop();
     m_protocolTimer->stop();
     
@@ -208,14 +208,14 @@ void EmberConnection::disconnect()
         m_socket->disconnectFromHost();
     } else if (state == QAbstractSocket::ConnectingState || 
                state == QAbstractSocket::HostLookupState) {
-        // Abort pending connection
+        
         qInfo().noquote() << "Aborting pending connection...";
         m_socket->abort();
     }
     
-    // Clear request tracking for next connection
+    
     m_requestedPaths.clear();
-    m_subscriptions.clear();  // Clear all subscriptions on disconnect
+    m_subscriptions.clear();  
 }
 
 bool EmberConnection::isConnected() const
@@ -225,7 +225,7 @@ bool EmberConnection::isConnected() const
 
 void EmberConnection::onSocketConnected()
 {
-    // Stop connection timeout timer
+    
     m_connectionTimer->stop();
     
     m_connected = true;
@@ -233,17 +233,17 @@ void EmberConnection::onSocketConnected()
     emit connected();
     qInfo().noquote() << "Connected to provider";
     
-    // Start protocol timeout timer - will be cancelled if we receive valid Ember+ data
+    
     m_protocolTimer->start();
     qInfo().noquote() << "Waiting for Ember+ response...";
     
-    // OPTIMIZATION: Check cache for previously discovered device name
-    // Display cached name immediately for instant UI feedback on reconnection
+    
+    
     QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
     if (CacheManager::hasDeviceCache(cacheKey)) {
         CacheManager::DeviceCache cache = CacheManager::getDeviceCache(cacheKey);
         
-        // Check if cache is still valid (not expired)
+        
         QDateTime now = QDateTime::currentDateTime();
         qint64 hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
         
@@ -252,10 +252,10 @@ void EmberConnection::onSocketConnected()
                 .arg(cache.deviceName)
                 .arg(hoursSinceLastSeen);
             
-            // Create/update root node with cached info
+            
             m_cacheManager->setRootNode(cache.rootPath, cache.deviceName, false, cache.identityPath);
             
-            // Emit cached device name immediately for instant UI update
+            
             emit nodeReceived(cache.rootPath, cache.deviceName, cache.deviceName, true);
             
             qInfo().noquote() << "Cached device name displayed instantly, will verify with device...";
@@ -265,7 +265,7 @@ void EmberConnection::onSocketConnected()
         }
     }
     
-    // Send GetDirectory to request root tree (always validate with device)
+    
     qInfo().noquote() << "About to send GetDirectory request...";
     sendGetDirectory();
     qInfo().noquote() << "GetDirectory call completed";
@@ -273,20 +273,20 @@ void EmberConnection::onSocketConnected()
 
 void EmberConnection::onSocketDisconnected()
 {
-    // Stop timers if still running
+    
     m_connectionTimer->stop();
     m_protocolTimer->stop();
     
     m_connected = false;
     m_emberDataReceived = false;
-    m_cacheManager->clear();  // Clear cached metadata
+    m_cacheManager->clear();  
     emit disconnected();
     qInfo().noquote() << "Disconnected from provider";
 }
 
 void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
 {
-    // Stop connection timeout timer
+    
     m_connectionTimer->stop();
     
     QString errorString = m_socket->errorString();
@@ -295,16 +295,16 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
     qCritical().noquote() << QString("Connection error: %1 (error code: %2, state: %3)")
         .arg(errorString).arg(error).arg(state);
     
-    // Handle different error types
-    // NOTE: RemoteHostClosedError is NORMAL when device closes connection gracefully
-    // We should NOT abort() for this - just let onSocketDisconnected() handle cleanup
+    
+    
+    
     if (error == QAbstractSocket::RemoteHostClosedError) {
         qInfo().noquote() << "Remote host closed connection gracefully";
-        // Let onSocketDisconnected handle cleanup
+        
         return;
     }
     
-    // For actual connection errors during connection attempt, abort and cleanup
+    
     if (error == QAbstractSocket::ConnectionRefusedError ||
         error == QAbstractSocket::NetworkError ||
         error == QAbstractSocket::HostNotFoundError ||
@@ -314,15 +314,15 @@ void EmberConnection::onSocketError(QAbstractSocket::SocketError error)
         
         qInfo().noquote() << "Aborting connection due to error...";
         
-        // Abort the connection attempt
+        
         if (state != QAbstractSocket::UnconnectedState) {
             m_socket->abort();
         }
         
-        // The abort() call will trigger onSocketDisconnected if needed
+        
     }
     else {
-        // Unknown/unhandled error - log for investigation
+        
         qWarning() << "[EmberConnection] Unhandled socket error type:" << error 
                    << "- relying on Qt's default handling";
     }
@@ -332,15 +332,15 @@ void EmberConnection::onConnectionTimeout()
 {
     qCritical().noquote() << QString("Connection timeout after 5 seconds");
     
-    // Abort the connection attempt
+    
     QAbstractSocket::SocketState state = m_socket->state();
     if (state == QAbstractSocket::ConnectingState || 
         state == QAbstractSocket::HostLookupState) {
         qInfo().noquote() << "Aborting connection attempt...";
         m_socket->abort();
         
-        // Emit disconnected signal to notify UI
-        // (abort() doesn't always trigger disconnected signal for non-connected sockets)
+        
+        
         if (!m_connected) {
             emit disconnected();
         }
@@ -351,7 +351,7 @@ void EmberConnection::onProtocolTimeout()
 {
     qCritical().noquote() << QString("No Ember+ response received after 10 seconds. This port does not appear to be serving Ember+ protocol.");
     
-    // Disconnect - this port doesn't seem to be Ember+
+    
     if (m_connected) {
         qInfo().noquote() << "Disconnecting due to protocol timeout...";
         disconnect();
@@ -366,16 +366,16 @@ void EmberConnection::onDataReceived()
         return;
     }
     
-    // Don't log every receive at info level - S101Protocol will log important messages
+    
     qDebug().noquote() << QString("Received %1 bytes from socket").arg(data.size());
     
-    // Feed data to S101 protocol layer
+    
     m_s101Protocol->feedData(data);
 }
 
 void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
 {
-    // Stop protocol timeout timer - we've received valid Ember+ data!
+    
     bool isFirstData = false;
     if (!m_emberDataReceived) {
         m_emberDataReceived = true;
@@ -384,10 +384,10 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
         qInfo().noquote() << "Ember+ protocol confirmed";
     }
     
-    // Feed Ember data to parser
+    
     m_glowParser->parseEmberData(emberData);
     
-    // Emit treePopulated signal if this was the first data received
+    
     if (isFirstData) {
         qDebug().noquote() << "Initial tree populated, emitting treePopulated signal";
         emit treePopulated();
@@ -396,7 +396,7 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
 
 void EmberConnection::onKeepAliveReceived()
 {
-    // Device sent a KeepAlive request - send response to maintain connection
+    
     qDebug() << "[EmberConnection] Sending KeepAlive RESPONSE to device";
     QByteArray response = m_s101Protocol->encodeKeepAliveResponse();
     qint64 bytesWritten = m_socket->write(response);
@@ -406,7 +406,7 @@ void EmberConnection::onKeepAliveReceived()
 
 void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
 {
-    // Track root-level nodes for smart device name detection
+    
     QStringList pathParts = node.path.split('.');
     int pathDepth = pathParts.size();
     
@@ -419,26 +419,26 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
             .arg(node.description)
             .arg(isGeneric ? "YES" : "no");
         
-        // Track this root node - but preserve existing non-generic name during tree fetch
+        
         if (m_cacheManager->hasRootNode(node.path) && !m_cacheManager->isRootNodeGeneric(node.path)) {
-            // Already have a good name, keep it
+            
             CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(node.path);
             qDebug().noquote() << QString("Preserving existing root node name: %1").arg(rootInfo.displayName);
         } else {
-            // New node or generic name - update it
+            
             QString existingIdentityPath;
             if (m_cacheManager->hasRootNode(node.path)) {
-                // Preserve identityPath if it was already discovered
+                
                 existingIdentityPath = m_cacheManager->getRootNode(node.path).identityPath;
             }
             m_cacheManager->setRootNode(node.path, displayName, isGeneric, existingIdentityPath);
         }
     }
-    // Track identity child nodes under root nodes
+    
     else if (pathDepth == 2) {
         QString parentPath = pathParts[0];
         if (m_cacheManager->hasRootNode(parentPath)) {
-            // Check if this is an identity node
+            
             QString nodeName = node.identifier.toLower();
             if (nodeName == "identity" || nodeName == "_identity" || 
                 nodeName == "deviceinfo" || nodeName == "device_info") {
@@ -452,23 +452,23 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
     qDebug().noquote() << QString("Node: %1 - Online: %2")
         .arg(node.path).arg(node.isOnline ? "YES" : "NO");
     
-    // Emit the node signal
+    
     emit nodeReceived(node.path, node.identifier, node.description, node.isOnline);
     
-    // TREE FETCH: If tree fetch is active, notify the service
+    
     if (m_treeFetchService->isActive()) {
         m_treeFetchService->onNodeReceived(node.path);
     }
     
-    // LAZY LOADING: Only auto-request children for special cases (root name discovery)
+    
     bool shouldAutoRequest = false;
     
-    // Special case 1: Root nodes with generic names (to discover device name)
+    
     if (pathDepth == 1 && m_cacheManager->hasRootNode(node.path) && m_cacheManager->isRootNodeGeneric(node.path)) {
         shouldAutoRequest = true;
         qDebug().noquote() << QString("Auto-requesting children of root node %1 for name discovery").arg(node.path);
     }
-    // Special case 2: Identity nodes under generic root (to find name parameter)
+    
     else if (pathDepth == 2) {
         QString rootPath = pathParts[0];
         if (m_cacheManager->hasRootNode(rootPath)) {
@@ -481,7 +481,7 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
     }
     
     if (shouldAutoRequest) {
-        // OPTIMIZATION: Use optimized field mask for name discovery
+        
         sendGetDirectoryForPath(node.path, true);
     }
 }
@@ -491,34 +491,34 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
     qDebug().noquote() << QString("Param %1 complete: '%2' = '%3' (Type=%4, Access=%5)")
         .arg(param.path).arg(param.identifier).arg(param.value).arg(param.type).arg(param.access);
     
-    // Check if this parameter could be a device name for a root node with generic name
+    
     QStringList pathParts = param.path.split('.');
     if (pathParts.size() >= 3) {
         QString rootPath = pathParts[0];
         if (m_cacheManager->hasRootNode(rootPath) && m_cacheManager->isRootNodeGeneric(rootPath)) {
-            // Check if parameter identifier suggests it's a device name
+            
             QString paramName = param.identifier.toLower();
             if (paramName == "name" || paramName == "device name" || 
                 paramName == "devicename" || paramName == "product") {
                 
-                // Check if under identity node
+                
                 CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(rootPath);
                 if (!rootInfo.identityPath.isEmpty()) {
                     if (param.path.startsWith(rootInfo.identityPath + ".")) {
                         qInfo().noquote() << QString("Found device name '%1' for root node %2 (from %3)")
                             .arg(param.value).arg(rootPath).arg(param.path);
                         
-                        // Update the display name
+                        
                         m_cacheManager->updateRootNodeDisplayName(rootPath, param.value, false);
                         
-                        // OPTIMIZATION: Cache device name for instant reconnection
+                        
                         QString cacheKey = QString("%1:%2").arg(m_host).arg(m_port);
                         CacheManager::cacheDevice(cacheKey, param.value, rootPath, rootInfo.identityPath);
                         
                         qDebug().noquote() << QString("Cached device name '%1' for %2")
                             .arg(param.value).arg(cacheKey);
                         
-                        // Re-emit node with new name (assume online since we're getting parameter updates)
+                        
                         emit nodeReceived(rootPath, param.value, param.value, true);
                     }
                 }
@@ -541,8 +541,8 @@ void EmberConnection::onParserMatrixReceived(const EmberData::MatrixInfo& matrix
 
 bool EmberConnection::isGenericNodeName(const QString &name)
 {
-    // Check if the name is a generic placeholder that should be replaced
-    // with identity information if available
+    
+    
     static QStringList genericNames = {
         "Device", "Root", "device", "root", 
         "Node 0", "Node 1", "Node 2", "Node 3", "Node 4", "Node 5"
@@ -561,7 +561,7 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
     qInfo().noquote() << QString("sendGetDirectoryForPath called with path='%1'").arg(path);
     qInfo().noquote() << QString("m_requestedPaths size: %1").arg(m_requestedPaths.size());
     
-    // Avoid infinite loops - don't request the same path twice
+    
     if (m_requestedPaths.contains(path)) {
         qInfo().noquote() << QString("ERROR: Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path);
         return;
@@ -579,9 +579,9 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
                 .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : "");
         }
         
-        // OPTIMIZATION: Use minimal field mask for faster name discovery
-        // When discovering device names, we only need Identifier, Description, and Value
-        // This reduces payload size by 20-40% and speeds up provider processing
+        
+        
+        
         libember::glow::DirFieldMask fieldMask = optimizedForNameDiscovery
             ? libember::glow::DirFieldMask(libember::glow::DirFieldMask::Identifier | 
                                            libember::glow::DirFieldMask::Description | 
@@ -592,7 +592,7 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
         auto root = new libember::glow::GlowRootElementCollection();
         
         if (path.isEmpty()) {
-            // Request root - use bare GlowCommand like working applications do
+            
             qInfo().noquote() << "Creating bare GlowCommand for root...";
             auto command = new libember::glow::GlowCommand(
                 libember::glow::CommandType::GetDirectory
@@ -602,7 +602,7 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
             qInfo().noquote() << "Command inserted successfully";
         }
         else {
-            // Request specific node path
+            
             qInfo().noquote() << QString("Creating QualifiedNode for path: %1").arg(path);
             QStringList segments = path.split('.', Qt::SkipEmptyParts);
             libember::ber::ObjectIdentifier oid;
@@ -620,16 +620,16 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
             qInfo().noquote() << "QualifiedNode with command inserted (no field mask)";
         }
         
-        // Encode to EmBER
+        
         qInfo().noquote() << "Encoding to EmBER...";
         libember::util::OctetStream stream;
         root->encode(stream);
         qInfo().noquote() << QString("EmBER payload size: %1 bytes").arg(stream.size());
         
-        // Use S101 protocol layer to encode
+        
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
-        // Send
+        
         qInfo().noquote() << QString("About to write %1 bytes to socket...").arg(s101Frame.size());
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
@@ -652,7 +652,7 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
         return;
     }
     
-    // Filter out already-requested paths
+    
     QStringList pathsToRequest;
     for (const QString& path : paths) {
         if (!m_requestedPaths.contains(path)) {
@@ -672,20 +672,20 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
             .arg(pathsToRequest.size())
             .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : "");
         
-        // OPTIMIZATION: Use minimal field mask for faster name discovery
+        
         libember::glow::DirFieldMask fieldMask = optimizedForNameDiscovery
             ? libember::glow::DirFieldMask(libember::glow::DirFieldMask::Identifier | 
                                            libember::glow::DirFieldMask::Description | 
                                            libember::glow::DirFieldMask::Value)
             : libember::glow::DirFieldMask::All;
         
-        // OPTIMIZATION: Batch multiple GetDirectory commands in single S101 frame
-        // This reduces protocol overhead and allows provider to optimize batch processing
+        
+        
         auto root = new libember::glow::GlowRootElementCollection();
         
         for (const QString& path : pathsToRequest) {
             if (path.isEmpty()) {
-                // Request root
+                
                 auto command = new libember::glow::GlowCommand(
                     libember::glow::CommandType::GetDirectory,
                     fieldMask
@@ -693,7 +693,7 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
                 root->insert(root->end(), command);
             }
             else {
-                // Request specific node path
+                
                 QStringList segments = path.split('.', Qt::SkipEmptyParts);
                 libember::ber::ObjectIdentifier oid;
                 
@@ -711,14 +711,14 @@ void EmberConnection::sendBatchGetDirectory(const QStringList& paths, bool optim
             }
         }
         
-        // Encode to EmBER  
+        
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Use S101 protocol layer to encode
+        
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
-        // Send
+        
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
         }
@@ -738,7 +738,7 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
     try {
         qDebug().noquote() << QString("Setting parameter %1 = %2").arg(path).arg(value);
         
-        // Parse path to OID
+        
         QStringList segments = path.split('.', Qt::SkipEmptyParts);
         libember::ber::ObjectIdentifier oid;
         
@@ -746,10 +746,10 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
             oid.push_back(seg.toInt());
         }
         
-        // Create qualified parameter with new value
+        
         auto param = new libember::glow::GlowQualifiedParameter(oid);
         
-        // Set value based on type
+        
         switch (type) {
             case libember::glow::ParameterType::Integer:
                 param->setValue(static_cast<long>(value.toLongLong()));
@@ -768,12 +768,12 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
                 break;
                 
             case libember::glow::ParameterType::Enum:
-                // For enum, value is the integer index
+                
                 param->setValue(static_cast<long>(value.toLongLong()));
                 break;
                 
             case libember::glow::ParameterType::Trigger:
-                // For triggers, send a null value (Ember+ convention for triggering actions)
+                
                 param->setValue(libember::ber::Null());
                 break;
                 
@@ -783,18 +783,18 @@ void EmberConnection::sendParameterValue(const QString &path, const QString &val
                 return;
         }
         
-        // Create root collection and add parameter
+        
         auto root = new libember::glow::GlowRootElementCollection();
         root->insert(root->end(), param);
         
-        // Encode to EmBER
+        
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Use S101 protocol layer to encode
+        
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
-        // Send
+        
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
             qDebug().noquote() << QString("Successfully sent value for %1").arg(path);
@@ -818,7 +818,7 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
         qDebug().noquote() << QString(">>> Sending %1: Matrix=%2, Target=%3, Source=%4")
                        .arg(operation).arg(matrixPath).arg(targetNumber).arg(sourceNumber);
         
-        // Parse matrix path to OID
+        
         QStringList segments = matrixPath.split('.', Qt::SkipEmptyParts);
         libember::ber::ObjectIdentifier matrixOid;
         
@@ -826,16 +826,16 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
             matrixOid.push_back(seg.toInt());
         }
         
-        // Create qualified matrix
+        
         auto matrix = new libember::glow::GlowQualifiedMatrix(matrixOid);
         
-        // Get the connections sequence from the matrix (creates it if it doesn't exist)
+        
         auto connectionsSeq = matrix->connections();
         
-        // Create connection object
+        
         auto connection = new libember::glow::GlowConnection(targetNumber);
         
-        // Set the operation based on connect/disconnect
+        
         if (connect) {
             connection->setOperation(libember::glow::ConnectionOperation::Connect);
             qDebug().noquote() << QString("    Operation: Connect (1)");
@@ -844,28 +844,28 @@ void EmberConnection::setMatrixConnection(const QString &matrixPath, int targetN
             qDebug().noquote() << QString("    Operation: Disconnect (2)");
         }
         
-        // Add source(s) to the connection
-        // For Ember+, we need to set the sources as an OID sequence
+        
+        
         libember::ber::ObjectIdentifier sources;
         sources.push_back(sourceNumber);
         connection->setSources(sources);
         qDebug().noquote() << QString("    Sources: [%1]").arg(sourceNumber);
         
-        // Add connection to the connections sequence
+        
         connectionsSeq->insert(connectionsSeq->end(), connection);
         
-        // Create root collection and add matrix
+        
         auto root = new libember::glow::GlowRootElementCollection();
         root->insert(root->end(), matrix);
         
-        // Encode to EmBER
+        
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Use S101 protocol layer to encode
+        
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
-        // Send
+        
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
             qDebug().noquote() << QString("Successfully sent matrix connection command");
@@ -932,7 +932,7 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     auto qualifiedFunction = new libember::glow::GlowQualifiedFunction(oid);
     qualifiedFunction->children()->insert(qualifiedFunction->children()->end(), command);
     
-    // Also subscribe to the function to receive invocation results
+    
     auto subscribeCmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
     qualifiedFunction->children()->insert(qualifiedFunction->children()->end(), subscribeCmd);
     
@@ -941,7 +941,7 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     m_socket->write(s101Frame);
     m_socket->flush();
@@ -950,7 +950,7 @@ void EmberConnection::invokeFunction(const QString &path, const QList<QVariant> 
     delete root;
 }
 
-// Subscription methods
+
 void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscribed)
 {
     if (!m_socket || !m_connected) {
@@ -963,14 +963,14 @@ void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscri
         return;
     }
     
-    // Parse path to OID
+    
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
     libember::ber::ObjectIdentifier oid;
     for (const QString& seg : segments) {
         oid.push_back(seg.toInt());
     }
     
-    // Create qualified parameter with subscribe command
+    
     auto param = new libember::glow::GlowQualifiedParameter(oid);
     auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
     param->children()->insert(param->children()->end(), command);
@@ -978,18 +978,18 @@ void EmberConnection::subscribeToParameter(const QString &path, bool autoSubscri
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), param);
     
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
-    // Send
+    
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    // Track subscription
+    
     SubscriptionState state;
     state.subscribedAt = QDateTime::currentDateTime();
     state.autoSubscribed = autoSubscribed;
@@ -1014,14 +1014,14 @@ void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
         return;
     }
     
-    // Parse path to OID
+    
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
     libember::ber::ObjectIdentifier oid;
     for (const QString& seg : segments) {
         oid.push_back(seg.toInt());
     }
     
-    // Create qualified node with subscribe command
+    
     auto node = new libember::glow::GlowQualifiedNode(oid);
     auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
     node->children()->insert(node->children()->end(), command);
@@ -1029,18 +1029,18 @@ void EmberConnection::subscribeToNode(const QString &path, bool autoSubscribed)
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), node);
     
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
-    // Send
+    
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    // Track subscription
+    
     SubscriptionState state;
     state.subscribedAt = QDateTime::currentDateTime();
     state.autoSubscribed = autoSubscribed;
@@ -1065,14 +1065,14 @@ void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed
         return;
     }
     
-    // Parse path to OID
+    
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
     libember::ber::ObjectIdentifier oid;
     for (const QString& seg : segments) {
         oid.push_back(seg.toInt());
     }
     
-    // Create qualified matrix with subscribe command
+    
     auto matrix = new libember::glow::GlowQualifiedMatrix(oid);
     auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
     matrix->children()->insert(matrix->children()->end(), command);
@@ -1080,18 +1080,18 @@ void EmberConnection::subscribeToMatrix(const QString &path, bool autoSubscribed
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), matrix);
     
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
-    // Send
+    
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    // Track subscription
+    
     SubscriptionState state;
     state.subscribedAt = QDateTime::currentDateTime();
     state.autoSubscribed = autoSubscribed;
@@ -1116,14 +1116,14 @@ void EmberConnection::unsubscribeFromParameter(const QString &path)
         return;
     }
     
-    // Parse path to OID
+    
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
     libember::ber::ObjectIdentifier oid;
     for (const QString& seg : segments) {
         oid.push_back(seg.toInt());
     }
     
-    // Create qualified parameter with unsubscribe command
+    
     auto param = new libember::glow::GlowQualifiedParameter(oid);
     auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Unsubscribe);
     param->children()->insert(param->children()->end(), command);
@@ -1131,18 +1131,18 @@ void EmberConnection::unsubscribeFromParameter(const QString &path)
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), param);
     
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
-    // Send
+    
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    // Remove from tracking
+    
     m_subscriptions.remove(path);
     
     qDebug().noquote() << QString("Unsubscribed from parameter: %1").arg(path);
@@ -1162,14 +1162,14 @@ void EmberConnection::unsubscribeFromNode(const QString &path)
         return;
     }
     
-    // Parse path to OID
+    
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
     libember::ber::ObjectIdentifier oid;
     for (const QString& seg : segments) {
         oid.push_back(seg.toInt());
     }
     
-    // Create qualified node with unsubscribe command
+    
     auto node = new libember::glow::GlowQualifiedNode(oid);
     auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Unsubscribe);
     node->children()->insert(node->children()->end(), command);
@@ -1177,18 +1177,18 @@ void EmberConnection::unsubscribeFromNode(const QString &path)
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), node);
     
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
-    // Send
+    
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    // Remove from tracking
+    
     m_subscriptions.remove(path);
     
     qDebug().noquote() << QString("Unsubscribed from node: %1").arg(path);
@@ -1208,14 +1208,14 @@ void EmberConnection::unsubscribeFromMatrix(const QString &path)
         return;
     }
     
-    // Parse path to OID
+    
     QStringList segments = path.split('.', Qt::SkipEmptyParts);
     libember::ber::ObjectIdentifier oid;
     for (const QString& seg : segments) {
         oid.push_back(seg.toInt());
     }
     
-    // Create qualified matrix with unsubscribe command
+    
     auto matrix = new libember::glow::GlowQualifiedMatrix(oid);
     auto command = new libember::glow::GlowCommand(libember::glow::CommandType::Unsubscribe);
     matrix->children()->insert(matrix->children()->end(), command);
@@ -1223,18 +1223,18 @@ void EmberConnection::unsubscribeFromMatrix(const QString &path)
     auto root = new libember::glow::GlowRootElementCollection();
     root->insert(root->end(), matrix);
     
-    // Encode to BER
+    
     libember::util::OctetStream stream;
     root->encode(stream);
     
-    // Use S101 protocol layer to encode
+    
     QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
     
-    // Send
+    
     m_socket->write(s101Frame);
     m_socket->flush();
     
-    // Remove from tracking
+    
     m_subscriptions.remove(path);
     
     qDebug().noquote() << QString("Unsubscribed from matrix: %1").arg(path);
@@ -1253,7 +1253,7 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
         return;
     }
     
-    // Filter out already-subscribed paths
+    
     QList<SubscriptionRequest> toSubscribe;
     for (const auto& req : requests) {
         if (!m_subscriptions.contains(req.path)) {
@@ -1271,20 +1271,20 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
     try {
         qDebug().noquote() << QString("Batch subscribing to %1 paths...").arg(toSubscribe.size());
         
-        // OPTIMIZATION: Batch multiple Subscribe commands in single S101 frame
-        // This reduces protocol overhead and network round trips (5-20x reduction)
+        
+        
         auto root = new libember::glow::GlowRootElementCollection();
         
         int successCount = 0;
         for (const auto& req : toSubscribe) {
-            // Parse path to OID
+            
             QStringList segments = req.path.split('.', Qt::SkipEmptyParts);
             libember::ber::ObjectIdentifier oid;
             for (const QString& seg : segments) {
                 oid.push_back(seg.toInt());
             }
             
-            // Create appropriate qualified element based on type
+            
             if (req.type == "Node") {
                 auto node = new libember::glow::GlowQualifiedNode(oid);
                 auto cmd = new libember::glow::GlowCommand(libember::glow::CommandType::Subscribe);
@@ -1319,7 +1319,7 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
                 continue;
             }
             
-            // Track subscription
+            
             SubscriptionState state;
             state.subscribedAt = QDateTime::currentDateTime();
             state.autoSubscribed = true;
@@ -1332,14 +1332,14 @@ void EmberConnection::sendBatchSubscribe(const QList<SubscriptionRequest>& reque
             return;
         }
         
-        // Encode to BER
+        
         libember::util::OctetStream stream;
         root->encode(stream);
         
-        // Use S101 protocol layer to encode
+        
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
-        // Send
+        
         m_socket->write(s101Frame);
         m_socket->flush();
         
@@ -1357,7 +1357,7 @@ bool EmberConnection::isSubscribed(const QString &path) const
     return m_subscriptions.contains(path);
 }
 
-// Complete tree fetch implementation
+
 void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
 {
     if (!m_connected) {
@@ -1367,7 +1367,7 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
     
     qInfo().noquote() << QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size());
     
-    // Set up callback for TreeFetchService to send GetDirectory requests
+    
     m_treeFetchService->setSendGetDirectoryCallback([this](const QString& path, bool isRoot) {
         qDebug().noquote() << QString("Tree fetch requesting: %1").arg(path.isEmpty() ? "root" : path);
         
@@ -1375,7 +1375,7 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
             auto root = new libember::glow::GlowRootElementCollection();
             
             if (path.isEmpty()) {
-                // Request root
+                
                 auto command = new libember::glow::GlowCommand(
                     libember::glow::CommandType::GetDirectory,
                     libember::glow::DirFieldMask::All
@@ -1383,7 +1383,7 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
                 root->insert(root->end(), command);
             }
             else {
-                // Request specific node path
+                
                 QStringList segments = path.split('.', Qt::SkipEmptyParts);
                 libember::ber::ObjectIdentifier oid;
                 
@@ -1400,14 +1400,14 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
                 root->insert(root->end(), node);
             }
             
-            // Encode to EmBER
+            
             libember::util::OctetStream stream;
             root->encode(stream);
             
-            // Use S101 protocol layer to encode
+            
             QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
             
-            // Send
+            
             if (m_socket->write(s101Frame) > 0) {
                 m_socket->flush();
             }
@@ -1419,11 +1419,11 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
         }
     });
     
-    // Connect progress signals
+    
     connect(m_treeFetchService, &TreeFetchService::progressUpdated, this, &EmberConnection::treeFetchProgress, Qt::UniqueConnection);
     connect(m_treeFetchService, &TreeFetchService::fetchCompleted, this, &EmberConnection::treeFetchCompleted, Qt::UniqueConnection);
     
-    // Start the fetch
+    
     m_treeFetchService->startFetch(initialNodePaths);
 }
 

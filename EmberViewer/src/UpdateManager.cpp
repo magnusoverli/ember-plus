@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Update Manager Base Class Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "UpdateManager.h"
 #include "version.h"
@@ -28,7 +28,7 @@ UpdateManager::~UpdateManager()
 
 void UpdateManager::checkForUpdates()
 {
-    // Build GitHub API URL for latest release
+    
     QString apiUrl = QString("%1/repos/%2/%3/releases/latest")
         .arg(GITHUB_API_BASE)
         .arg(GITHUB_REPO_OWNER)
@@ -41,7 +41,7 @@ void UpdateManager::checkForUpdates()
     request.setRawHeader("Accept", "application/vnd.github.v3+json");
     request.setRawHeader("User-Agent", QString("EmberViewer/%1").arg(getCurrentVersion()).toUtf8());
     
-    // Add GitHub API token if available (increases rate limit from 60 to 5000 req/hour)
+    
 #ifdef GITHUB_API_TOKEN
     request.setRawHeader("Authorization", QString("Bearer %1").arg(GITHUB_API_TOKEN).toUtf8());
     qDebug() << "Using authenticated GitHub API requests";
@@ -65,7 +65,7 @@ void UpdateManager::onUpdateCheckFinished()
     if (reply->error() != QNetworkReply::NoError) {
         QString errorMsg;
         
-        // Check for rate limiting
+        
         if (reply->errorString().contains("rate limit", Qt::CaseInsensitive)) {
             errorMsg = "GitHub API rate limit exceeded. Please try again later (limit resets hourly).";
             qWarning() << "Update check failed: GitHub API rate limit exceeded";
@@ -78,7 +78,7 @@ void UpdateManager::onUpdateCheckFinished()
         return;
     }
 
-    // Parse JSON response
+    
     QByteArray responseData = reply->readAll();
     QJsonDocument doc = QJsonDocument::fromJson(responseData);
 
@@ -90,7 +90,7 @@ void UpdateManager::onUpdateCheckFinished()
 
     QJsonObject release = doc.object();
 
-    // Parse release information
+    
     UpdateInfo updateInfo = parseReleaseJson(release);
 
     if (updateInfo.version.isEmpty()) {
@@ -99,17 +99,17 @@ void UpdateManager::onUpdateCheckFinished()
         return;
     }
 
-    // Check if this version should be skipped
+    
     if (isVersionSkipped(updateInfo.version)) {
         qInfo() << "Update available but skipped by user:" << updateInfo.version;
         emit noUpdateAvailable();
         return;
     }
 
-    // Compare versions
+    
     QString currentVersion = getCurrentVersion();
     if (isNewerVersion(updateInfo.version, currentVersion)) {
-        // Check if assets are ready for download
+        
         if (updateInfo.downloadUrl.isEmpty()) {
             qInfo() << "Update" << updateInfo.version << "found but assets not ready yet";
             QString message = QString("Version %1 is available but the download files are still being prepared.\n"
@@ -131,25 +131,25 @@ UpdateManager::UpdateInfo UpdateManager::parseReleaseJson(const QJsonObject &rel
 {
     UpdateInfo info;
 
-    // Extract basic release information
+    
     info.tagName = release["tag_name"].toString();
     info.releaseNotes = release["body"].toString();
     info.publishedAt = release["published_at"].toString();
     info.isPrerelease = release["prerelease"].toBool(false);
 
-    // Extract version number from tag (e.g., "v0.4.0" -> "0.4.0")
+    
     info.version = info.tagName;
     if (info.version.startsWith("v")) {
         info.version = info.version.mid(1);
     }
 
-    // Let platform-specific subclass select the appropriate asset
+    
     QString assetUrl = selectAssetForPlatform(release);
 
     if (!assetUrl.isEmpty()) {
         info.downloadUrl = assetUrl;
 
-        // Extract asset details from the assets array
+        
         QJsonArray assets = release["assets"].toArray();
         for (const QJsonValue &assetValue : assets) {
             QJsonObject asset = assetValue.toObject();
@@ -166,7 +166,7 @@ UpdateManager::UpdateInfo UpdateManager::parseReleaseJson(const QJsonObject &rel
 
 bool UpdateManager::isNewerVersion(const QString &remoteVersion, const QString &currentVersion) const
 {
-    // Use QVersionNumber for robust semantic version comparison
+    
     QVersionNumber remote = QVersionNumber::fromString(remoteVersion);
     QVersionNumber current = QVersionNumber::fromString(currentVersion);
 
@@ -175,7 +175,7 @@ bool UpdateManager::isNewerVersion(const QString &remoteVersion, const QString &
 
 QString UpdateManager::getCurrentVersion()
 {
-    // Returns version string from version.h (e.g., "0.3.2")
+    
     return EMBERVIEWER_VERSION_STRING;
 }
 

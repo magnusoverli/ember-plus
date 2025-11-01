@@ -1,10 +1,10 @@
-/*
-    EmberViewer - Update Dialog Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "UpdateDialog.h"
 #include <QVBoxLayout>
@@ -41,7 +41,7 @@ void UpdateDialog::setupUi()
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
-    // Title
+    
     m_titleLabel = new QLabel("A new version of EmberViewer is available!");
     QFont titleFont = m_titleLabel->font();
     titleFont.setPointSize(titleFont.pointSize() + 2);
@@ -49,7 +49,7 @@ void UpdateDialog::setupUi()
     m_titleLabel->setFont(titleFont);
     mainLayout->addWidget(m_titleLabel);
 
-    // Version information
+    
     QString currentVersion = UpdateManager::getCurrentVersion();
     m_versionLabel = new QLabel(QString("Current version: %1\nNew version: %2")
         .arg(currentVersion)
@@ -58,7 +58,7 @@ void UpdateDialog::setupUi()
 
     mainLayout->addSpacing(10);
 
-    // Release notes group
+    
     QGroupBox *notesGroup = new QGroupBox("What's New");
     QVBoxLayout *notesLayout = new QVBoxLayout(notesGroup);
 
@@ -69,24 +69,24 @@ void UpdateDialog::setupUi()
 
     mainLayout->addWidget(notesGroup);
 
-    // Download size info
+    
     m_downloadSizeLabel = new QLabel(QString("Download size: %1")
         .arg(formatFileSize(m_updateInfo.assetSize)));
     mainLayout->addWidget(m_downloadSizeLabel);
 
-    // Progress bar (initially hidden)
+    
     m_progressBar = new QProgressBar();
     m_progressBar->setVisible(false);
     mainLayout->addWidget(m_progressBar);
 
-    // Status label (initially hidden)
+    
     m_statusLabel = new QLabel();
     m_statusLabel->setVisible(false);
     mainLayout->addWidget(m_statusLabel);
 
     mainLayout->addSpacing(10);
 
-    // Button layout
+    
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
 
@@ -110,12 +110,12 @@ void UpdateDialog::onUpdateNowClicked()
 {
     m_userAction = UpdateNow;
 
-    // Disable buttons during update
+    
     m_updateNowButton->setEnabled(false);
     m_remindLaterButton->setEnabled(false);
     m_skipVersionButton->setEnabled(false);
 
-    // Show progress bar
+    
     m_progressBar->setVisible(true);
     m_statusLabel->setVisible(true);
     m_statusLabel->setText("Downloading update...");
@@ -176,34 +176,34 @@ QString UpdateDialog::formatFileSize(qint64 bytes) const
 
 QString UpdateDialog::formatReleaseNotes(const QString &markdown) const
 {
-    // Simple Markdown-to-HTML conversion
-    // This is a basic implementation - could be enhanced with a proper Markdown library
+    
+    
 
     QString html = markdown;
 
-    // Convert headers (## Header -> <h3>Header</h3>)
+    
     html.replace(QRegularExpression("## (.+)"), "<h3>\\1</h3>");
     html.replace(QRegularExpression("# (.+)"), "<h2>\\1</h2>");
 
-    // Convert bold (**text** -> <b>text</b>)
+    
     html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
 
-    // Convert italic (*text* -> <i>text</i>)
+    
     html.replace(QRegularExpression("\\*(.+?)\\*"), "<i>\\1</i>");
 
-    // Convert bullet points (- item -> <li>item</li>)
+    
     html.replace(QRegularExpression("^- (.+)$", QRegularExpression::MultilineOption), "<li>\\1</li>");
     html.replace(QRegularExpression("^\\* (.+)$", QRegularExpression::MultilineOption), "<li>\\1</li>");
 
-    // Wrap list items in <ul>
+    
     if (html.contains("<li>")) {
         html = "<ul>" + html + "</ul>";
     }
 
-    // Convert line breaks
+    
     html.replace("\n\n", "<br><br>");
 
-    // Wrap in basic HTML
+    
     QString styledHtml = QString(
         "<html><body style='font-family: sans-serif;'>"
         "%1"

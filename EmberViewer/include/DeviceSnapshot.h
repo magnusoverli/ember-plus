@@ -1,11 +1,3 @@
-/*
-    EmberViewer - Device Snapshot
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
-
 #ifndef DEVICESNAPSHOT_H
 #define DEVICESNAPSHOT_H
 
@@ -39,7 +31,7 @@ struct ParameterData {
     QStringList enumOptions;
     QList<int> enumValues;
     bool isOnline;
-    int streamIdentifier = -1;  // Audio meter stream ID (-1 = not a meter)
+    int streamIdentifier = -1;
     
     QJsonObject toJson() const;
     static ParameterData fromJson(const QJsonObject& json);
@@ -52,11 +44,11 @@ struct MatrixData {
     int type;
     int targetCount;
     int sourceCount;
-    QList<int> targetNumbers;  // Actual target indices (e.g., [0,1,2,8,9,10])
-    QList<int> sourceNumbers;  // Actual source indices
+    QList<int> targetNumbers;
+    QList<int> sourceNumbers;
     QMap<int, QString> targetLabels;
     QMap<int, QString> sourceLabels;
-    QMap<std::pair<int,int>, bool> connections; // (target,source) -> connected
+    QMap<std::pair<int,int>, bool> connections;
     
     QJsonObject toJson() const;
     static MatrixData fromJson(const QJsonObject& json);
@@ -79,27 +71,23 @@ class DeviceSnapshot {
 public:
     DeviceSnapshot();
     
-    // Metadata
     QString deviceName;
     QDateTime captureTime;
     QString hostAddress;
     int port;
     int formatVersion;
     
-    // Device structure
-    QStringList rootPaths;  // Ordered list of root element paths
+    QStringList rootPaths;
     QMap<QString, NodeData> nodes;
     QMap<QString, ParameterData> parameters;
     QMap<QString, MatrixData> matrices;
     QMap<QString, FunctionData> functions;
     
-    // Statistics
     int nodeCount() const { return nodes.size(); }
     int parameterCount() const { return parameters.size(); }
     int matrixCount() const { return matrices.size(); }
     int functionCount() const { return functions.size(); }
     
-    // Serialization
     QJsonDocument toJson() const;
     bool saveToFile(const QString& filePath) const;
     
@@ -110,4 +98,4 @@ private:
     static constexpr int CURRENT_FORMAT_VERSION = 1;
 };
 
-#endif // DEVICESNAPSHOT_H
+#endif

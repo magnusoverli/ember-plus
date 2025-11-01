@@ -1,10 +1,10 @@
-/*
-    EmberViewer - S101 Protocol Handler Implementation
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
 
 #include "S101Protocol.h"
 #include <s101/MessageType.hpp>
@@ -24,7 +24,7 @@ S101Protocol::~S101Protocol()
 
 void S101Protocol::feedData(const QByteArray& data)
 {
-    // Feed raw bytes to S101 decoder with callback
+    
     const unsigned char* bytes = reinterpret_cast<const unsigned char*>(data.constData());
     
     m_decoder->read(bytes, bytes + data.size(),
@@ -35,37 +35,37 @@ void S101Protocol::feedData(const QByteArray& data)
             if (first == last)
                 return true;
             
-            // Parse S101 frame header with bounds checking
-            // Minimum: slot(1) + message(1) + command(1) + version(1) = 4 bytes
+            
+            
             auto remaining = std::distance(first, last);
             if (remaining < 4) {
                 qWarning() << "[S101] Frame too short:" << remaining << "bytes (need at least 4)";
-                return true;  // Skip malformed frame but continue processing
+                return true;  
             }
             
-            first++;  // Skip slot
+            first++;  
             auto message = *first++;
             
             if (message == libs101::MessageType::EmBER) {
                 auto command = *first++;
-                first++;  // Skip version
+                first++;  
                 
                 if (command == libs101::CommandType::EmBER) {
-                    // EmBER data command has: flags(1) + dtd(1) + appBytes(1+) + payload
+                    
                     if (std::distance(first, last) < 2) {
                         qWarning() << "[S101] EmBER command frame too short";
                         return true;
                     }
                     
                     auto flags = libs101::PackageFlag(*first++);
-                    first++;  // Skip DTD
-                    // Check bounds before reading appBytes
+                    first++;  
+                    
                     if (first == last) {
                         qWarning() << "[S101] Unexpected end of frame at appBytes field";
                         return true;
                     }
                     
-                    // Skip application bytes with bounds checking
+                    
                     auto appBytes = *first++;
                     unsigned char appBytesCount = appBytes;
                     
@@ -79,7 +79,7 @@ void S101Protocol::feedData(const QByteArray& data)
                         --appBytes;
                     }
                     
-                    // Extract Ember+ data (whatever remains after header)
+                    
                     if (first != last) {
                         QByteArray emberData(reinterpret_cast<const char*>(&(*first)), 
                                             std::distance(first, last));
@@ -90,16 +90,16 @@ void S101Protocol::feedData(const QByteArray& data)
                     }
                 }
                 else if (command == libs101::CommandType::KeepAliveRequest) {
-                    // Keep-alive request received - emit signal for response
+                    
                     qDebug() << "[S101] KeepAlive REQUEST received from device";
                     emit self->keepAliveReceived();
                 }
                 else if (command == libs101::CommandType::KeepAliveResponse) {
-                    // Keep-alive response received (we don't send requests, but log if we get one)
+                    
                     qDebug() << "[S101] KeepAlive RESPONSE received (unexpected)";
                 }
                 else {
-                    // Unknown command type
+                    
                     qDebug() << "[S101] Unknown command type:" << static_cast<int>(command);
                 }
             }
@@ -114,22 +114,22 @@ QByteArray S101Protocol::encodeEmberData(const libember::util::OctetStream& embe
 {
     auto encoder = libs101::StreamEncoder<unsigned char>();
     
-    // S101 frame with Ember+ payload
-    encoder.encode(0x00);  // Slot
+    
+    encoder.encode(0x00);  
     encoder.encode(libs101::MessageType::EmBER);
     encoder.encode(libs101::CommandType::EmBER);
-    encoder.encode(0x01);  // Version
+    encoder.encode(0x01);  
     encoder.encode(libs101::PackageFlag::FirstPackage | libs101::PackageFlag::LastPackage);
-    encoder.encode(0x01);  // DTD (Glow)
-    encoder.encode(0x02);  // 2 app bytes (required by some devices)
-    encoder.encode(0x28);  // App byte 1
-    encoder.encode(0x02);  // App byte 2
+    encoder.encode(0x01);  
+    encoder.encode(0x02);  
+    encoder.encode(0x28);  
+    encoder.encode(0x02);  
     
-    // Add Ember+ data
+    
     encoder.encode(emberData.begin(), emberData.end());
     encoder.finish();
     
-    // Convert to QByteArray
+    
     std::vector<unsigned char> data(encoder.begin(), encoder.end());
     return QByteArray(reinterpret_cast<const char*>(data.data()), data.size());
 }
@@ -138,14 +138,14 @@ QByteArray S101Protocol::encodeKeepAliveResponse()
 {
     auto encoder = libs101::StreamEncoder<unsigned char>();
     
-    // S101 keep-alive response frame
-    encoder.encode(0x00);  // Slot
+    
+    encoder.encode(0x00);  
     encoder.encode(libs101::MessageType::EmBER);
     encoder.encode(libs101::CommandType::KeepAliveResponse);
-    encoder.encode(0x01);  // Version
+    encoder.encode(0x01);  
     encoder.finish();
     
-    // Convert to QByteArray
+    
     std::vector<unsigned char> data(encoder.begin(), encoder.end());
     return QByteArray(reinterpret_cast<const char*>(data.data()), data.size());
 }

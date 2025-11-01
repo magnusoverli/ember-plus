@@ -1,12 +1,12 @@
-/*
-    EmberViewer - Windows Update Manager
-    
-    Platform-specific update manager for Windows using NSIS installer.
-    
-    Copyright (C) 2025 Magnus Overli
-    Distributed under the Boost Software License, Version 1.0.
-    (See accompanying file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-*/
+
+
+
+
+
+
+
+
+
 
 #ifndef WINDOWSUPDATEMANAGER_H
 #define WINDOWSUPDATEMANAGER_H
@@ -24,11 +24,11 @@ public:
     explicit WindowsUpdateManager(QObject *parent = nullptr);
     ~WindowsUpdateManager();
 
-    // Install update (download installer, execute, exit app)
+    
     void installUpdate(const UpdateInfo &updateInfo) override;
 
 protected:
-    // Select Windows installer asset from GitHub release
+    
     QString selectAssetForPlatform(const QJsonObject &release) override;
 
 private slots:
@@ -43,4 +43,4 @@ private:
     QNetworkReply *m_downloadReply;
 };
 
-#endif // WINDOWSUPDATEMANAGER_H
+#endif 
