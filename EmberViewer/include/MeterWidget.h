@@ -58,6 +58,7 @@ private:
     QColor getColorForLevel(double normalizedLevel) const;
     QString formatValue(double value) const;
     void getMeterConstants(MeterType type, double &riseTime, double &fallTime) const;
+    void getColorZones(MeterType type, double &greenThreshold, double &yellowThreshold) const;
 
     
     QString m_identifier;
@@ -81,9 +82,7 @@ private:
     static constexpr int METER_WIDTH = 40;
     static constexpr int METER_MARGIN = 10;
     static constexpr int PEAK_HOLD_MS = 2000;  
-    static constexpr int UPDATE_INTERVAL_MS = 20;  
-    static constexpr double GREEN_THRESHOLD = 0.75;   
-    static constexpr double YELLOW_THRESHOLD = 0.90;
+    static constexpr int UPDATE_INTERVAL_MS = 20;
     
     
     

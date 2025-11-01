@@ -187,6 +187,41 @@ void MeterWidget::getMeterConstants(MeterType type, double &riseTime, double &fa
     }
 }
 
+void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &yellowThreshold) const
+{
+    switch (type) {
+        case MeterType::VU_METER:
+            // VU Meter: Green below 0 VU (50%), Red above 0 VU
+            // No yellow zone - just green and red
+            greenThreshold = 0.50;   // 0 VU is at middle
+            yellowThreshold = 1.00;  // No yellow, goes straight to red
+            break;
+            
+        case MeterType::DIN_PPM:
+            // DIN PPM: Green (-50 to -20 dBr), Yellow (-20 to 0 dBr), Red (0 to +5 dBr)
+            greenThreshold = 0.40;   // -20 dBr
+            yellowThreshold = 0.90;  // 0 dBr (reference level)
+            break;
+            
+        case MeterType::BBC_PPM:
+            // BBC PPM: Green (PPM 1-4), Yellow (PPM 5-6), Red (PPM 7)
+            greenThreshold = 0.67;   // PPM 4 (reference level)
+            yellowThreshold = 0.92;  // PPM 6 (permitted peak)
+            break;
+            
+        case MeterType::DIGITAL_PEAK:
+            // Digital Peak: Green (-∞ to -18 dBFS), Yellow (-18 to -6 dBFS), Red (-6 to 0 dBFS)
+            greenThreshold = 0.70;   // -18 dBFS
+            yellowThreshold = 0.90;  // -6 dBFS
+            break;
+            
+        default:
+            greenThreshold = 0.75;
+            yellowThreshold = 0.90;
+            break;
+    }
+}
+
 double MeterWidget::normalizeValue(double value) const
 {
     if (m_maxValue <= m_minValue) {
@@ -199,12 +234,16 @@ double MeterWidget::normalizeValue(double value) const
 
 QColor MeterWidget::getColorForLevel(double normalizedLevel) const
 {
-    if (normalizedLevel >= YELLOW_THRESHOLD) {
-        return QColor(255, 0, 0);  
-    } else if (normalizedLevel >= GREEN_THRESHOLD) {
-        return QColor(255, 200, 0);  
+    // Get meter-specific color zone thresholds
+    double greenThreshold, yellowThreshold;
+    getColorZones(m_meterType, greenThreshold, yellowThreshold);
+    
+    if (normalizedLevel >= yellowThreshold) {
+        return QColor(255, 0, 0);  // Red
+    } else if (normalizedLevel >= greenThreshold) {
+        return QColor(255, 200, 0);  // Yellow
     } else {
-        return QColor(0, 200, 0);  
+        return QColor(0, 200, 0);  // Green
     }
 }
 
@@ -246,9 +285,12 @@ void MeterWidget::drawMeter(QPainter &painter)
     double normalizedValue = normalizeValue(m_displayValue);
     int fillHeight = static_cast<int>(normalizedValue * meterHeight);
     
+    // Get meter-specific color zone thresholds
+    double greenThreshold, yellowThreshold;
+    getColorZones(m_meterType, greenThreshold, yellowThreshold);
     
-    int greenHeight = static_cast<int>(GREEN_THRESHOLD * meterHeight);
-    int yellowHeight = static_cast<int>((YELLOW_THRESHOLD - GREEN_THRESHOLD) * meterHeight);
+    int greenHeight = static_cast<int>(greenThreshold * meterHeight);
+    int yellowHeight = static_cast<int>((yellowThreshold - greenThreshold) * meterHeight);
     int redHeight = meterHeight - greenHeight - yellowHeight;
     
     if (fillHeight > 0) {
