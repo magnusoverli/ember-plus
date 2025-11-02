@@ -82,34 +82,54 @@ void MatrixModel::setSourceNumbers(const QList<int> &numbers)
 
 void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
 {
-    qDebug().noquote() << QString("MatrixModel: setTargetLabel called - Target: %1, Label: '%2', Matrix: %3")
-        .arg(targetNumber).arg(label).arg(m_matrixPath);
+    // Only set label if not already set, or if current is a placeholder
+    // This prevents later label layers from overwriting good labels with "N/A"
+    QString currentLabel = m_targetLabels.value(targetNumber);
+    bool isPlaceholder = currentLabel.isEmpty() || currentLabel.startsWith("Target ");
     
-    m_targetLabels[targetNumber] = label;
-    
-    // Add to numbers list if not present
-    if (!m_targetNumbers.contains(targetNumber)) {
-        m_targetNumbers.append(targetNumber);
-        std::sort(m_targetNumbers.begin(), m_targetNumbers.end());
+    if (isPlaceholder) {
+        qDebug().noquote() << QString("MatrixModel: setTargetLabel - Target: %1, Label: '%2', Matrix: %3")
+            .arg(targetNumber).arg(label).arg(m_matrixPath);
+        
+        m_targetLabels[targetNumber] = label;
+        
+        // Add to numbers list if not present
+        if (!m_targetNumbers.contains(targetNumber)) {
+            m_targetNumbers.append(targetNumber);
+            std::sort(m_targetNumbers.begin(), m_targetNumbers.end());
+        }
+        
+        emit dataChanged();
+    } else {
+        qDebug().noquote() << QString("MatrixModel: SKIPPED setTargetLabel - Target: %1 already has label '%2', ignoring '%3'")
+            .arg(targetNumber).arg(currentLabel).arg(label);
     }
-    
-    emit dataChanged();
 }
 
 void MatrixModel::setSourceLabel(int sourceNumber, const QString &label)
 {
-    qDebug().noquote() << QString("MatrixModel: setSourceLabel called - Source: %1, Label: '%2', Matrix: %3")
-        .arg(sourceNumber).arg(label).arg(m_matrixPath);
+    // Only set label if not already set, or if current is a placeholder
+    // This prevents later label layers from overwriting good labels with "N/A"
+    QString currentLabel = m_sourceLabels.value(sourceNumber);
+    bool isPlaceholder = currentLabel.isEmpty() || currentLabel.startsWith("Source ");
     
-    m_sourceLabels[sourceNumber] = label;
-    
-    // Add to numbers list if not present
-    if (!m_sourceNumbers.contains(sourceNumber)) {
-        m_sourceNumbers.append(sourceNumber);
-        std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());
+    if (isPlaceholder) {
+        qDebug().noquote() << QString("MatrixModel: setSourceLabel - Source: %1, Label: '%2', Matrix: %3")
+            .arg(sourceNumber).arg(label).arg(m_matrixPath);
+        
+        m_sourceLabels[sourceNumber] = label;
+        
+        // Add to numbers list if not present
+        if (!m_sourceNumbers.contains(sourceNumber)) {
+            m_sourceNumbers.append(sourceNumber);
+            std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());
+        }
+        
+        emit dataChanged();
+    } else {
+        qDebug().noquote() << QString("MatrixModel: SKIPPED setSourceLabel - Source: %1 already has label '%2', ignoring '%3'")
+            .arg(sourceNumber).arg(currentLabel).arg(label);
     }
-    
-    emit dataChanged();
 }
 
 void MatrixModel::setConnection(int targetNumber, int sourceNumber, bool connected, int disposition)

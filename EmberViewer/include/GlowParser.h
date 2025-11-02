@@ -56,6 +56,7 @@ signals:
     void functionReceived(const EmberData::FunctionInfo& function);
     void invocationResultReceived(const EmberData::InvocationResult& result);
     void streamValueReceived(const EmberData::StreamValue& streamValue);
+    void matrixLabelPathsDiscovered(const QString& matrixPath, const QStringList& basePaths);
     
     void parsingError(const QString& error);
 
@@ -82,6 +83,16 @@ private:
     
     // Map stream identifier to factor for proper value conversion
     QMap<int, int> m_streamFactors;
+    
+    // Structure to track label paths for a matrix
+    struct MatrixLabelPaths {
+        QString matrixPath;
+        QMap<QString, QString> labelBasePaths;  // basePath -> description (e.g., "1.2.3.1" -> "Primary")
+        QList<QString> labelOrder;  // Ordered list of basePaths (index 0 = targets, 1 = sources)
+    };
+    
+    // Map matrix path to its label paths
+    QMap<QString, MatrixLabelPaths> m_matrixLabelPaths;
 };
 
 #endif 

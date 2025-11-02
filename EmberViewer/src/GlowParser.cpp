@@ -20,10 +20,12 @@
 #include <ember/glow/GlowConnection.hpp>
 #include <ember/glow/GlowTarget.hpp>
 #include <ember/glow/GlowSource.hpp>
+#include <ember/glow/GlowLabel.hpp>
 #include <ember/glow/GlowStreamCollection.hpp>
 #include <ember/glow/GlowStreamEntry.hpp>
 #include <ember/glow/GlowInvocationResult.hpp>
 #include <QVariant>
+#include <QDebug>
 
 GlowParser::GlowParser(QObject *parent)
     : QObject(parent)
@@ -246,6 +248,80 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.number = path.back();
     
+    // Check if this parameter is part of a matrix label collection
+    // Path structure: matrix.labels.basePath.signalNumber
+    
+    // Debug for first few parameters only to avoid spam
+    static int debugCount = 0;
+    if (debugCount < 5 && (info.path.contains(".1.0.1.") || info.path.contains(".1.1.1."))) {
+        qDebug().noquote() << QString("DEBUG: Parameter path=%1, m_matrixLabelPaths.size=%2")
+            .arg(info.path).arg(m_matrixLabelPaths.size());
+        debugCount++;
+    }
+    
+    for (auto it = m_matrixLabelPaths.begin(); it != m_matrixLabelPaths.end(); ++it) {
+        const QString& matrixPath = it.key();
+        const MatrixLabelPaths& labelPaths = it.value();
+        
+        // Check if this parameter's path starts with any of the label basePaths
+        for (auto labelIt = labelPaths.labelBasePaths.begin(); labelIt != labelPaths.labelBasePaths.end(); ++labelIt) {
+            const QString& basePath = labelIt.key();
+            
+            if (info.path.startsWith(basePath + ".")) {
+                qDebug().noquote() << QString("MATCHED label path! basePath=%1, fullPath=%2")
+                    .arg(basePath).arg(info.path);
+                // This is a label parameter! Extract signal number and value
+                // Path structure: basePath.nodeNumber.signalNumber (e.g., basePath.1.0)
+                // where nodeNumber 1 = targets, 2 = sources
+                QString remaining = info.path.mid(basePath.length() + 1);
+                QStringList parts = remaining.split('.');
+                
+                // Need at least 2 parts: nodeNumber and signalNumber
+                if (parts.size() >= 2) {
+                    int nodeNumber = parts[0].toInt();
+                    int signalNumber = parts[1].toInt();
+                    
+                    if (param->contains(libember::glow::ParameterProperty::Value)) {
+                        auto value = param->value();
+                        if (value.type().value() == libember::glow::ParameterType::String) {
+                            QString labelValue = QString::fromStdString(value.toString());
+                            
+                            // nodeNumber 1 = targets, 2 = sources (common Ember+ convention)
+                            bool isTargetLabel = (nodeNumber == 1);
+                            
+                            if (isTargetLabel) {
+                                // This is a target label
+                                EmberData::MatrixTargetInfo targetInfo;
+                                targetInfo.matrixPath = matrixPath;
+                                targetInfo.targetNumber = signalNumber;
+                                targetInfo.label = labelValue;
+                                
+                                qDebug().noquote() << QString("EMBER+ TARGET LABEL: Matrix %1, target %2, label '%3'")
+                                    .arg(matrixPath).arg(signalNumber).arg(labelValue);
+                                
+                                emit matrixTargetReceived(targetInfo);
+                            } else {
+                                // This is a source label
+                                EmberData::MatrixSourceInfo sourceInfo;
+                                sourceInfo.matrixPath = matrixPath;
+                                sourceInfo.sourceNumber = signalNumber;
+                                sourceInfo.label = labelValue;
+                                
+                                qDebug().noquote() << QString("EMBER+ SOURCE LABEL: Matrix %1, source %2, label '%3'")
+                                    .arg(matrixPath).arg(signalNumber).arg(labelValue);
+                                
+                                emit matrixSourceReceived(sourceInfo);
+                            }
+                        }
+                    }
+                }
+                
+                // Don't process this as a regular parameter
+                return;
+            }
+        }
+    }
+    
     
     info.identifier = param->contains(libember::glow::ParameterProperty::Identifier)
         ? QString::fromStdString(param->identifier())
@@ -371,6 +447,66 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     info.path = parentPath.isEmpty() 
         ? QString::number(info.number) 
         : QString("%1.%2").arg(parentPath).arg(info.number);
+    
+    // Check if this parameter is part of a matrix label collection (non-qualified path)
+    for (auto it = m_matrixLabelPaths.begin(); it != m_matrixLabelPaths.end(); ++it) {
+        const QString& matrixPath = it.key();
+        const MatrixLabelPaths& labelPaths = it.value();
+        
+        for (auto labelIt = labelPaths.labelBasePaths.begin(); labelIt != labelPaths.labelBasePaths.end(); ++labelIt) {
+            const QString& basePath = labelIt.key();
+            
+            if (info.path.startsWith(basePath + ".")) {
+                QString remaining = info.path.mid(basePath.length() + 1);
+                QStringList parts = remaining.split('.');
+                
+                static int debugLabelCount = 0;
+                if (debugLabelCount < 10) {
+                    qDebug().noquote() << QString("LABEL DEBUG: path=%1, basePath=%2, remaining=%3, parts=%4")
+                        .arg(info.path).arg(basePath).arg(remaining).arg(parts.join(","));
+                    debugLabelCount++;
+                }
+                
+                if (parts.size() >= 2 && param->contains(libember::glow::ParameterProperty::Value)) {
+                    int nodeNumber = parts[0].toInt();
+                    int signalNumber = parts[1].toInt();
+                    
+                    auto value = param->value();
+                    if (value.type().value() == libember::glow::ParameterType::String) {
+                        QString labelValue = QString::fromStdString(value.toString());
+                        
+                        static int valueDebugCount = 0;
+                        if (valueDebugCount < 10) {
+                            qDebug().noquote() << QString("VALUE DEBUG: paramNumber=%1, nodeNum=%2, signalNum=%3, value='%4'")
+                                .arg(param->number()).arg(nodeNumber).arg(signalNumber).arg(labelValue);
+                            valueDebugCount++;
+                        }
+                        
+                        bool isTargetLabel = (nodeNumber == 1);
+                        
+                        if (isTargetLabel) {
+                            EmberData::MatrixTargetInfo targetInfo;
+                            targetInfo.matrixPath = matrixPath;
+                            targetInfo.targetNumber = signalNumber;
+                            targetInfo.label = labelValue;
+                            qDebug().noquote() << QString("EMBER+ TARGET LABEL: Matrix %1, target %2, label '%3'")
+                                .arg(matrixPath).arg(signalNumber).arg(labelValue);
+                            emit matrixTargetReceived(targetInfo);
+                        } else {
+                            EmberData::MatrixSourceInfo sourceInfo;
+                            sourceInfo.matrixPath = matrixPath;
+                            sourceInfo.sourceNumber = signalNumber;
+                            sourceInfo.label = labelValue;
+                            qDebug().noquote() << QString("EMBER+ SOURCE LABEL: Matrix %1, source %2, label '%3'")
+                                .arg(matrixPath).arg(signalNumber).arg(labelValue);
+                            emit matrixSourceReceived(sourceInfo);
+                        }
+                    }
+                }
+                return;
+            }
+        }
+    }
     
     
     info.identifier = param->contains(libember::glow::ParameterProperty::Identifier)
@@ -534,6 +670,50 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
             : 0;
         
         emit matrixReceived(info);
+    }
+    
+    // Read labels collection per Ember+ spec
+    if (matrix->labels()) {
+        MatrixLabelPaths labelPaths;
+        labelPaths.matrixPath = pathStr;
+        
+        // Iterate through all GlowLabel objects
+        std::vector<libember::glow::GlowLabel const*> labels;
+        matrix->typedLabels(std::back_inserter(labels));
+        
+        for (auto label : labels) {
+            // Get basePath (where label parameters live)
+            auto basePath = label->basePath();
+            QString basePathStr;
+            for (auto num : basePath) {
+                basePathStr += QString::number(num) + ".";
+            }
+            basePathStr.chop(1);  // Remove trailing dot
+            
+            // Get description (layer name like "Primary", "Internal")
+            QString description = QString::fromStdString(label->description());
+            
+            // Store the mapping and maintain order
+            labelPaths.labelBasePaths[basePathStr] = description;
+            labelPaths.labelOrder.append(basePathStr);
+            
+            // Per Ember+ convention: first label = targets, second = sources
+            QString labelType = (labelPaths.labelOrder.size() == 1) ? "targets" : "sources";
+            qDebug().noquote() << QString("Matrix %1: Found label layer '%2' (%3) at basePath %4")
+                .arg(pathStr).arg(description).arg(labelType).arg(basePathStr);
+        }
+        
+        // Store label paths for this matrix
+        if (!labelPaths.labelBasePaths.isEmpty()) {
+            m_matrixLabelPaths[pathStr] = labelPaths;
+            
+            qDebug().noquote() << QString("STORED %1 label basePaths for matrix %2 (total matrices: %3)")
+                .arg(labelPaths.labelBasePaths.size()).arg(pathStr).arg(m_matrixLabelPaths.size());
+            
+            // Emit signal to request label parameter values
+            qDebug().noquote() << QString("Emitting signal to request label parameters for matrix %1").arg(pathStr);
+            emit matrixLabelPathsDiscovered(pathStr, labelPaths.labelOrder);
+        }
     }
     
     

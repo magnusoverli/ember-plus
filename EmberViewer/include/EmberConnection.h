@@ -145,6 +145,9 @@ private:
     
     QSet<QString> m_requestedPaths;
     
+    // Track matrix label basePaths to automatically expand their children
+    QSet<QString> m_labelBasePaths;
+    
     
     int m_nextInvocationId;
     QMap<int, QString> m_pendingInvocations;  
