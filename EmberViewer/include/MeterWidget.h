@@ -94,6 +94,7 @@ private:
     
     QTimer *m_updateTimer;
     qint64 m_lastRenderTime;    // For calculating dt in time-domain ballistics
+    qint64 m_lastLabelUpdateTime;  // For rate-limiting text label updates
     MeterType m_meterType;      // Current meter type
     
     
@@ -101,6 +102,7 @@ private:
     static constexpr int METER_MARGIN = 10;
     static constexpr int PEAK_HOLD_MS = 2000;  
     static constexpr int UPDATE_INTERVAL_MS = 20;
+    static constexpr int LABEL_UPDATE_INTERVAL_MS = 100;  // Rate limit text label: 10 Hz for readability
     
     
     

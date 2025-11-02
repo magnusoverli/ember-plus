@@ -30,6 +30,7 @@ MeterWidget::MeterWidget(QWidget *parent)
     , m_displayValue(0.0)
     , m_peakValue(0.0)
     , m_lastRenderTime(QDateTime::currentMSecsSinceEpoch())
+    , m_lastLabelUpdateTime(0)  // Initialize to 0 to force first update
     , m_meterType(MeterType::VU_METER)
     , m_customGreenThreshold(-20.0)
     , m_customYellowThreshold(-6.0)
@@ -280,12 +281,20 @@ void MeterWidget::updateValue(double value)
     // Store target value - no processing, ballistics handled in onUpdateTimer()
     m_targetValue = value;
     
-    // Update text label immediately for quick feedback
-    m_valueLabel->setText(formatValue(value));
+    // Rate-limit text label updates for better readability (10 Hz vs 25 Hz stream rate)
+    // Professional meters typically update numerical displays at 5-10 Hz for human readability
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_lastLabelUpdateTime >= LABEL_UPDATE_INTERVAL_MS) {
+        m_valueLabel->setText(formatValue(value));
+        m_lastLabelUpdateTime = now;
+    }
     
     // Update peak hold if this is a new peak
-    if (value > m_peakValue) {
-        m_peakValue = value;
+    // Use the maximum of incoming value and current display value to avoid 
+    // peak appearing below meter bar during ballistic decay
+    double effectiveValue = std::max(value, m_displayValue);
+    if (effectiveValue > m_peakValue) {
+        m_peakValue = effectiveValue;
         m_peakTime = QDateTime::currentDateTime();
         m_peakLabel->setText(QString("Peak: %1").arg(formatValue(m_peakValue)));
     }
@@ -326,6 +335,9 @@ void MeterWidget::onUpdateTimer()
     // Check if peak hold has expired
     if (m_peakTime.isValid() && m_peakTime.msecsTo(QDateTime::currentDateTime()) > PEAK_HOLD_MS) {
         m_peakLabel->setStyleSheet("font-size: 10pt; color: #888888;");  // Gray out expired peak
+        // Reset peak value so next value becomes new peak (peak refresh behavior)
+        m_peakValue = m_minValue;
+        m_peakTime = QDateTime();  // Invalidate timer
     } else if (m_peakValue > m_minValue) {
         m_peakLabel->setStyleSheet("font-size: 10pt; color: #ff6666;");  // Red for active peak
     }
