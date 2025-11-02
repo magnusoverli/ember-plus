@@ -41,6 +41,9 @@ class MatrixManager;
 class CrosspointActivityTracker;
 class SnapshotManager;
 class FunctionInvoker;
+class TriggerWidget;
+class SliderWidget;
+class GraphWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -73,6 +76,7 @@ private slots:
     void onMatrixConnectionReceived(const QString &matrixPath, int targetNumber, int sourceNumber, bool connected, int disposition);
     void onMatrixConnectionsCleared(const QString &matrixPath);
     void onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber);
+    void onMatrixDimensionsUpdated(const QString &path, QWidget *widget);
     void onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
                            const QStringList &argNames, const QList<int> &argTypes,
                            const QStringList &resultNames, const QList<int> &resultTypes);
@@ -103,6 +107,7 @@ private:
     void createDockWindows();
     void loadSettings();
     void saveSettings();
+    void cleanupActiveParameterWidget();
     
     void logMessage(const QString &message);
     
@@ -137,6 +142,10 @@ private:
     
     MeterWidget *m_activeMeter;
     QString m_activeMeterPath;  // Track subscribed meter parameter path for cleanup
+    
+    // Active parameter widgets
+    QWidget *m_activeParameterWidget;  // Generic pointer to currently active widget
+    QString m_activeParameterPath;     // Track active parameter path for cleanup
     
     
     QMap<int, QString> m_streamIdToPath;

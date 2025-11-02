@@ -41,12 +41,12 @@ endfunction()
 # Create tests
 add_emberviewer_test(test_constants)
 add_emberviewer_test(test_path_parsing)
-add_emberviewer_test(test_matrix_widget)
+add_emberviewer_test(test_virtualized_matrix_widget)
 add_emberviewer_test(test_parameter_delegate)
 add_emberviewer_test(test_s101_protocol)
 
 # Link widget tests against the library
-target_link_libraries(test_matrix_widget PRIVATE EmberViewerLib)
+target_link_libraries(test_virtualized_matrix_widget PRIVATE EmberViewerLib)
 target_link_libraries(test_parameter_delegate PRIVATE EmberViewerLib)
 
 # Optional: Add coverage target

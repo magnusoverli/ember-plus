@@ -15,8 +15,9 @@
 #include <QMap>
 #include <QString>
 
-class MatrixWidget;
+class VirtualizedMatrixWidget;
 class EmberConnection;
+class QWidget;
 
 class MatrixManager : public QObject
 {
@@ -27,7 +28,7 @@ public:
     ~MatrixManager();
 
     
-    MatrixWidget* getMatrix(const QString &path) const;
+    QWidget* getMatrix(const QString &path) const;
     void clear();
 
 public slots:
@@ -41,11 +42,12 @@ public slots:
     void onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber);
 
 signals:
-    void matrixWidgetCreated(const QString &path, MatrixWidget *widget);
+    void matrixWidgetCreated(const QString &path, QWidget *widget);
+    void matrixDimensionsUpdated(const QString &path, QWidget *widget);
 
 private:
     EmberConnection *m_connection;
-    QMap<QString, MatrixWidget*> m_matrixWidgets;  
+    QMap<QString, QWidget*> m_matrixWidgets;  
     
     static constexpr int MATRIX_LABEL_PATH_MARKER = 666999666;
 };

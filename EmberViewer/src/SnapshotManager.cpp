@@ -10,7 +10,7 @@
 #include "EmberConnection.h"
 #include "DeviceSnapshot.h"
 #include "MatrixManager.h"
-#include "MatrixWidget.h"
+#include "VirtualizedMatrixWidget.h"
 #include "EmberDataTypes.h"
 #include "FunctionInvoker.h"
 #include <QFileDialog>
@@ -246,7 +246,8 @@ DeviceSnapshot SnapshotManager::captureSnapshot(QLineEdit* hostEdit, QSpinBox* p
             
         } else if (type == "Matrix") {
             
-            MatrixWidget* matrixWidget = m_matrixManager->getMatrix(path);
+            VirtualizedMatrixWidget* matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(m_matrixManager->getMatrix(path));
+            
             if (matrixWidget) {
                 MatrixData matrixData;
                 matrixData.path = path;

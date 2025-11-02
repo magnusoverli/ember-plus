@@ -127,8 +127,14 @@ else()
     )
 endif()
 add_library(EmberViewerLib STATIC
-    src/MatrixWidget.cpp
+    src/MatrixModel.cpp
+    src/VirtualizedMatrixWidget.cpp
+    src/VirtualizedHeaderView.cpp
+    src/VirtualizedSidebarView.cpp
     src/MeterWidget.cpp
+    src/TriggerWidget.cpp
+    src/SliderWidget.cpp
+    src/GraphWidget.cpp
     src/ParameterDelegate.cpp
     src/DeviceSnapshot.cpp
     src/UpdateManager.cpp
@@ -147,8 +153,14 @@ add_library(EmberViewerLib STATIC
     src/EmberConnection.cpp
     src/EmberProvider.cpp
     ${PLATFORM_UPDATE_SOURCES}
-    include/MatrixWidget.h
+    include/MatrixModel.h
+    include/VirtualizedMatrixWidget.h
+    include/VirtualizedHeaderView.h
+    include/VirtualizedSidebarView.h
     include/MeterWidget.h
+    include/TriggerWidget.h
+    include/SliderWidget.h
+    include/GraphWidget.h
     include/ParameterDelegate.h
     include/DeviceSnapshot.h
     include/UpdateManager.h
@@ -175,8 +187,14 @@ file(GLOB_RECURSE SOURCE_FILES
     include/*.h
 )
 list(REMOVE_ITEM SOURCE_FILES 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixModel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VirtualizedMatrixWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VirtualizedHeaderView.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VirtualizedSidebarView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MeterWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/TriggerWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SliderWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/GraphWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ParameterDelegate.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/DeviceSnapshot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UpdateManager.cpp
@@ -197,8 +215,14 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LinuxUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/WindowsUpdateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MacUpdateManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/MatrixWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/MatrixModel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/VirtualizedMatrixWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/VirtualizedHeaderView.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/VirtualizedSidebarView.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/MeterWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/TriggerWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/SliderWidget.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/GraphWidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/ParameterDelegate.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/DeviceSnapshot.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/UpdateManager.h
