@@ -56,6 +56,12 @@ public:
     void setSidebarWidth(int width);
     int headerHeight() const { return m_headerHeight; }
     int sidebarWidth() const { return m_sidebarWidth; }
+    
+    // Global preferred dimensions (shared across all matrix widgets)
+    static void setPreferredHeaderHeight(int height);
+    static void setPreferredSidebarWidth(int width);
+    static int preferredHeaderHeight();
+    static int preferredSidebarWidth();
 
     // Coordinate conversion
     QPoint cellAt(const QPoint &pos) const;

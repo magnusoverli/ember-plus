@@ -1,11 +1,13 @@
 /*
     VirtualizedHeaderView.cpp - Implementation of virtualized horizontal header
+    Displays TARGET labels (outputs) horizontally at the top (columns per Ember+ spec)
 */
 
 #include "VirtualizedHeaderView.h"
 #include "MatrixModel.h"
 #include <QPainter>
 #include <QFontMetrics>
+#include <QMouseEvent>
 
 VirtualizedHeaderView::VirtualizedHeaderView(int cellWidth, QWidget *parent)
     : QWidget(parent)
@@ -14,9 +16,13 @@ VirtualizedHeaderView::VirtualizedHeaderView(int cellWidth, QWidget *parent)
     , m_scrollOffset(0)
     , m_highlightedCol(-1)
     , m_crosspointsEnabled(false)
+    , m_isResizing(false)
+    , m_resizeStartY(0)
+    , m_resizeStartHeight(0)
 {
-    setMinimumHeight(30);
+    setMinimumHeight(MIN_HEADER_HEIGHT);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    setMouseTracking(true);  // Enable mouse tracking for cursor changes
 }
 
 VirtualizedHeaderView::~VirtualizedHeaderView()
@@ -77,13 +83,13 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
 
     if (!m_model) return;
 
-    const QList<int> &sources = m_model->sourceNumbers();
-    if (sources.isEmpty()) return;
+    const QList<int> &targets = m_model->targetNumbers();
+    if (targets.isEmpty()) return;
 
     // Calculate visible range
     int firstCol = m_scrollOffset / m_cellWidth;
     int lastCol = (m_scrollOffset + width() - 1) / m_cellWidth;
-    lastCol = qMin(lastCol, sources.size() - 1);
+    lastCol = qMin(lastCol, targets.size() - 1);
 
     // Draw labels
     painter.setPen(palette().buttonText().color());
@@ -92,8 +98,8 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
     painter.setFont(font);
 
     for (int col = firstCol; col <= lastCol; ++col) {
-        int sourceNumber = sources[col];
-        QString label = m_model->sourceLabel(sourceNumber);
+        int targetNumber = targets[col];
+        QString label = m_model->targetLabel(targetNumber);
 
         int x = col * m_cellWidth - m_scrollOffset;
         QRect cellRect(x, 0, m_cellWidth, height());
@@ -129,5 +135,62 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
     // Draw bottom border
     painter.setPen(palette().dark().color());
     painter.drawLine(0, height() - 1, width(), height() - 1);
+}
+
+bool VirtualizedHeaderView::isInResizeZone(int y) const
+{
+    return y >= height() - RESIZE_HANDLE_HEIGHT && y <= height();
+}
+
+void VirtualizedHeaderView::updateCursor(int y)
+{
+    if (isInResizeZone(y)) {
+        setCursor(Qt::SizeVerCursor);
+    } else {
+        setCursor(Qt::ArrowCursor);
+    }
+}
+
+void VirtualizedHeaderView::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && isInResizeZone(event->pos().y())) {
+        m_isResizing = true;
+        m_resizeStartY = event->globalPosition().toPoint().y();
+        m_resizeStartHeight = height();
+        event->accept();
+    } else {
+        QWidget::mousePressEvent(event);
+    }
+}
+
+void VirtualizedHeaderView::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_isResizing) {
+        int deltaY = event->globalPosition().toPoint().y() - m_resizeStartY;
+        int newHeight = m_resizeStartHeight + deltaY;
+        
+        // Clamp to min/max bounds
+        newHeight = qMax(MIN_HEADER_HEIGHT, qMin(MAX_HEADER_HEIGHT, newHeight));
+        
+        // Emit signal to notify parent widget
+        emit headerHeightChanged(newHeight);
+        
+        event->accept();
+    } else {
+        // Update cursor when hovering
+        updateCursor(event->pos().y());
+        QWidget::mouseMoveEvent(event);
+    }
+}
+
+void VirtualizedHeaderView::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && m_isResizing) {
+        m_isResizing = false;
+        updateCursor(event->pos().y());
+        event->accept();
+    } else {
+        QWidget::mouseReleaseEvent(event);
+    }
 }
 

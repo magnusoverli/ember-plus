@@ -15,12 +15,16 @@
 #include <QHBoxLayout>
 #include <QDebug>
 
+// Static members for global preferred dimensions
+static int s_preferredHeaderHeight = 80;
+static int s_preferredSidebarWidth = 80;
+
 VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
     : QAbstractScrollArea(parent)
     , m_model(nullptr)
     , m_cellSize(20, 20)
-    , m_headerHeight(30)
-    , m_sidebarWidth(80)
+    , m_headerHeight(s_preferredHeaderHeight)
+    , m_sidebarWidth(s_preferredSidebarWidth)
     , m_selectedCell(-1, -1)
     , m_hoveredCell(-1, -1)
     , m_isDragging(false)
@@ -82,6 +86,18 @@ VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
             this, [this](int value) {
         m_sidebarView->setScrollOffset(value);
     });
+    
+    // Connect header resize signal for drag-to-resize functionality
+    connect(m_headerView, &VirtualizedHeaderView::headerHeightChanged,
+            this, [this](int newHeight) {
+        setHeaderHeight(newHeight);
+    });
+    
+    // Connect sidebar resize signal for drag-to-resize functionality
+    connect(m_sidebarView, &VirtualizedSidebarView::sidebarWidthChanged,
+            this, [this](int newWidth) {
+        setSidebarWidth(newWidth);
+    });
 
     // Initial layout
     updateViewportSize();
@@ -121,6 +137,12 @@ void VirtualizedMatrixWidget::setModel(MatrixModel *model)
     // Update child views
     m_headerView->setModel(model);
     m_sidebarView->setModel(model);
+    
+    // Connect header resize signal
+    connect(m_headerView, &VirtualizedHeaderView::headerHeightChanged,
+            this, [this](int newHeight) {
+        setHeaderHeight(newHeight);
+    });
 
     updateScrollBars();
     viewport()->update();
@@ -138,6 +160,7 @@ void VirtualizedMatrixWidget::setCellSize(const QSize &size)
 void VirtualizedMatrixWidget::setHeaderHeight(int height)
 {
     m_headerHeight = height;
+    s_preferredHeaderHeight = height;  // Update global preference
     setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     updateViewportSize();
 }
@@ -145,6 +168,7 @@ void VirtualizedMatrixWidget::setHeaderHeight(int height)
 void VirtualizedMatrixWidget::setSidebarWidth(int width)
 {
     m_sidebarWidth = width;
+    s_preferredSidebarWidth = width;  // Update global preference
     setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     updateViewportSize();
 }
@@ -153,12 +177,12 @@ void VirtualizedMatrixWidget::setSelectedCell(int targetIndex, int sourceIndex)
 {
     if (!m_model) return;
 
-    // Convert target/source indices to grid row/col
     const QList<int> &targets = m_model->targetNumbers();
     const QList<int> &sources = m_model->sourceNumbers();
 
-    int row = targets.indexOf(targetIndex);
-    int col = sources.indexOf(sourceIndex);
+    // Ember+ spec: columns=targets, rows=sources
+    int col = targets.indexOf(targetIndex);
+    int row = sources.indexOf(sourceIndex);
 
     if (row >= 0 && col >= 0) {
         m_selectedCell = QPoint(col, row);
@@ -321,16 +345,18 @@ QPoint VirtualizedMatrixWidget::cellAt(const QPoint &pos) const
 {
     if (!m_model) return QPoint(-1, -1);
 
-    // Account for scroll position
+    QPoint vpPos = pos - QPoint(0, 0);
+
     int scrollX = horizontalScrollBar()->value();
     int scrollY = verticalScrollBar()->value();
 
-    int col = (pos.x() + scrollX) / m_cellSize.width();
-    int row = (pos.y() + scrollY) / m_cellSize.height();
+    int col = (vpPos.x() + scrollX) / m_cellSize.width();
+    int row = (vpPos.y() + scrollY) / m_cellSize.height();
 
-    // Validate bounds
-    if (col < 0 || col >= m_model->sourceNumbers().size() ||
-        row < 0 || row >= m_model->targetNumbers().size()) {
+    // Ember+ spec: columns=targets, rows=sources
+    // Clamp to valid range
+    if (col < 0 || col >= m_model->targetNumbers().size() ||
+        row < 0 || row >= m_model->sourceNumbers().size()) {
         return QPoint(-1, -1);
     }
 
@@ -410,11 +436,12 @@ void VirtualizedMatrixWidget::mousePressEvent(QMouseEvent *event)
             m_selectedCell = cell;
             
             // Get actual target/source numbers
+            // Ember+ spec: columns=targets, rows=sources
             const QList<int> &targets = m_model->targetNumbers();
             const QList<int> &sources = m_model->sourceNumbers();
             
-            int targetNumber = targets[cell.y()];
-            int sourceNumber = sources[cell.x()];
+            int targetNumber = targets[cell.x()];
+            int sourceNumber = sources[cell.y()];
             
             // Emit both new and old API signals
             emit crosspointClicked(targetNumber, sourceNumber);
@@ -439,11 +466,12 @@ void VirtualizedMatrixWidget::mouseMoveEvent(QMouseEvent *event)
         m_sidebarView->setHighlightedRow(cell.y());
         
         if (cell.x() >= 0 && cell.y() >= 0) {
+            // Ember+ spec: columns=targets, rows=sources
             const QList<int> &targets = m_model->targetNumbers();
             const QList<int> &sources = m_model->sourceNumbers();
             
-            int targetNumber = targets[cell.y()];
-            int sourceNumber = sources[cell.x()];
+            int targetNumber = targets[cell.x()];
+            int sourceNumber = sources[cell.y()];
             
             // Set tooltip
             QString targetLabel = m_model->targetLabel(targetNumber);
@@ -647,13 +675,13 @@ void VirtualizedMatrixWidget::drawGrid(QPainter &painter, const QRect &visibleCe
 {
     painter.setPen(QPen(palette().mid().color(), 1));
 
-    // Draw vertical lines (source separators)
+    // Draw vertical lines (target separators) - columns per Ember+ spec
     for (int col = visibleCells.left(); col <= visibleCells.right() + 1; ++col) {
         int x = col * m_cellSize.width() - horizontalScrollBar()->value();
         painter.drawLine(x, 0, x, viewport()->height());
     }
 
-    // Draw horizontal lines (target separators)
+    // Draw horizontal lines (source separators) - rows per Ember+ spec
     for (int row = visibleCells.top(); row <= visibleCells.bottom() + 1; ++row) {
         int y = row * m_cellSize.height() - verticalScrollBar()->value();
         painter.drawLine(0, y, viewport()->width(), y);
@@ -664,6 +692,7 @@ void VirtualizedMatrixWidget::drawConnections(QPainter &painter, const QRect &vi
 {
     if (!m_model) return;
 
+    // Ember+ spec: columns=targets, rows=sources
     const QList<int> &targets = m_model->targetNumbers();
     const QList<int> &sources = m_model->sourceNumbers();
 
@@ -673,8 +702,8 @@ void VirtualizedMatrixWidget::drawConnections(QPainter &painter, const QRect &vi
 
     for (int row = visibleCells.top(); row <= visibleCells.bottom(); ++row) {
         for (int col = visibleCells.left(); col <= visibleCells.right(); ++col) {
-            int targetNumber = targets[row];
-            int sourceNumber = sources[col];
+            int targetNumber = targets[col];
+            int sourceNumber = sources[row];
 
             if (m_model->isConnected(targetNumber, sourceNumber)) {
                 QRect rect = cellRect(row, col);
@@ -724,15 +753,37 @@ void VirtualizedMatrixWidget::invalidateCellRegion(int row, int col)
 void VirtualizedMatrixWidget::invalidateCell(int targetNumber, int sourceNumber)
 {
     if (!m_model) return;
-    
+
+    // Ember+ spec: columns=targets, rows=sources
     const QList<int> &targets = m_model->targetNumbers();
     const QList<int> &sources = m_model->sourceNumbers();
-    
-    int row = targets.indexOf(targetNumber);
-    int col = sources.indexOf(sourceNumber);
+
+    int col = targets.indexOf(targetNumber);
+    int row = sources.indexOf(sourceNumber);
     
     if (row >= 0 && col >= 0) {
         invalidateCellRegion(row, col);
     }
+}
+
+// Static methods for global preferred dimensions
+void VirtualizedMatrixWidget::setPreferredHeaderHeight(int height)
+{
+    s_preferredHeaderHeight = height;
+}
+
+void VirtualizedMatrixWidget::setPreferredSidebarWidth(int width)
+{
+    s_preferredSidebarWidth = width;
+}
+
+int VirtualizedMatrixWidget::preferredHeaderHeight()
+{
+    return s_preferredHeaderHeight;
+}
+
+int VirtualizedMatrixWidget::preferredSidebarWidth()
+{
+    return s_preferredSidebarWidth;
 }
 
