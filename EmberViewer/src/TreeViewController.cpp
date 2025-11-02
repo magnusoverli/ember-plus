@@ -242,6 +242,19 @@ void TreeViewController::onMatrixReceived(const QString &path, int , const QStri
         item->setData(0, Qt::UserRole, path);
         item->setData(0, Qt::UserRole + 7, "Matrix");  
         
+        
+        if (item->parent()) {
+            QTreeWidgetItem *parent = item->parent();
+            
+            for (int i = 0; i < parent->childCount(); i++) {
+                QTreeWidgetItem *child = parent->child(i);
+                if (child->text(0) == "Loading..." && child->text(1).isEmpty()) {
+                    delete child;
+                    break;  
+                }
+            }
+        }
+        
         if (isNew) {
             qInfo().noquote() << QString("Matrix discovered: %1 (%2×%3)").arg(displayName).arg(sourceCount).arg(targetCount);
             
@@ -250,6 +263,13 @@ void TreeViewController::onMatrixReceived(const QString &path, int , const QStri
             
             
             emit matrixItemCreated(path, item);
+        }
+        
+        // Auto-request full details if matrix has no dimensions yet
+        if ((targetCount == 0 || sourceCount == 0) && !m_fetchedPaths.contains(path)) {
+            qInfo().noquote() << QString("Matrix has no dimensions, auto-requesting details for: %1").arg(path);
+            m_fetchedPaths.insert(path);
+            m_connection->sendGetDirectoryForPath(path);
         }
     }
 }
@@ -342,6 +362,15 @@ void TreeViewController::onItemExpanded(QTreeWidgetItem *item)
                 m_connection->sendBatchGetDirectory(pathsToPrefetch);
             }
         }
+    }
+    else if (type == "Matrix" && !m_fetchedPaths.contains(path)) {
+        
+        
+        
+        m_fetchedPaths.insert(path);
+        
+        qDebug().noquote() << QString("Lazy loading: Requesting matrix details for %1").arg(path);
+        m_connection->sendGetDirectoryForPath(path);
     }
 }
 
