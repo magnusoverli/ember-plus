@@ -79,6 +79,9 @@ private:
     
     
     QMap<QString, bool> m_nodesWithIdentifier;
+    
+    // Map stream identifier to factor for proper value conversion
+    QMap<int, int> m_streamFactors;
 };
 
 #endif 

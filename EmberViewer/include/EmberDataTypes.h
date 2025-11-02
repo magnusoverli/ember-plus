@@ -42,6 +42,8 @@ struct ParameterInfo {
     int streamIdentifier;
     QString format;              // C-style format string (e.g., "%.1f dBFS")
     QString referenceLevel;      // Detected reference level (e.g., "dBFS", "dBu", "dBr")
+    QString formula;             // Formula string for value conversion
+    int factor;                  // Factor for value conversion (default: 1)
 };
 
 

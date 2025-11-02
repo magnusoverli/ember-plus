@@ -144,7 +144,7 @@ void TreeViewController::onNodeReceived(const QString &path, const QString &iden
 void TreeViewController::onParameterReceived(const QString &path, int , const QString &identifier, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
-                                    const QString &format, const QString &referenceLevel)
+                                    const QString &format, const QString &referenceLevel, const QString &formula, int factor)
 {
     QTreeWidgetItem *item = findOrCreateTreeItem(path);
     if (item) {
@@ -164,8 +164,11 @@ void TreeViewController::onParameterReceived(const QString &path, int , const QS
         item->setData(0, Qt::UserRole + 5, enumOptions); 
         item->setData(0, Qt::UserRole + 9, streamIdentifier);  
         item->setData(0, Qt::UserRole + 10, format);  // Format string
-    qDebug() << "[TreeViewController] Storing format:" << format << "referenceLevel:" << referenceLevel;
         item->setData(0, Qt::UserRole + 11, referenceLevel);  // Reference level
+        item->setData(0, Qt::UserRole + 12, formula);  // Formula string
+        item->setData(0, Qt::UserRole + 13, factor);  // Factor
+    qDebug() << "[TreeViewController] Storing format:" << format << "referenceLevel:" << referenceLevel 
+             << "formula:" << formula << "factor:" << factor;
         
         
         QList<QVariant> enumValuesVar;

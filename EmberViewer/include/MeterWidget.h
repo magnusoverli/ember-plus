@@ -33,7 +33,8 @@ public:
     
     void setParameterInfo(const QString &identifier, const QString &path, 
                          double minValue, double maxValue,
-                         const QString &format = QString(), const QString &referenceLevel = QString());
+                         const QString &format = QString(), const QString &referenceLevel = QString(),
+                         int factor = 1);
     
     
     void updateValue(double value);
@@ -42,12 +43,18 @@ public:
     int streamIdentifier() const { return m_streamIdentifier; }
     void setStreamIdentifier(int id) { m_streamIdentifier = id; }
     
+    // Threshold configuration
+    void setCustomThresholds(double greenThreshold, double yellowThreshold);
+    void resetToDefaultThresholds();
+    void showThresholdConfigDialog();
+    
     
     QString parameterPath() const { return m_parameterPath; }
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
 private slots:
     void onUpdateTimer();
@@ -55,11 +62,13 @@ private slots:
 
 private:
     void drawMeter(QPainter &painter);
+    void drawScaleMarkings(QPainter &painter, const QRect &meterRect);
     double normalizeValue(double value) const;
     QColor getColorForLevel(double normalizedLevel) const;
     QString formatValue(double value) const;
     void getMeterConstants(MeterType type, double &riseTime, double &fallTime) const;
     void getColorZones(MeterType type, double &greenThreshold, double &yellowThreshold) const;
+    void setMeterTypeByIndex(int comboIndex);  // Helper to set both combo and enum
     
     // dB-aware helper methods
     bool isDatabaseScale() const;
@@ -96,7 +105,14 @@ private:
     
     
     QLabel *m_valueLabel;
+    QLabel *m_peakLabel;  // Shows peak hold value
     QComboBox *m_meterTypeCombo;
+    
+    // User-configurable thresholds (in dB, -1 means use defaults)
+    double m_customGreenThreshold;
+    double m_customYellowThreshold;
+    bool m_useCustomThresholds;
+    bool m_useLogarithmicScale;  // Use logarithmic rendering for dB scales
 };
 
 #endif 

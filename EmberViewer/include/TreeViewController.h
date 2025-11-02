@@ -49,7 +49,7 @@ public slots:
     void onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                             int access, int type, const QVariant &minimum, const QVariant &maximum,
                             const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
-                                const QString &format, const QString &referenceLevel);
+                                const QString &format, const QString &referenceLevel, const QString &formula, int factor);
     void onMatrixReceived(const QString &path, int number, const QString &identifier, const QString &description,
                          int type, int targetCount, int sourceCount);
     void onFunctionReceived(const QString &path, const QString &identifier, const QString &description,

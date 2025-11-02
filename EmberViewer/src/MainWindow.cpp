@@ -651,7 +651,7 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
 void MainWindow::onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
-                                    const QString &format, const QString &referenceLevel)
+                                    const QString &format, const QString &referenceLevel, const QString &formula, int factor)
 {
     
     if (streamIdentifier > 0) {
@@ -684,7 +684,7 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
     
     
     m_treeViewController->onParameterReceived(path, number, identifier, value, access, type, 
-                                             minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier, format, referenceLevel);
+                                             minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier, format, referenceLevel, formula, factor);
 }
 
 void MainWindow::onMatrixReceived(const QString &path, int number, const QString &identifier, 
@@ -793,25 +793,22 @@ void MainWindow::onTreeSelectionChanged()
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Delete old widget if it exists
-            QWidget *oldWidget = m_propertyPanel;
-            if (oldWidget) {
-                // Don't delete if it's a MatrixWidget (managed by MatrixManager)
-                MatrixWidget *oldMatrix = qobject_cast<MatrixWidget*>(oldWidget);
-                if (!oldMatrix) {
-                    oldWidget->deleteLater();
-                }
-            }
-            
-            // Clean up old layout
+            // Clean up old layout first
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *layoutItem;
                 while ((layoutItem = oldLayout->takeAt(0)) != nullptr) {
+                    // Delete the widget contained in the layout item
+                    if (layoutItem->widget()) {
+                        layoutItem->widget()->deleteLater();
+                    }
                     delete layoutItem;
                 }
                 delete oldLayout;
             }
+            
+            // Reset property panel pointer
+            m_propertyPanel = nullptr;
             
             
             m_activeMeter = new MeterWidget();
@@ -825,11 +822,15 @@ void MainWindow::onTreeSelectionChanged()
             double maxValue = maxVar.isValid() ? maxVar.toDouble() : 100.0;
             
             
-            // Read format and referenceLevel
+            // Read format, referenceLevel, formula, and factor
             QString format = item->data(0, Qt::UserRole + 10).toString();
             QString referenceLevel = item->data(0, Qt::UserRole + 11).toString();
-            qDebug() << "[MainWindow] Read from tree item - format:" << format << "referenceLevel:" << referenceLevel << "for path:" << oidPath;
-            m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue, format, referenceLevel);
+            QString formula = item->data(0, Qt::UserRole + 12).toString();
+            int factor = item->data(0, Qt::UserRole + 13).toInt();
+            if (factor == 0) factor = 1;  // Default to 1 if not set
+            qDebug() << "[MainWindow] Read from tree item - format:" << format << "referenceLevel:" << referenceLevel 
+                     << "formula:" << formula << "factor:" << factor << "for path:" << oidPath;
+            m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue, format, referenceLevel, factor);
             m_activeMeter->setStreamIdentifier(streamIdentifier);
             
             
@@ -850,15 +851,59 @@ void MainWindow::onTreeSelectionChanged()
             }
             
             
+            // Create container widget for meter and info
+            QWidget *meterContainer = new QWidget();
+            QVBoxLayout *containerLayout = new QVBoxLayout(meterContainer);
+            containerLayout->setContentsMargins(0, 0, 0, 0);
+            
+            // Add meter widget
+            containerLayout->addWidget(m_activeMeter);
+            
+            // Add info label below meter (outside meter's internal layout)
+            // Note: MeterWidget may override the range if it detects non-negative range with dB reference
+            QString rangeInfo;
+            bool likelyMismatch = (minValue >= 0.0 && !referenceLevel.isEmpty() && 
+                                   referenceLevel.contains("dB", Qt::CaseInsensitive));
+            
+            if (likelyMismatch) {
+                // Show the auto-corrected range based on reference level
+                if (referenceLevel.contains("dBFS", Qt::CaseInsensitive) || 
+                    referenceLevel.contains("dBTP", Qt::CaseInsensitive)) {
+                    rangeInfo = QString("Min: -60.0 dBFS (auto)\nMax: 0.0 dBFS (auto)");
+                } else if (referenceLevel.contains("dBr", Qt::CaseInsensitive)) {
+                    rangeInfo = QString("Min: -50.0 dBr (auto)\nMax: +5.0 dBr (auto)");
+                } else if (referenceLevel.contains("dBu", Qt::CaseInsensitive)) {
+                    rangeInfo = QString("Min: -20.0 dBu (auto)\nMax: +20.0 dBu (auto)");
+                } else if (referenceLevel.contains("LUFS", Qt::CaseInsensitive)) {
+                    rangeInfo = QString("Min: -40.0 LUFS (auto)\nMax: 0.0 LUFS (auto)");
+                } else if (factor > 1) {
+                    // Calculate range from factor
+                    double rangeInDb = 2560.0 / factor;
+                    double minCalc = -rangeInDb;
+                    double maxCalc = rangeInDb / 4.0;
+                    rangeInfo = QString("Min: %1 dB (factor=%2)\nMax: %3 dB (factor=%2)")
+                        .arg(minCalc, 0, 'f', 1).arg(factor).arg(maxCalc, 0, 'f', 1);
+                } else {
+                    rangeInfo = QString("Min: -10.0 dB (auto)\nMax: +10.0 dB (auto)");
+                }
+            } else {
+                rangeInfo = QString("Min: %1\nMax: %2").arg(minValue).arg(maxValue);
+            }
+            
+            QLabel *infoLabel = new QLabel(QString("Path: %1\n%2\nStream ID: %3")
+                .arg(oidPath).arg(rangeInfo).arg(streamIdentifier));
+            infoLabel->setStyleSheet("padding: 10px; background-color: transparent; border-top: 1px solid #ddd;");
+            infoLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+            containerLayout->addWidget(infoLabel);
+            
+            // Use scroll area to prevent overlap
+            QScrollArea *scrollArea = new QScrollArea();
+            scrollArea->setWidget(meterContainer);
+            scrollArea->setWidgetResizable(true);
+            scrollArea->setFrameShape(QFrame::NoFrame);
+            
             QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
-            propLayout->addWidget(m_activeMeter);
-            
-            
-            QLabel *infoLabel = new QLabel(QString("Path: %1\nMin: %2\nMax: %3\nStream ID: %4")
-                .arg(oidPath).arg(minValue).arg(maxValue).arg(streamIdentifier));
-            infoLabel->setStyleSheet("padding: 10px;");
-            propLayout->addWidget(infoLabel);
-            
+            propLayout->addWidget(scrollArea);
             propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = m_activeMeter;
         }

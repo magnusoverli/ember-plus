@@ -320,6 +320,26 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
         info.referenceLevel = detectReferenceLevel(info.format);
     }
     
+    // Parse formula if available
+    if (param->contains(libember::glow::ParameterProperty::Formula)) {
+        auto formula = param->formula();
+        // We want the providerToConsumer formula (device value -> display value)
+        info.formula = QString::fromStdString(formula.providerToConsumer());
+    }
+    
+    // Parse factor if available
+    if (param->contains(libember::glow::ParameterProperty::Factor)) {
+        info.factor = param->factor();
+    } else {
+        info.factor = 1;  // Default factor
+    }
+    
+    // Store factor for stream value conversion
+    if (info.streamIdentifier > 0 && info.factor > 0) {
+        m_streamFactors[info.streamIdentifier] = info.factor;
+        qDebug() << "[GlowParser] Stored factor" << info.factor << "for stream ID" << info.streamIdentifier;
+    }
+    
     
     if (info.streamIdentifier > 0) {
         qDebug() << "[GlowParser] PPM Parameter (qualified):" << info.path 
@@ -330,7 +350,9 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
                  << "min=" << info.minimum
                  << "max=" << info.maximum
                  << "format=" << info.format
-                 << "reference=" << info.referenceLevel;
+                 << "reference=" << info.referenceLevel
+                 << "formula=" << info.formula
+                 << "factor=" << info.factor;
     }
     
     emit parameterReceived(info);
@@ -424,6 +446,26 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
         info.referenceLevel = detectReferenceLevel(info.format);
     }
     
+    // Parse formula if available
+    if (param->contains(libember::glow::ParameterProperty::Formula)) {
+        auto formula = param->formula();
+        // We want the providerToConsumer formula (device value -> display value)
+        info.formula = QString::fromStdString(formula.providerToConsumer());
+    }
+    
+    // Parse factor if available
+    if (param->contains(libember::glow::ParameterProperty::Factor)) {
+        info.factor = param->factor();
+    } else {
+        info.factor = 1;  // Default factor
+    }
+    
+    // Store factor for stream value conversion
+    if (info.streamIdentifier > 0 && info.factor > 0) {
+        m_streamFactors[info.streamIdentifier] = info.factor;
+        qDebug() << "[GlowParser] Stored factor" << info.factor << "for stream ID" << info.streamIdentifier;
+    }
+    
     
     if (info.streamIdentifier > 0) {
         qDebug() << "[GlowParser] PPM Parameter (unqualified):" << info.path 
@@ -434,7 +476,9 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
                  << "min=" << info.minimum
                  << "max=" << info.maximum
                  << "format=" << info.format
-                 << "reference=" << info.referenceLevel;
+                 << "reference=" << info.referenceLevel
+                 << "formula=" << info.formula
+                 << "factor=" << info.factor;
     }
     
     emit parameterReceived(info);
@@ -820,11 +864,18 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
                     break;
             }
             
+            // Look up factor for this stream, default to 1 if not found
+            int factor = m_streamFactors.value(info.streamIdentifier, 1);
             
-            info.value = rawValue / 32.0;
+            // Convert raw value using factor: dB = rawValue / factor
+            if (factor > 0) {
+                info.value = rawValue / static_cast<double>(factor);
+            } else {
+                info.value = rawValue;  // No conversion if factor is invalid
+            }
             
             qDebug() << "[GlowParser] StreamEntry: streamId=" << info.streamIdentifier 
-                     << "rawValue=" << rawValue << "dB=" << info.value;
+                     << "rawValue=" << rawValue << "factor=" << factor << "dB=" << info.value;
             
             emit streamValueReceived(info);
         }
