@@ -10,6 +10,7 @@
 
 #include "CrosspointActivityTracker.h"
 #include <QLabel>
+#include <QEvent>
 
 CrosspointActivityTracker::CrosspointActivityTracker(QLabel *statusLabel, QObject *parent)
     : QObject(parent)
@@ -71,6 +72,26 @@ void CrosspointActivityTracker::onActivityTimerTick()
         updateStatusBar();
         emit timeRemainingChanged(m_timeRemaining);
     }
+}
+
+bool CrosspointActivityTracker::eventFilter(QObject *watched, QEvent *event)
+{
+    // Reset timer on any user activity when enabled
+    if (m_enabled) {
+        QEvent::Type type = event->type();
+        if (type == QEvent::MouseButtonPress || 
+            type == QEvent::MouseButtonRelease ||
+            type == QEvent::MouseMove ||
+            type == QEvent::KeyPress || 
+            type == QEvent::KeyRelease ||
+            type == QEvent::Wheel ||
+            type == QEvent::FocusIn) {
+            resetTimer();
+        }
+    }
+    
+    // Always pass events through
+    return QObject::eventFilter(watched, event);
 }
 
 void CrosspointActivityTracker::updateStatusBar()

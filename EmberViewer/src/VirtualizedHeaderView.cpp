@@ -7,10 +7,10 @@
 #include <QPainter>
 #include <QFontMetrics>
 
-VirtualizedHeaderView::VirtualizedHeaderView(QWidget *parent)
+VirtualizedHeaderView::VirtualizedHeaderView(int cellWidth, QWidget *parent)
     : QWidget(parent)
     , m_model(nullptr)
-    , m_cellWidth(40)
+    , m_cellWidth(cellWidth)
     , m_scrollOffset(0)
     , m_highlightedCol(-1)
 {

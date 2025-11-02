@@ -27,6 +27,9 @@ signals:
     void timeout();
     void timeRemainingChanged(int seconds);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     void onActivityTimeout();
     void onActivityTimerTick();

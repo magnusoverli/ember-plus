@@ -15,7 +15,7 @@ class VirtualizedSidebarView : public QWidget
     Q_OBJECT
 
 public:
-    explicit VirtualizedSidebarView(QWidget *parent = nullptr);
+    explicit VirtualizedSidebarView(int cellHeight, QWidget *parent = nullptr);
     ~VirtualizedSidebarView();
 
     void setModel(MatrixModel *model);

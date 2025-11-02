@@ -77,6 +77,7 @@ private slots:
     void onMatrixConnectionsCleared(const QString &matrixPath);
     void onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber);
     void onMatrixDimensionsUpdated(const QString &path, QWidget *widget);
+    void onMatrixWidgetCreated(const QString &path, QWidget *widget);
     void onFunctionReceived(const QString &path, const QString &identifier, const QString &description,
                            const QStringList &argNames, const QList<int> &argTypes,
                            const QStringList &resultNames, const QList<int> &resultTypes);
@@ -108,6 +109,7 @@ private:
     void loadSettings();
     void saveSettings();
     void cleanupActiveParameterWidget();
+    void cleanupPropertyPanelLayout();
     
     void logMessage(const QString &message);
     

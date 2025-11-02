@@ -235,7 +235,7 @@ void EmberConnection::onSocketConnected()
     
     
     m_protocolTimer->start();
-    qInfo().noquote() << "Waiting for Ember+ response...";
+    qDebug().noquote() << "Waiting for Ember+ response...";
     
     
     
@@ -248,7 +248,7 @@ void EmberConnection::onSocketConnected()
         qint64 hoursSinceLastSeen = cache.lastSeen.secsTo(now) / 3600;
         
         if (cache.isValid) {
-            qInfo().noquote() << QString("Using cached device name: '%1' (last seen %2 hours ago)")
+            qDebug().noquote() << QString("Using cached device name: '%1' (last seen %2 hours ago)")
                 .arg(cache.deviceName)
                 .arg(hoursSinceLastSeen);
             
@@ -258,17 +258,17 @@ void EmberConnection::onSocketConnected()
             
             emit nodeReceived(cache.rootPath, cache.deviceName, cache.deviceName, true);
             
-            qInfo().noquote() << "Cached device name displayed instantly, will verify with device...";
+            qDebug().noquote() << "Cached device name displayed instantly, will verify with device...";
         } else {
-            qInfo().noquote() << QString("Cache expired (last seen %1 hours ago), will rediscover device name")
+            qDebug().noquote() << QString("Cache expired (last seen %1 hours ago), will rediscover device name")
                 .arg(hoursSinceLastSeen);
         }
     }
     
     
-    qInfo().noquote() << "About to send GetDirectory request...";
+    qDebug().noquote() << "About to send GetDirectory request...";
     sendGetDirectory();
-    qInfo().noquote() << "GetDirectory call completed";
+    qDebug().noquote() << "GetDirectory call completed";
 }
 
 void EmberConnection::onSocketDisconnected()
@@ -381,7 +381,7 @@ void EmberConnection::onS101MessageReceived(const QByteArray& emberData)
         m_emberDataReceived = true;
         isFirstData = true;
         m_protocolTimer->stop();
-        qInfo().noquote() << "Ember+ protocol confirmed";
+        qDebug().noquote() << "Ember+ protocol confirmed";
     }
     
     
@@ -414,7 +414,7 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
         QString displayName = !node.description.isEmpty() ? node.description : node.identifier;
         bool isGeneric = isGenericNodeName(displayName);
         
-        qInfo().noquote() << QString("ROOT Node [%1]: Identifier='%2', Description='%3', Generic=%4")
+        qDebug().noquote() << QString("ROOT Node [%1]: Identifier='%2', Description='%3', Generic=%4")
             .arg(node.path).arg(node.identifier)
             .arg(node.description)
             .arg(isGeneric ? "YES" : "no");
@@ -443,7 +443,7 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
             if (nodeName == "identity" || nodeName == "_identity" || 
                 nodeName == "deviceinfo" || nodeName == "device_info") {
                 m_cacheManager->updateRootNodeIdentityPath(parentPath, node.path);
-                qInfo().noquote() << QString("Detected identity node for root %1: %2")
+                qDebug().noquote() << QString("Detected identity node for root %1: %2")
                     .arg(parentPath).arg(node.path);
             }
         }
@@ -505,7 +505,7 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
                 CacheManager::RootNodeInfo rootInfo = m_cacheManager->getRootNode(rootPath);
                 if (!rootInfo.identityPath.isEmpty()) {
                     if (param.path.startsWith(rootInfo.identityPath + ".")) {
-                        qInfo().noquote() << QString("Found device name '%1' for root node %2 (from %3)")
+                        qDebug().noquote() << QString("Found device name '%1' for root node %2 (from %3)")
                             .arg(param.value).arg(rootPath).arg(param.path);
                         
                         
@@ -561,23 +561,23 @@ void EmberConnection::sendGetDirectory()
 
 void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimizedForNameDiscovery)
 {
-    qInfo().noquote() << QString("sendGetDirectoryForPath called with path='%1'").arg(path);
-    qInfo().noquote() << QString("m_requestedPaths size: %1").arg(m_requestedPaths.size());
+    qDebug().noquote() << QString("sendGetDirectoryForPath called with path='%1'").arg(path);
+    qDebug().noquote() << QString("m_requestedPaths size: %1").arg(m_requestedPaths.size());
     
     
     if (m_requestedPaths.contains(path)) {
-        qInfo().noquote() << QString("ERROR: Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path);
+        qDebug().noquote() << QString("ERROR: Skipping duplicate request for %1").arg(path.isEmpty() ? "root" : path);
         return;
     }
-    qInfo().noquote() << "Passed duplicate check, inserting path";
+    qDebug().noquote() << "Passed duplicate check, inserting path";
     m_requestedPaths.insert(path);
-    qInfo().noquote() << "Path inserted, continuing...";
+    qDebug().noquote() << "Path inserted, continuing...";
     
     try {
         if (path.isEmpty()) {
-            qInfo().noquote() << "Requesting root directory...";
+            qDebug().noquote() << "Requesting root directory...";
         } else {
-            qInfo().noquote() << QString("Requesting children of %1%2...")
+            qDebug().noquote() << QString("Requesting children of %1%2...")
                 .arg(path)
                 .arg(optimizedForNameDiscovery ? " (optimized for name discovery)" : "");
         }
@@ -591,22 +591,22 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
                                            libember::glow::DirFieldMask::Value)
             : libember::glow::DirFieldMask::All;
         
-        qInfo().noquote() << "Creating GlowRootElementCollection...";
+        qDebug().noquote() << "Creating GlowRootElementCollection...";
         auto root = new libember::glow::GlowRootElementCollection();
         
         if (path.isEmpty()) {
             
-            qInfo().noquote() << "Creating bare GlowCommand for root...";
+            qDebug().noquote() << "Creating bare GlowCommand for root...";
             auto command = new libember::glow::GlowCommand(
                 libember::glow::CommandType::GetDirectory
             );
-            qInfo().noquote() << "Inserting command into root...";
+            qDebug().noquote() << "Inserting command into root...";
             root->insert(root->end(), command);
-            qInfo().noquote() << "Command inserted successfully";
+            qDebug().noquote() << "Command inserted successfully";
         }
         else {
             
-            qInfo().noquote() << QString("Creating QualifiedNode for path: %1").arg(path);
+            qDebug().noquote() << QString("Creating QualifiedNode for path: %1").arg(path);
             QStringList segments = path.split('.', Qt::SkipEmptyParts);
             libember::ber::ObjectIdentifier oid;
             
@@ -620,23 +620,23 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
                 libember::glow::CommandType::GetDirectory
             );
             root->insert(root->end(), node);
-            qInfo().noquote() << "QualifiedNode with command inserted (no field mask)";
+            qDebug().noquote() << "QualifiedNode with command inserted (no field mask)";
         }
         
         
-        qInfo().noquote() << "Encoding to EmBER...";
+        qDebug().noquote() << "Encoding to EmBER...";
         libember::util::OctetStream stream;
         root->encode(stream);
-        qInfo().noquote() << QString("EmBER payload size: %1 bytes").arg(stream.size());
+        qDebug().noquote() << QString("EmBER payload size: %1 bytes").arg(stream.size());
         
         
         QByteArray s101Frame = m_s101Protocol->encodeEmberData(stream);
         
         
-        qInfo().noquote() << QString("About to write %1 bytes to socket...").arg(s101Frame.size());
+        qDebug().noquote() << QString("About to write %1 bytes to socket...").arg(s101Frame.size());
         if (m_socket->write(s101Frame) > 0) {
             m_socket->flush();
-            qInfo().noquote() << QString("Successfully sent GetDirectory request (%1 bytes)").arg(s101Frame.size());
+            qDebug().noquote() << QString("Successfully sent GetDirectory request (%1 bytes)").arg(s101Frame.size());
         }
         else {
             qCritical().noquote() << "Failed to send GetDirectory - socket write returned 0 or error";
@@ -1368,7 +1368,7 @@ void EmberConnection::fetchCompleteTree(const QStringList &initialNodePaths)
         return;
     }
     
-    qInfo().noquote() << QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size());
+    qDebug().noquote() << QString("Starting complete tree fetch with %1 initial nodes...").arg(initialNodePaths.size());
     
     
     m_treeFetchService->setSendGetDirectoryCallback([this](const QString& path, bool isRoot) {

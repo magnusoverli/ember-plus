@@ -76,17 +76,27 @@ void MatrixManager::onMatrixReceived(const QString &path, int , const QString &i
 
 void MatrixManager::onMatrixTargetReceived(const QString &matrixPath, int targetNumber, const QString &label)
 {
+    qDebug().noquote() << QString("MatrixManager: Received target label - Matrix: %1, Target: %2, Label: '%3'")
+        .arg(matrixPath).arg(targetNumber).arg(label);
+    
     VirtualizedMatrixWidget *widget = qobject_cast<VirtualizedMatrixWidget*>(m_matrixWidgets.value(matrixPath, nullptr));
     if (widget) {
         widget->setTargetLabel(targetNumber, label);
+    } else {
+        qWarning().noquote() << QString("MatrixManager: No widget found for matrix path: %1").arg(matrixPath);
     }
 }
 
 void MatrixManager::onMatrixSourceReceived(const QString &matrixPath, int sourceNumber, const QString &label)
 {
+    qDebug().noquote() << QString("MatrixManager: Received source label - Matrix: %1, Source: %2, Label: '%3'")
+        .arg(matrixPath).arg(sourceNumber).arg(label);
+    
     VirtualizedMatrixWidget *widget = qobject_cast<VirtualizedMatrixWidget*>(m_matrixWidgets.value(matrixPath, nullptr));
     if (widget) {
         widget->setSourceLabel(sourceNumber, label);
+    } else {
+        qWarning().noquote() << QString("MatrixManager: No widget found for matrix path: %1").arg(matrixPath);
     }
 }
 

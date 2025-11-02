@@ -163,6 +163,18 @@ MainWindow::MainWindow(QWidget *parent)
     
     
     connect(m_matrixManager, &MatrixManager::matrixDimensionsUpdated, this, &MainWindow::onMatrixDimensionsUpdated);
+    connect(m_matrixManager, &MatrixManager::matrixWidgetCreated, this, &MainWindow::onMatrixWidgetCreated);
+    
+    // Connect activity tracker timer updates to update matrix corner buttons
+    connect(m_activityTracker, &CrosspointActivityTracker::timeRemainingChanged, 
+            this, [this](int seconds) {
+        VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(m_propertyPanel);
+        if (matrixWidget) {
+            matrixWidget->updateCornerButton(m_activityTracker->isEnabled(), seconds);
+        }
+    });
+    
+
     
     setWindowTitle("EmberViewer - Ember+ Protocol Viewer");
     
@@ -226,7 +238,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
-    
+    // Handle port spin Enter key
     if (watched == m_portSpin && event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
@@ -238,10 +250,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     
-    
-    
-    
-    
+    // Handle update status label click
     if (watched == m_updateStatusLabel && event->type() == QEvent::MouseButtonPress) {
         if (m_updateDialog) {
             m_updateDialog->show();
@@ -661,6 +670,11 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
                                     const QString &format, const QString &referenceLevel, const QString &formula, int factor)
 {
+    // Log ALL parameters that contain "matrix" in the path (case-insensitive)
+    if (path.contains("matrix", Qt::CaseInsensitive) || path.contains("label", Qt::CaseInsensitive)) {
+        qDebug().noquote() << QString("PARAM_TRACE: Path='%1', Identifier='%2', Value='%3'")
+            .arg(path).arg(identifier).arg(value);
+    }
     
     if (streamIdentifier > 0) {
         m_streamIdToPath[streamIdentifier] = path;
@@ -670,6 +684,7 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
     
     QStringList pathParts = path.split('.');
     if (pathParts.size() >= 4 && pathParts[pathParts.size() - 3] == QString::number(MATRIX_LABEL_PATH_MARKER)) {
+        qDebug().noquote() << QString("LABEL_MATCH: Detected matrix label parameter - Path: %1").arg(path);
         
         QString labelType = pathParts[pathParts.size() - 2];  
         int labelNumber = pathParts.last().toInt();
@@ -678,6 +693,8 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
         QStringList matrixPathParts = pathParts.mid(0, pathParts.size() - 3);
         QString matrixPath = matrixPathParts.join('.');
         
+        qDebug().noquote() << QString("LABEL_MATCH: Matrix path: %1, Type: %2, Number: %3, Value: %4")
+            .arg(matrixPath).arg(labelType).arg(labelNumber).arg(value);
         
         if (labelType == "1") {
             
@@ -687,7 +704,11 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
             m_matrixManager->onMatrixSourceReceived(matrixPath, labelNumber, value);
         }
         
-        
+        return; // Don't process label parameters as regular parameters
+    } else if (path.contains("label", Qt::CaseInsensitive)) {
+        // Log when path contains "label" but doesn't match the expected pattern
+        qDebug().noquote() << QString("LABEL_NO_MATCH: Path contains 'label' but doesn't match pattern. Path='%1', Parts=%2, Marker='%3'")
+            .arg(path).arg(pathParts.size()).arg(MATRIX_LABEL_PATH_MARKER);
     }
     
     
@@ -728,6 +749,28 @@ void MainWindow::onMatrixConnectionsCleared(const QString &matrixPath)
 void MainWindow::onMatrixTargetConnectionsCleared(const QString &matrixPath, int targetNumber)
 {
     m_matrixManager->onMatrixTargetConnectionsCleared(matrixPath, targetNumber);
+}
+
+void MainWindow::onMatrixWidgetCreated(const QString &path, QWidget *widget)
+{
+    qInfo().noquote() << QString("onMatrixWidgetCreated called for path: %1").arg(path);
+    
+    // Connect the crosspoint clicked signal to enable toggling
+    VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(widget);
+    if (matrixWidget) {
+        // Use the overload with matrixPath parameter (explicitly cast to resolve overload)
+        connect(matrixWidget, 
+                static_cast<void(VirtualizedMatrixWidget::*)(const QString&, int, int)>(&VirtualizedMatrixWidget::crosspointClicked),
+                this, &MainWindow::onCrosspointClicked);
+        
+        // Connect corner button to enable/disable crosspoints
+        connect(matrixWidget, &VirtualizedMatrixWidget::enableCrosspointsRequested,
+                this, [this](bool enable) {
+            m_enableCrosspointsAction->setChecked(enable);
+        });
+        
+        qDebug().noquote() << QString("Connected signals for matrix: %1").arg(path);
+    }
 }
 
 void MainWindow::onMatrixDimensionsUpdated(const QString &path, QWidget *widget)
@@ -795,6 +838,14 @@ void MainWindow::onTreeSelectionChanged()
     QString oidPath = item->data(0, Qt::UserRole).toString();
     QString type = item->text(1);
     
+    // ALWAYS clean up previous property panel content on selection change
+    // This ensures consistent UX - properties area always reflects current selection
+    cleanupActiveParameterWidget();
+    if (m_activityTracker && m_activityTracker->isEnabled()) {
+        m_enableCrosspointsAction->setChecked(false);
+    }
+    cleanupPropertyPanelLayout();
+    
     
     if (m_showOidPath) {
         
@@ -834,6 +885,26 @@ void MainWindow::onTreeSelectionChanged()
                 m_treeViewController->markPathAsFetched(oidPath);
                 m_connection->sendGetDirectoryForPath(oidPath);
             }
+        } else {
+            // Matrix has dimensions - check if widget already exists
+            QWidget *existingWidget = m_matrixManager->getMatrix(oidPath);
+            if (existingWidget) {
+                qInfo().noquote() << QString("Displaying existing matrix widget for: %1").arg(oidPath);
+                
+                // Display the existing matrix widget in properties panel
+                QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+                propLayout->addWidget(existingWidget);
+                propLayout->setContentsMargins(5, 5, 5, 5);
+                existingWidget->show();  // Make visible again after hide in cleanup
+                m_propertyPanel = existingWidget;
+                
+                // Update corner button state
+                VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(existingWidget);
+                if (matrixWidget && m_activityTracker) {
+                    matrixWidget->updateCornerButton(m_activityTracker->isEnabled(), 
+                                                     m_activityTracker->isEnabled() ? 60 : 0);
+                }
+            }
         }
     }
     
@@ -867,19 +938,7 @@ void MainWindow::onTreeSelectionChanged()
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Clean up old layout first
-            QLayout *oldLayout = m_propertyGroup->layout();
-            if (oldLayout) {
-                QLayoutItem *layoutItem;
-                while ((layoutItem = oldLayout->takeAt(0)) != nullptr) {
-                    // Delete the widget contained in the layout item
-                    if (layoutItem->widget()) {
-                        layoutItem->widget()->deleteLater();
-                    }
-                    delete layoutItem;
-                }
-                delete oldLayout;
-            }
+            // Layout already cleaned up at start of selection handler
             
             // Reset property panel pointer
             m_propertyPanel = nullptr;
@@ -1034,8 +1093,7 @@ void MainWindow::onTreeSelectionChanged()
             bool useSlider = hasRange && (range > 50.0 || !formula.isEmpty() || (paramType == 2 && range > 10.0));
             
             if (useSlider) {
-                // Clean up old widgets
-                cleanupActiveParameterWidget();
+                // Widgets already cleaned up at start of selection handler
                 
                 // Create SliderWidget
                 SliderWidget *sliderWidget = new SliderWidget();
@@ -1055,16 +1113,8 @@ void MainWindow::onTreeSelectionChanged()
                             m_connection->sendParameterValue(path, newValue, type);
                         });
                 
-                // Add to properties area
-                QLayout *oldLayout = m_propertyGroup->layout();
-                if (oldLayout) {
-                    QLayoutItem *item;
-                    while ((item = oldLayout->takeAt(0)) != nullptr) {
-                        if (item->widget()) item->widget()->deleteLater();
-                        delete item;
-                    }
-                    delete oldLayout;
-                }
+            // Add to properties area
+            cleanupPropertyPanelLayout();
                 
                 QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
                 propLayout->addWidget(sliderWidget);
@@ -1085,8 +1135,7 @@ void MainWindow::onTreeSelectionChanged()
             double minValue = minVar.isValid() ? minVar.toDouble() : 0.0;
             double maxValue = maxVar.isValid() ? maxVar.toDouble() : 100.0;
             
-            // Clean up old widgets
-            cleanupActiveParameterWidget();
+            // Widgets already cleaned up at start of selection handler
             
             // Create GraphWidget
             GraphWidget *graphWidget = new GraphWidget();
@@ -1110,21 +1159,31 @@ void MainWindow::onTreeSelectionChanged()
             }
             
             // Add to properties area
-            QLayout *oldLayout = m_propertyGroup->layout();
-            if (oldLayout) {
-                QLayoutItem *item;
-                while ((item = oldLayout->takeAt(0)) != nullptr) {
-                    if (item->widget()) item->widget()->deleteLater();
-                    delete item;
-                }
-                delete oldLayout;
-            }
+            cleanupPropertyPanelLayout();
             
             QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
             propLayout->addWidget(graphWidget);
             propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = graphWidget;
             m_activeParameterWidget = graphWidget;
+        } else {
+            // Generic parameter without special widget
+            qDebug().noquote() << QString("Generic parameter selected (no special widget): %1").arg(oidPath);
+            
+            // Widgets and layout already cleaned up at start of selection handler
+            
+            m_propertyPanel = new QWidget();
+            QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
+            propContentLayout->addWidget(new QLabel("Parameter properties"));
+            propContentLayout->addWidget(new QLabel(QString("Path: %1").arg(oidPath)));
+            propContentLayout->addWidget(new QLabel(QString("Value: %1").arg(item->text(2))));
+            propContentLayout->addStretch();
+            
+            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+            propLayout->addWidget(m_propertyPanel);
+            propLayout->setContentsMargins(5, 5, 5, 5);
+            
+            m_propertyGroup->setTitle("Properties");
         }
     }
     else if (type == "Matrix") {
@@ -1176,46 +1235,53 @@ void MainWindow::onTreeSelectionChanged()
             propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = matrixWidget;
             
+            // Update property group title with matrix info
+            int matrixType = matrixWidget->getMatrixType();
+            QString matrixTypeStr;
+            switch (matrixType) {
+                case 0: matrixTypeStr = "1:N"; break;
+                case 1: matrixTypeStr = "N:1"; break;
+                case 2: matrixTypeStr = "N:N"; break;
+                default: matrixTypeStr = "Unknown"; break;
+            }
+            int sourceCount = matrixWidget->getSourceNumbers().size();
+            int targetCount = matrixWidget->getTargetNumbers().size();
+            m_propertyGroup->setTitle(QString("Matrix: %1×%2 (%3)")
+                .arg(sourceCount)
+                .arg(targetCount)
+                .arg(matrixTypeStr));
+            
             
         }
     } else {
+        // Handle all unhandled types (Node, Function, etc.)
+        qDebug().noquote() << QString("Selected type: '%1' - showing basic info").arg(type);
         
-        // Unsubscribe from meter if we're switching away from it
-        if (!m_activeMeterPath.isEmpty()) {
-            m_connection->unsubscribeFromParameter(m_activeMeterPath);
-            qDebug().noquote() << QString("Unsubscribed from meter (switching to other): %1")
-                .arg(m_activeMeterPath);
-            m_activeMeterPath.clear();
+        // Layout already cleaned up at start of selection handler
+        // Show basic information about the selected item
+        m_propertyPanel = new QWidget();
+        QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
+        
+        QString identifier = item->text(0);
+        QString value = item->text(2);
+        
+        propContentLayout->addWidget(new QLabel(QString("<b>Type:</b> %1").arg(type)));
+        if (!identifier.isEmpty()) {
+            propContentLayout->addWidget(new QLabel(QString("<b>Name:</b> %1").arg(identifier)));
         }
-        
-        
-        VirtualizedMatrixWidget *currentMatrix = qobject_cast<VirtualizedMatrixWidget*>(m_propertyPanel);
-        if (currentMatrix) {
-            
-            if (m_activityTracker && m_activityTracker->isEnabled()) {
-                m_enableCrosspointsAction->setChecked(false);
-            }
-            
-            
-            QLayout *oldLayout = m_propertyGroup->layout();
-            if (oldLayout) {
-                QLayoutItem *item;
-                while ((item = oldLayout->takeAt(0)) != nullptr) {
-                    delete item;
-                }
-                delete oldLayout;
-            }
-            
-            
-            m_propertyPanel = new QWidget();
-            QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
-            propContentLayout->addWidget(new QLabel("Select an item to view properties"));
-            propContentLayout->addStretch();
-            
-            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
-            propLayout->addWidget(m_propertyPanel);
-            propLayout->setContentsMargins(5, 5, 5, 5);
+        if (!oidPath.isEmpty()) {
+            propContentLayout->addWidget(new QLabel(QString("<b>Path:</b> %1").arg(oidPath)));
         }
+        if (!value.isEmpty() && value != "—") {
+            propContentLayout->addWidget(new QLabel(QString("<b>Value:</b> %1").arg(value)));
+        }
+        propContentLayout->addStretch();
+        
+        QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+        propLayout->addWidget(m_propertyPanel);
+        propLayout->setContentsMargins(5, 5, 5, 5);
+        
+        m_propertyGroup->setTitle(QString("%1 Properties").arg(type));
     }
 }
 
@@ -1231,6 +1297,35 @@ void MainWindow::cleanupActiveParameterWidget()
     
     // Clear active widget pointer (widget will be deleted by layout cleanup)
     m_activeParameterWidget = nullptr;
+}
+
+void MainWindow::cleanupPropertyPanelLayout()
+{
+    // Clean up old layout and widgets
+    QLayout *oldLayout = m_propertyGroup->layout();
+    if (oldLayout) {
+        QLayoutItem *item;
+        while ((item = oldLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) {
+                QWidget *widget = item->widget();
+                
+                // Check if it's a VirtualizedMatrixWidget (managed by MatrixManager)
+                VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(widget);
+                if (matrixWidget) {
+                    // Don't delete matrix widgets - they're owned by MatrixManager
+                    // Just hide them so they're not visible
+                    matrixWidget->hide();
+                    matrixWidget->setParent(nullptr);  // Remove from widget hierarchy
+                    qDebug().noquote() << "Hidden matrix widget (not deleted - managed by MatrixManager)";
+                } else {
+                    // Safe to delete other widgets
+                    widget->deleteLater();
+                }
+            }
+            delete item;
+        }
+        delete oldLayout;
+    }
 }
 
 void MainWindow::loadSettings()
@@ -1307,10 +1402,11 @@ void MainWindow::onEnableCrosspointsToggled(bool enabled)
         logMessage("Crosspoint editing DISABLED");
     }
     
-    
+    // Update all matrix widgets (both current and cached ones)
     VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(m_propertyPanel);
     if (matrixWidget) {
         matrixWidget->setCrosspointsEnabled(enabled);
+        matrixWidget->updateCornerButton(enabled, enabled ? 60 : 0);
     }
 }
 

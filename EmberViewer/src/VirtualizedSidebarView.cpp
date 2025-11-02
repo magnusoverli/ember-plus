@@ -7,10 +7,10 @@
 #include <QPainter>
 #include <QFontMetrics>
 
-VirtualizedSidebarView::VirtualizedSidebarView(QWidget *parent)
+VirtualizedSidebarView::VirtualizedSidebarView(int cellHeight, QWidget *parent)
     : QWidget(parent)
     , m_model(nullptr)
-    , m_cellHeight(30)
+    , m_cellHeight(cellHeight)
     , m_scrollOffset(0)
     , m_highlightedRow(-1)
 {

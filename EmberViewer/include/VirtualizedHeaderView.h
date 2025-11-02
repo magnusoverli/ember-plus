@@ -15,7 +15,7 @@ class VirtualizedHeaderView : public QWidget
     Q_OBJECT
 
 public:
-    explicit VirtualizedHeaderView(QWidget *parent = nullptr);
+    explicit VirtualizedHeaderView(int cellWidth, QWidget *parent = nullptr);
     ~VirtualizedHeaderView();
 
     void setModel(MatrixModel *model);

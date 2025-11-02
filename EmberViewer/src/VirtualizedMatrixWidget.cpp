@@ -18,7 +18,7 @@
 VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
     : QAbstractScrollArea(parent)
     , m_model(nullptr)
-    , m_cellSize(40, 30)
+    , m_cellSize(20, 20)
     , m_headerHeight(30)
     , m_sidebarWidth(80)
     , m_selectedCell(-1, -1)
@@ -39,21 +39,38 @@ VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
     // Configure viewport
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     viewport()->setBackgroundRole(QPalette::Base);
+    
+    // Reserve space for header and sidebar
+    setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
 
     // Create header view
-    m_headerView = new VirtualizedHeaderView(this);
-    m_headerView->setCellWidth(m_cellSize.width());
+    m_headerView = new VirtualizedHeaderView(m_cellSize.width(), this);
 
     // Create sidebar view
-    m_sidebarView = new VirtualizedSidebarView(this);
-    m_sidebarView->setCellHeight(m_cellSize.height());
+    m_sidebarView = new VirtualizedSidebarView(m_cellSize.height(), this);
 
-    // Create corner widget
-    m_cornerWidget = new QLabel(this);
-    QLabel *cornerLabel = static_cast<QLabel*>(m_cornerWidget);
-    cornerLabel->setFrameStyle(QFrame::Panel | QFrame::Raised);
-    cornerLabel->setAlignment(Qt::AlignCenter);
-    m_cornerWidget->setStyleSheet("QLabel { background-color: palette(button); }");
+    // Create corner widget as button for enabling/disabling crosspoints
+    m_cornerWidget = new QPushButton(this);
+    m_cornerWidget->setCheckable(true);
+    m_cornerWidget->setChecked(false);
+    
+    // Use lock icons from resources
+    QIcon lockIcon;
+    lockIcon.addFile(":/resources/lock-closed.png", QSize(), QIcon::Normal, QIcon::Off);
+    lockIcon.addFile(":/resources/lock-open.png", QSize(), QIcon::Normal, QIcon::On);
+    m_cornerWidget->setIcon(lockIcon);
+    m_cornerWidget->setIconSize(QSize(m_sidebarWidth - 10, m_headerHeight - 10));
+    
+    m_cornerWidget->setToolTip("Click to enable crosspoint editing (Ctrl+E)");
+    m_cornerWidget->setStyleSheet(
+        "QPushButton { "
+        "  background-color: palette(button); "
+        "  border: 2px solid palette(mid); "
+        "}"
+    );
+    
+    // Connect button click to emit enable/disable signal
+    connect(m_cornerWidget, &QPushButton::toggled, this, &VirtualizedMatrixWidget::enableCrosspointsRequested);
     
     // Connect scrollbar changes to update header/sidebar
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, 
@@ -97,10 +114,8 @@ void VirtualizedMatrixWidget::setModel(MatrixModel *model)
             default: matrixTypeStr = "Unknown"; break;
         }
         
-        static_cast<QLabel*>(m_cornerWidget)->setText(QString("%1×%2\n%3")
-            .arg(m_model->sourceCount())
-            .arg(m_model->targetCount())
-            .arg(matrixTypeStr));
+        // Corner widget is now a button for enabling/disabling crosspoints
+        // Dimension info moved to Properties panel title
     }
 
     // Update child views
@@ -123,12 +138,14 @@ void VirtualizedMatrixWidget::setCellSize(const QSize &size)
 void VirtualizedMatrixWidget::setHeaderHeight(int height)
 {
     m_headerHeight = height;
+    setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     updateViewportSize();
 }
 
 void VirtualizedMatrixWidget::setSidebarWidth(int width)
 {
     m_sidebarWidth = width;
+    setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     updateViewportSize();
 }
 
@@ -189,10 +206,8 @@ void VirtualizedMatrixWidget::setMatrixInfo(const QString &identifier, const QSt
         default: matrixTypeStr = "Unknown"; break;
     }
     
-    static_cast<QLabel*>(m_cornerWidget)->setText(QString("%1×%2\n%3")
-        .arg(sourceCount)
-        .arg(targetCount)
-        .arg(matrixTypeStr));
+    // Corner widget is now a button for enabling/disabling crosspoints
+    // Dimension info moved to Properties panel title
     
     updateScrollBars();
     viewport()->update();
@@ -283,7 +298,19 @@ QList<int> VirtualizedMatrixWidget::getSourceNumbers() const
 void VirtualizedMatrixWidget::setCrosspointsEnabled(bool enabled)
 {
     m_crosspointsEnabled = enabled;
-    viewport()->setEnabled(enabled);
+    m_cornerWidget->setChecked(enabled);
+}
+
+void VirtualizedMatrixWidget::updateCornerButton(bool enabled, int timeRemaining)
+{
+    Q_UNUSED(timeRemaining);
+    
+    if (enabled) {
+        m_cornerWidget->setToolTip("Crosspoint editing enabled\nClick to disable");
+    } else {
+        m_cornerWidget->setToolTip("Click to enable crosspoint editing (Ctrl+E)");
+    }
+    m_cornerWidget->setChecked(enabled);
 }
 
 QPoint VirtualizedMatrixWidget::cellAt(const QPoint &pos) const
@@ -573,15 +600,18 @@ void VirtualizedMatrixWidget::updateScrollBars()
 
 void VirtualizedMatrixWidget::updateViewportSize()
 {
+    // Update viewport margins to reserve space for header and sidebar
+    setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
+    
     QRect vp = viewport()->geometry();
     
-    // Position header at top
+    // Position header at top (in the top margin area)
     m_headerView->setGeometry(m_sidebarWidth, 0, 
-                              vp.width() - m_sidebarWidth, m_headerHeight);
+                              vp.width(), m_headerHeight);
     
-    // Position sidebar at left
+    // Position sidebar at left (in the left margin area)
     m_sidebarView->setGeometry(0, m_headerHeight,
-                               m_sidebarWidth, vp.height() - m_headerHeight);
+                               m_sidebarWidth, vp.height());
     
     // Position corner widget
     m_cornerWidget->setGeometry(0, 0, m_sidebarWidth, m_headerHeight);

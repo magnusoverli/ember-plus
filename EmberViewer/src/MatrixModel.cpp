@@ -34,6 +34,9 @@ void MatrixModel::setMatrixInfo(const QString &identifier, const QString &descri
     // Auto-generate target/source lists if dimensions changed from empty to populated
     if (dimensionsChanged && wasEmpty && nowPopulated) {
         if (m_targetNumbers.isEmpty() && targetCount > 0) {
+            qDebug().noquote() << QString("MatrixModel: AUTO-GENERATING placeholder labels for %1 targets (matrix: %2)")
+                .arg(targetCount).arg(m_matrixPath);
+            
             m_targetNumbers.clear();
             for (int i = 0; i < targetCount; ++i) {
                 m_targetNumbers.append(i);
@@ -44,6 +47,9 @@ void MatrixModel::setMatrixInfo(const QString &identifier, const QString &descri
         }
         
         if (m_sourceNumbers.isEmpty() && sourceCount > 0) {
+            qDebug().noquote() << QString("MatrixModel: AUTO-GENERATING placeholder labels for %1 sources (matrix: %2)")
+                .arg(sourceCount).arg(m_matrixPath);
+            
             m_sourceNumbers.clear();
             for (int i = 0; i < sourceCount; ++i) {
                 m_sourceNumbers.append(i);
@@ -76,6 +82,9 @@ void MatrixModel::setSourceNumbers(const QList<int> &numbers)
 
 void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
 {
+    qDebug().noquote() << QString("MatrixModel: setTargetLabel called - Target: %1, Label: '%2', Matrix: %3")
+        .arg(targetNumber).arg(label).arg(m_matrixPath);
+    
     m_targetLabels[targetNumber] = label;
     
     // Add to numbers list if not present
@@ -89,6 +98,9 @@ void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
 
 void MatrixModel::setSourceLabel(int sourceNumber, const QString &label)
 {
+    qDebug().noquote() << QString("MatrixModel: setSourceLabel called - Source: %1, Label: '%2', Matrix: %3")
+        .arg(sourceNumber).arg(label).arg(m_matrixPath);
+    
     m_sourceLabels[sourceNumber] = label;
     
     // Add to numbers list if not present

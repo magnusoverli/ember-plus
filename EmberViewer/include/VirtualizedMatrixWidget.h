@@ -7,9 +7,9 @@
 #define VIRTUALIZEDMATRIXWIDGET_H
 
 #include <QAbstractScrollArea>
-#include <QString>
 #include <QPoint>
-#include <QRect>
+#include <QSize>
+#include <QPushButton>
 #include "MatrixModel.h"
 
 class QLabel;
@@ -45,6 +45,7 @@ public:
     QList<int> getTargetNumbers() const;
     QList<int> getSourceNumbers() const;
     void setCrosspointsEnabled(bool enabled);
+    void updateCornerButton(bool enabled, int timeRemaining);
 
     // Cell sizing
     void setCellSize(const QSize &size);
@@ -72,12 +73,12 @@ public:
     void refresh();
 
 signals:
-    // New API signals
     void crosspointClicked(int targetNumber, int sourceNumber);
     void crosspointHovered(int targetNumber, int sourceNumber);
-    
-    // MatrixWidget compatibility signals
+    void selectionChanged(int targetNumber, int sourceNumber);
+    // Overload with matrixPath for better routing
     void crosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
+    void enableCrosspointsRequested(bool enable);
     void crosspointToggleRequested();
 
 protected:
@@ -122,7 +123,7 @@ private:
     // Child views
     VirtualizedHeaderView *m_headerView;
     VirtualizedSidebarView *m_sidebarView;
-    QWidget *m_cornerWidget;
+    QPushButton *m_cornerWidget;
     
     // Path for signal compatibility
     QString m_matrixPath;
