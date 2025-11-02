@@ -13,6 +13,7 @@ VirtualizedSidebarView::VirtualizedSidebarView(int cellHeight, QWidget *parent)
     , m_cellHeight(cellHeight)
     , m_scrollOffset(0)
     , m_highlightedRow(-1)
+    , m_crosspointsEnabled(false)
 {
     setMinimumWidth(80);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
@@ -48,6 +49,14 @@ void VirtualizedSidebarView::setHighlightedRow(int row)
     }
 }
 
+void VirtualizedSidebarView::setCrosspointsEnabled(bool enabled)
+{
+    if (m_crosspointsEnabled != enabled) {
+        m_crosspointsEnabled = enabled;
+        update();
+    }
+}
+
 QSize VirtualizedSidebarView::sizeHint() const
 {
     return QSize(80, height());
@@ -61,7 +70,10 @@ QSize VirtualizedSidebarView::minimumSizeHint() const
 void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
-    painter.fillRect(rect(), palette().button());
+    
+    // Use red background when crosspoints enabled, otherwise default button color
+    QColor bgColor = m_crosspointsEnabled ? QColor("#890000") : palette().button().color();
+    painter.fillRect(rect(), bgColor);
 
     if (!m_model) return;
 

@@ -13,6 +13,7 @@ VirtualizedHeaderView::VirtualizedHeaderView(int cellWidth, QWidget *parent)
     , m_cellWidth(cellWidth)
     , m_scrollOffset(0)
     , m_highlightedCol(-1)
+    , m_crosspointsEnabled(false)
 {
     setMinimumHeight(30);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -48,6 +49,14 @@ void VirtualizedHeaderView::setHighlightedColumn(int col)
     }
 }
 
+void VirtualizedHeaderView::setCrosspointsEnabled(bool enabled)
+{
+    if (m_crosspointsEnabled != enabled) {
+        m_crosspointsEnabled = enabled;
+        update();
+    }
+}
+
 QSize VirtualizedHeaderView::sizeHint() const
 {
     return QSize(width(), 30);
@@ -61,7 +70,10 @@ QSize VirtualizedHeaderView::minimumSizeHint() const
 void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
-    painter.fillRect(rect(), palette().button());
+    
+    // Use red background when crosspoints enabled, otherwise default button color
+    QColor bgColor = m_crosspointsEnabled ? QColor("#890000") : palette().button().color();
+    painter.fillRect(rect(), bgColor);
 
     if (!m_model) return;
 

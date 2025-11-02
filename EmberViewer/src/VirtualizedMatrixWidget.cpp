@@ -299,6 +299,10 @@ void VirtualizedMatrixWidget::setCrosspointsEnabled(bool enabled)
 {
     m_crosspointsEnabled = enabled;
     m_cornerWidget->setChecked(enabled);
+    
+    // Update header and sidebar background colors
+    m_headerView->setCrosspointsEnabled(enabled);
+    m_sidebarView->setCrosspointsEnabled(enabled);
 }
 
 void VirtualizedMatrixWidget::updateCornerButton(bool enabled, int timeRemaining)

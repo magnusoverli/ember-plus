@@ -22,6 +22,7 @@ public:
     void setCellHeight(int height);
     void setScrollOffset(int offset);
     void setHighlightedRow(int row);  // For crosshair effect
+    void setCrosspointsEnabled(bool enabled);
     
     int cellHeight() const { return m_cellHeight; }
     int scrollOffset() const { return m_scrollOffset; }
@@ -37,6 +38,7 @@ private:
     int m_cellHeight;
     int m_scrollOffset;
     int m_highlightedRow;  // -1 means no highlight
+    bool m_crosspointsEnabled;
 };
 
 #endif // VIRTUALIZEDSIDEBARVIEW_H
