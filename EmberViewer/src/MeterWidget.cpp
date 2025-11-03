@@ -103,6 +103,10 @@ MeterWidget::MeterWidget(QWidget *parent)
 
 MeterWidget::~MeterWidget()
 {
+    // Stop the timer to prevent crashes when widget is being destroyed
+    if (m_updateTimer) {
+        m_updateTimer->stop();
+    }
 }
 
 void MeterWidget::setParameterInfo(const QString &identifier, const QString &path, 
@@ -1097,3 +1101,13 @@ void MeterWidget::resizeEvent(QResizeEvent *event)
     update();
 }
 
+
+void MeterWidget::hideEvent(QHideEvent *event)
+{
+    // Stop the timer when widget is hidden to prevent crashes
+    // This is called before deleteLater() actually deletes the widget
+    if (m_updateTimer) {
+        m_updateTimer->stop();
+    }
+    QWidget::hideEvent(event);
+}

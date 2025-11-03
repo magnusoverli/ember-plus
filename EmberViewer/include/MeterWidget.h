@@ -55,7 +55,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
-
+    void hideEvent(QHideEvent *event) override;
 private slots:
     void onUpdateTimer();
     void onMeterTypeChanged(int index);
