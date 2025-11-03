@@ -211,6 +211,16 @@ void TreeViewController::onParameterReceived(const QString &path, int , const QS
             item->setText(2, "");  
         }
         
+        
+        bool canWrite = (access == 2 || access == 3);
+        if (canWrite && !isAudioMeter) {
+            item->setForeground(2, QBrush(QColor(30, 144, 255)));
+            item->setFlags(item->flags() | Qt::ItemIsEditable);
+        } else {
+            item->setForeground(2, QBrush());
+            item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+        }
+        
         if (isNew) {
             qDebug().noquote() << QString("Parameter: %1 = %2 [%3] (Type: %4, Access: %5)").arg(identifier).arg(value).arg(path).arg(type).arg(access);
         }
