@@ -310,7 +310,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
                                 qDebug().noquote() << QString("EMBER+ SOURCE LABEL: Matrix %1, source %2, label '%3'")
                                     .arg(matrixPath).arg(signalNumber).arg(labelValue);
                                 
-                                emit matrixSourceReceived(sourceInfo);
+                                 emit matrixSourceReceived(sourceInfo);
                             }
                         }
                     }
@@ -323,9 +323,28 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     }
     
     
-    info.identifier = param->contains(libember::glow::ParameterProperty::Identifier)
+    bool hasIdentifier = param->contains(libember::glow::ParameterProperty::Identifier);
+    bool hadIdentifier = m_parametersWithIdentifier.value(info.path, false);
+    
+    info.identifier = hasIdentifier
         ? QString::fromStdString(param->identifier())
         : QString("Parameter %1").arg(info.number);
+    
+    
+    if (hasIdentifier) {
+        m_parametersWithIdentifier[info.path] = true;
+    }
+    
+    
+    if (hadIdentifier && !hasIdentifier) {
+        qDebug() << "[GlowParser] SKIPPING Parameter:" << info.path
+                 << "- would replace valid identifier with stub";
+        return;
+    }
+    
+    info.description = param->contains(libember::glow::ParameterProperty::Description)
+        ? QString::fromStdString(param->description())
+        : QString();
     
     
     if (param->contains(libember::glow::ParameterProperty::Value)) {
@@ -509,10 +528,27 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     }
     
     
-    info.identifier = param->contains(libember::glow::ParameterProperty::Identifier)
+    bool hasIdentifier = param->contains(libember::glow::ParameterProperty::Identifier);
+    bool hadIdentifier = m_parametersWithIdentifier.value(info.path, false);
+    
+    info.identifier = hasIdentifier
         ? QString::fromStdString(param->identifier())
         : QString("Parameter %1").arg(info.number);
     
+    
+    if (hasIdentifier) {
+        m_parametersWithIdentifier[info.path] = true;
+    }
+    
+    if (hadIdentifier && !hasIdentifier) {
+        qDebug() << "[GlowParser] SKIPPING Parameter:" << info.path
+                 << "- would replace valid identifier with stub";
+        return;
+    }
+    
+    info.description = param->contains(libember::glow::ParameterProperty::Description)
+        ? QString::fromStdString(param->description())
+        : QString();
     
     if (param->contains(libember::glow::ParameterProperty::Value)) {
         auto value = param->value();

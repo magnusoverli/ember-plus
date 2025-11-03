@@ -73,6 +73,7 @@ private:
     QString detectReferenceLevel(const QString& formatString) const;
     libember::dom::AsyncDomReader *m_domReader;
     QMap<QString, bool> m_nodesWithIdentifier;
+    QMap<QString, bool> m_parametersWithIdentifier;
     QMap<int, int> m_streamFactors;
     struct MatrixLabelPaths {
         QString matrixPath;
