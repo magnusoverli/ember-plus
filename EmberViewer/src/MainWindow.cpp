@@ -227,11 +227,41 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // Disconnect from provider before cleanup
+    if (m_connection && m_connection->isConnected()) {
+        m_connection->disconnect();
+    }
+    
+    // Ensure all subscriptions are cleared
+    if (m_activeMeterPath.isEmpty() == false) {
+        m_activeMeterPath.clear();
+    }
+    if (m_activeParameterPath.isEmpty() == false) {
+        m_activeParameterPath.clear();
+    }
+    
+    // Clean up property panel widgets to avoid dangling pointers
+    m_propertyPanel = nullptr;
+    m_activeParameterWidget = nullptr;
+    m_activeMeter = nullptr;
+    
     saveSettings();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    // Gracefully disconnect before closing
+    if (m_connection && m_connection->isConnected()) {
+        qInfo().noquote() << "Disconnecting before window close...";
+        m_connection->disconnect();
+        
+        // Give the socket time to disconnect gracefully
+        // This prevents SIGSEGV from pending socket operations
+        QEventLoop loop;
+        QTimer::singleShot(100, &loop, &QEventLoop::quit);
+        loop.exec();
+    }
+    
     saveSettings();
     QMainWindow::closeEvent(event);
 }

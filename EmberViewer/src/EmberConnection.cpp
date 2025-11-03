@@ -89,10 +89,18 @@ EmberConnection::EmberConnection(QObject *parent)
     
     connect(m_glowParser, &GlowParser::matrixTargetReceived, this, 
             [this](const EmberData::MatrixTargetInfo& target) {
+                // Track that we've fetched this target label
+                if (m_matrixLabelStates.contains(target.matrixPath)) {
+                    m_matrixLabelStates[target.matrixPath].fetchedTargets.insert(target.targetNumber);
+                }
                 emit matrixTargetReceived(target.matrixPath, target.targetNumber, target.label);
             });
     connect(m_glowParser, &GlowParser::matrixSourceReceived, this,
             [this](const EmberData::MatrixSourceInfo& source) {
+                // Track that we've fetched this source label
+                if (m_matrixLabelStates.contains(source.matrixPath)) {
+                    m_matrixLabelStates[source.matrixPath].fetchedSources.insert(source.sourceNumber);
+                }
                 emit matrixSourceReceived(source.matrixPath, source.sourceNumber, source.label);
             });
     connect(m_glowParser, &GlowParser::matrixConnectionReceived, this,
@@ -126,12 +134,20 @@ EmberConnection::EmberConnection(QObject *parent)
     
     connect(m_glowParser, &GlowParser::matrixLabelPathsDiscovered, this,
             [this](const QString& matrixPath, const QStringList& basePaths) {
-                qInfo().noquote() << QString("Matrix %1: Requesting label parameters for %2 label layers")
+                qInfo().noquote() << QString("Matrix %1: Prefetching ALL labels for %2 label layers")
                     .arg(matrixPath).arg(basePaths.size());
+                
+                // Update the matrix fetch state with label base paths
+                if (m_matrixLabelStates.contains(matrixPath)) {
+                    m_matrixLabelStates[matrixPath].labelBasePaths = basePaths;
+                }
+                
                 for (const QString& basePath : basePaths) {
-                    
+                    // Track this as a label base path for recursive fetching
                     m_labelBasePaths.insert(basePath);
-                    qDebug().noquote() << QString("  - Requesting labels at basePath: %1").arg(basePath);
+                    m_labelFetchPaths.insert(basePath);
+                    m_labelPathToMatrix[basePath] = matrixPath;
+                    qDebug().noquote() << QString("  - Starting recursive label fetch at basePath: %1").arg(basePath);
                     sendGetDirectoryForPath(basePath);
                 }
             });
@@ -151,10 +167,30 @@ EmberConnection::EmberConnection(QObject *parent)
 
 EmberConnection::~EmberConnection()
 {
-    if (m_socket->state() == QAbstractSocket::ConnectedState) {
-        m_socket->disconnectFromHost();
+    // Stop all timers first
+    if (m_connectionTimer) {
+        m_connectionTimer->stop();
+    }
+    if (m_protocolTimer) {
+        m_protocolTimer->stop();
     }
     
+    // Disconnect all signals to prevent crashes during cleanup
+    if (m_socket) {
+        m_socket->disconnect();
+        
+        // Close the socket connection if still connected
+        if (m_socket->state() == QAbstractSocket::ConnectedState) {
+            m_socket->disconnectFromHost();
+            // Don't wait for graceful disconnect in destructor
+            // Just abort to ensure immediate cleanup
+            if (m_socket->state() != QAbstractSocket::UnconnectedState) {
+                m_socket->abort();
+            }
+        }
+    }
+    
+    // Now safe to delete protocol handlers
     delete m_s101Protocol;
     delete m_glowParser;
 }
@@ -476,12 +512,18 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
     
     bool shouldAutoRequest = false;
     
-    
-    if (pathDepth == 1 && m_cacheManager->hasRootNode(node.path) && m_cacheManager->isRootNodeGeneric(node.path)) {
+    // Auto-expand first 3 depth levels to discover all matrices and enable label prefetching
+    // This ensures matrices are discovered immediately on connection without user interaction
+    if (pathDepth <= 3) {
+        shouldAutoRequest = true;
+        qDebug().noquote() << QString("Auto-expanding node at depth %1 to discover matrices: %2")
+            .arg(pathDepth).arg(node.path);
+    }
+    // Legacy: Also handle specific root node name discovery cases
+    else if (pathDepth == 1 && m_cacheManager->hasRootNode(node.path) && m_cacheManager->isRootNodeGeneric(node.path)) {
         shouldAutoRequest = true;
         qDebug().noquote() << QString("Auto-requesting children of root node %1 for name discovery").arg(node.path);
     }
-    
     else if (pathDepth == 2) {
         QString rootPath = pathParts[0];
         if (m_cacheManager->hasRootNode(rootPath)) {
@@ -494,18 +536,35 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
     }
     
     
+    // Check if this node is part of an active label fetch operation
+    bool isLabelFetchNode = false;
     for (const QString& labelBasePath : m_labelBasePaths) {
-        if (node.path.startsWith(labelBasePath + ".")) {
-            shouldAutoRequest = true;
-            qDebug().noquote() << QString("Auto-requesting children of label node %1 (under basePath %2)")
-                .arg(node.path).arg(labelBasePath);
+        if (node.path.startsWith(labelBasePath + ".") || node.path == labelBasePath) {
+            isLabelFetchNode = true;
+            
+            // If we're actively fetching labels for this base path, recursively request children
+            if (m_labelFetchPaths.contains(labelBasePath)) {
+                // Calculate depth relative to base path to limit recursion
+                QString relativePath = node.path.mid(labelBasePath.length());
+                int depth = relativePath.count('.') - 1; // -1 for the leading dot
+                
+                // Limit recursion depth to 3 levels below base path
+                // basePath.0.1 = label parameter (depth 2), no need to go deeper
+                if (depth < 2) {
+                    shouldAutoRequest = true;
+                    qDebug().noquote() << QString("Recursive label fetch (depth %1): requesting children of %2")
+                        .arg(depth + 1).arg(node.path);
+                }
+            }
             break;
         }
     }
     
     if (shouldAutoRequest) {
-        
-        sendGetDirectoryForPath(node.path, true);
+        // Use optimized field mask only for label fetch operations
+        // For matrix discovery, we need full details (DirFieldMask::All)
+        bool optimizeForLabels = isLabelFetchNode;
+        sendGetDirectoryForPath(node.path, optimizeForLabels);
     }
 }
 
@@ -560,6 +619,12 @@ void EmberConnection::onParserMatrixReceived(const EmberData::MatrixInfo& matrix
 {
     qDebug().noquote() << QString("Matrix: %1 [%2] - Type:%3, %4×%5")
                     .arg(matrix.identifier).arg(matrix.path).arg(matrix.type).arg(matrix.sourceCount).arg(matrix.targetCount);
+    
+    // Initialize label fetch state for this matrix
+    MatrixLabelFetchState fetchState;
+    fetchState.targetCount = matrix.targetCount;
+    fetchState.sourceCount = matrix.sourceCount;
+    m_matrixLabelStates[matrix.path] = fetchState;
     
     emit matrixReceived(matrix.path, matrix.number, matrix.identifier, matrix.description, 
                        matrix.type, matrix.targetCount, matrix.sourceCount);
@@ -621,7 +686,8 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
             
             qDebug().noquote() << "Creating bare GlowCommand for root...";
             auto command = new libember::glow::GlowCommand(
-                libember::glow::CommandType::GetDirectory
+                libember::glow::CommandType::GetDirectory,
+                fieldMask
             );
             qDebug().noquote() << "Inserting command into root...";
             root->insert(root->end(), command);
@@ -640,10 +706,12 @@ void EmberConnection::sendGetDirectoryForPath(const QString& path, bool optimize
             auto node = new libember::glow::GlowQualifiedNode(oid);
             new libember::glow::GlowCommand(
                 node,
-                libember::glow::CommandType::GetDirectory
+                libember::glow::CommandType::GetDirectory,
+                fieldMask
             );
             root->insert(root->end(), node);
-            qDebug().noquote() << "QualifiedNode with command inserted (no field mask)";
+            qDebug().noquote() << QString("QualifiedNode with command inserted (field mask: %1)")
+                .arg(optimizedForNameDiscovery ? "Name discovery" : "All");
         }
         
         

@@ -115,6 +115,16 @@ private:
     QTimer *m_protocolTimer;
     QSet<QString> m_requestedPaths;
     QSet<QString> m_labelBasePaths;
+    QSet<QString> m_labelFetchPaths;  // Tracks paths actively being fetched for labels
+    QMap<QString, QString> m_labelPathToMatrix;  // labelBasePath -> matrixPath
+    struct MatrixLabelFetchState {
+        int targetCount;
+        int sourceCount;
+        QSet<int> fetchedTargets;
+        QSet<int> fetchedSources;
+        QStringList labelBasePaths;  // 0=targets, 1=sources
+    };
+    QMap<QString, MatrixLabelFetchState> m_matrixLabelStates;  // matrixPath -> fetch state
     int m_nextInvocationId;
     QMap<int, QString> m_pendingInvocations;
     struct SubscriptionState {
