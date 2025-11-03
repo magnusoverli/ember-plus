@@ -19,7 +19,7 @@ GraphWidget::GraphWidget(QWidget *parent)
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(10);
     
-    // Identifier label at top
+    
     m_identifierLabel = new QLabel(this);
     QFont identFont = m_identifierLabel->font();
     identFont.setPointSize(14);
@@ -28,7 +28,7 @@ GraphWidget::GraphWidget(QWidget *parent)
     m_identifierLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(m_identifierLabel);
     
-    // Current value display
+    
     m_currentValueLabel = new QLabel("--", this);
     QFont valueFont = m_currentValueLabel->font();
     valueFont.setPointSize(18);
@@ -38,7 +38,7 @@ GraphWidget::GraphWidget(QWidget *parent)
     m_currentValueLabel->setStyleSheet("color: #2196F3; padding: 5px;");
     mainLayout->addWidget(m_currentValueLabel);
     
-    // Stats label
+    
     m_statsLabel = new QLabel("No data", this);
     m_statsLabel->setAlignment(Qt::AlignCenter);
     m_statsLabel->setStyleSheet("color: #666; font-size: 10pt;");
@@ -46,13 +46,13 @@ GraphWidget::GraphWidget(QWidget *parent)
     
     mainLayout->addSpacing(10);
     
-    // Graph area (will be drawn in paintEvent)
+    
     QWidget *graphArea = new QWidget(this);
     graphArea->setMinimumHeight(250);
     graphArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    mainLayout->addWidget(graphArea, 1);  // Stretch factor
+    mainLayout->addWidget(graphArea, 1);  
     
-    // Time window selector
+    
     QHBoxLayout *controlLayout = new QHBoxLayout();
     QLabel *timeLabel = new QLabel("Time window:", this);
     timeLabel->setStyleSheet("font-size: 10pt;");
@@ -63,7 +63,7 @@ GraphWidget::GraphWidget(QWidget *parent)
     m_timeWindowCombo->addItem("30 seconds", 30);
     m_timeWindowCombo->addItem("1 minute", 60);
     m_timeWindowCombo->addItem("5 minutes", 300);
-    m_timeWindowCombo->setCurrentIndex(1);  // 30 seconds default
+    m_timeWindowCombo->setCurrentIndex(1);  
     m_timeWindowCombo->setStyleSheet("font-size: 10pt;");
     connect(m_timeWindowCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &GraphWidget::onTimeWindowChanged);
@@ -72,7 +72,7 @@ GraphWidget::GraphWidget(QWidget *parent)
     
     mainLayout->addLayout(controlLayout);
     
-    // Path info at bottom
+    
     m_pathLabel = new QLabel(this);
     m_pathLabel->setAlignment(Qt::AlignCenter);
     m_pathLabel->setStyleSheet("color: #AAA; font-size: 9pt; padding-top: 5px;");
@@ -110,16 +110,16 @@ void GraphWidget::addDataPoint(double value)
     
     m_dataPoints.append(point);
     
-    // Prune old data
+    
     pruneOldData();
     
-    // Update current value display
+    
     m_currentValueLabel->setText(formatValue(value));
     
-    // Update stats
+    
     updateStats();
     
-    // Trigger repaint
+    
     update();
 }
 
@@ -143,7 +143,7 @@ void GraphWidget::pruneOldData()
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     qint64 cutoff = now - (m_timeWindowSeconds * 1000);
     
-    // Remove data points older than time window
+    
     while (!m_dataPoints.isEmpty() && m_dataPoints.first().timestamp < cutoff) {
         m_dataPoints.removeFirst();
     }
@@ -182,20 +182,20 @@ void GraphWidget::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     
-    // Calculate graph area (leave margins)
-    QRect graphRect = rect();
-    graphRect.adjust(60, 100, -20, -120);  // Left, Top, Right, Bottom margins
     
-    // Draw background
+    QRect graphRect = rect();
+    graphRect.adjust(60, 100, -20, -120);  
+    
+    
     painter.fillRect(graphRect, QColor(250, 250, 250));
     painter.setPen(QPen(QColor(200, 200, 200), 1));
     painter.drawRect(graphRect);
     
-    // Draw grid lines and axes
+    
     drawGridLines(painter, graphRect);
     drawAxes(painter, graphRect);
     
-    // Draw the graph line
+    
     drawGraph(painter, graphRect);
 }
 
@@ -212,7 +212,7 @@ void GraphWidget::drawAxes(QPainter &painter, const QRect &graphRect)
     axisFont.setPointSize(8);
     painter.setFont(axisFont);
     
-    // Y-axis labels (values)
+    
     int numYLabels = 5;
     for (int i = 0; i <= numYLabels; i++) {
         double value = m_minValue + (m_maxValue - m_minValue) * i / numYLabels;
@@ -221,11 +221,11 @@ void GraphWidget::drawAxes(QPainter &painter, const QRect &graphRect)
         QString label = formatValue(value);
         painter.drawText(QRect(5, y - 10, 50, 20), Qt::AlignRight | Qt::AlignVCenter, label);
         
-        // Tick mark
+        
         painter.drawLine(graphRect.left() - 5, y, graphRect.left(), y);
     }
     
-    // X-axis labels (time)
+    
     if (!m_dataPoints.isEmpty()) {
         qint64 now = QDateTime::currentMSecsSinceEpoch();
         qint64 windowStart = now - (m_timeWindowSeconds * 1000);
@@ -240,7 +240,7 @@ void GraphWidget::drawAxes(QPainter &painter, const QRect &graphRect)
             painter.drawText(QRect(x - 30, graphRect.bottom() + 5, 60, 20), 
                            Qt::AlignCenter, label);
             
-            // Tick mark
+            
             painter.drawLine(x, graphRect.bottom(), x, graphRect.bottom() + 5);
         }
     }
@@ -250,14 +250,14 @@ void GraphWidget::drawGridLines(QPainter &painter, const QRect &graphRect)
 {
     painter.setPen(QPen(QColor(220, 220, 220), 1, Qt::DotLine));
     
-    // Horizontal grid lines
+    
     int numHLines = 5;
     for (int i = 0; i <= numHLines; i++) {
         int y = graphRect.bottom() - (graphRect.height() * i / numHLines);
         painter.drawLine(graphRect.left(), y, graphRect.right(), y);
     }
     
-    // Vertical grid lines
+    
     int numVLines = 4;
     for (int i = 0; i <= numVLines; i++) {
         int x = graphRect.left() + (graphRect.width() * i / numVLines);
@@ -272,18 +272,18 @@ void GraphWidget::drawGraph(QPainter &painter, const QRect &graphRect)
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     qint64 windowStart = now - (m_timeWindowSeconds * 1000);
     
-    // Build path for graph line
+    
     QPainterPath path;
     bool firstPoint = true;
     
     for (const DataPoint &point : m_dataPoints) {
-        // Map timestamp to x coordinate
+        
         double timeRatio = static_cast<double>(point.timestamp - windowStart) / (m_timeWindowSeconds * 1000);
         int x = graphRect.left() + static_cast<int>(timeRatio * graphRect.width());
         
-        // Map value to y coordinate
+        
         double valueRatio = (point.value - m_minValue) / (m_maxValue - m_minValue);
-        valueRatio = qBound(0.0, valueRatio, 1.0);  // Clamp
+        valueRatio = qBound(0.0, valueRatio, 1.0);  
         int y = graphRect.bottom() - static_cast<int>(valueRatio * graphRect.height());
         
         if (firstPoint) {
@@ -294,11 +294,11 @@ void GraphWidget::drawGraph(QPainter &painter, const QRect &graphRect)
         }
     }
     
-    // Draw the line
-    painter.setPen(QPen(QColor(33, 150, 243), 2));  // Blue
+    
+    painter.setPen(QPen(QColor(33, 150, 243), 2));  
     painter.drawPath(path);
     
-    // Draw points
+    
     painter.setBrush(QColor(33, 150, 243));
     for (const DataPoint &point : m_dataPoints) {
         double timeRatio = static_cast<double>(point.timestamp - windowStart) / (m_timeWindowSeconds * 1000);

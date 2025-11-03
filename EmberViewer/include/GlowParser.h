@@ -41,11 +41,9 @@ public:
     explicit GlowParser(QObject *parent = nullptr);
     ~GlowParser();
 
-    
     void parseEmberData(const QByteArray& data);
 
 signals:
-    
     void nodeReceived(const EmberData::NodeInfo& node);
     void parameterReceived(const EmberData::ParameterInfo& param);
     void matrixReceived(const EmberData::MatrixInfo& matrix);
@@ -57,7 +55,6 @@ signals:
     void invocationResultReceived(const EmberData::InvocationResult& result);
     void streamValueReceived(const EmberData::StreamValue& streamValue);
     void matrixLabelPathsDiscovered(const QString& matrixPath, const QStringList& basePaths);
-    
     void parsingError(const QString& error);
 
 private:
@@ -74,24 +71,14 @@ private:
     void processInvocationResult(libember::dom::Node* result);
     void processStreamCollection(libember::glow::GlowContainer* streamCollection);
     QString detectReferenceLevel(const QString& formatString) const;
-    
     libember::dom::AsyncDomReader *m_domReader;
-    
-    
-    
     QMap<QString, bool> m_nodesWithIdentifier;
-    
-    // Map stream identifier to factor for proper value conversion
     QMap<int, int> m_streamFactors;
-    
-    // Structure to track label paths for a matrix
     struct MatrixLabelPaths {
         QString matrixPath;
-        QMap<QString, QString> labelBasePaths;  // basePath -> description (e.g., "1.2.3.1" -> "Primary")
-        QList<QString> labelOrder;  // Ordered list of basePaths (index 0 = targets, 1 = sources)
+        QMap<QString, QString> labelBasePaths;
+        QList<QString> labelOrder;
     };
-    
-    // Map matrix path to its label paths
     QMap<QString, MatrixLabelPaths> m_matrixLabelPaths;
 };
 

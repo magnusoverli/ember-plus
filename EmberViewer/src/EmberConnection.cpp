@@ -123,13 +123,13 @@ EmberConnection::EmberConnection(QObject *parent)
         disconnect();
     });
     
-    // Connect matrix label paths discovered signal to request label parameters
+    
     connect(m_glowParser, &GlowParser::matrixLabelPathsDiscovered, this,
             [this](const QString& matrixPath, const QStringList& basePaths) {
                 qInfo().noquote() << QString("Matrix %1: Requesting label parameters for %2 label layers")
                     .arg(matrixPath).arg(basePaths.size());
                 for (const QString& basePath : basePaths) {
-                    // Track this basePath so we auto-expand its children
+                    
                     m_labelBasePaths.insert(basePath);
                     qDebug().noquote() << QString("  - Requesting labels at basePath: %1").arg(basePath);
                     sendGetDirectoryForPath(basePath);
@@ -493,7 +493,7 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
         }
     }
     
-    // Check if this node is under a matrix label basePath - if so, auto-request its children
+    
     for (const QString& labelBasePath : m_labelBasePaths) {
         if (node.path.startsWith(labelBasePath + ".")) {
             shouldAutoRequest = true;

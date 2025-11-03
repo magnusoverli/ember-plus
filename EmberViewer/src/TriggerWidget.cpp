@@ -14,7 +14,7 @@ TriggerWidget::TriggerWidget(QWidget *parent)
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(15);
     
-    // Identifier label at top
+    
     m_identifierLabel = new QLabel(this);
     QFont identFont = m_identifierLabel->font();
     identFont.setPointSize(14);
@@ -23,7 +23,7 @@ TriggerWidget::TriggerWidget(QWidget *parent)
     m_identifierLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(m_identifierLabel);
     
-    // Status label
+    
     m_statusLabel = new QLabel("Ready to trigger", this);
     m_statusLabel->setAlignment(Qt::AlignCenter);
     m_statusLabel->setStyleSheet("color: #666; font-size: 11pt;");
@@ -31,7 +31,7 @@ TriggerWidget::TriggerWidget(QWidget *parent)
     
     mainLayout->addSpacing(10);
     
-    // Large trigger button
+    
     m_triggerButton = new QPushButton("TRIGGER", this);
     m_triggerButton->setMinimumHeight(80);
     m_triggerButton->setMaximumWidth(300);
@@ -68,13 +68,13 @@ TriggerWidget::TriggerWidget(QWidget *parent)
     
     mainLayout->addSpacing(10);
     
-    // Last triggered info
+    
     m_lastTriggeredLabel = new QLabel("Never triggered", this);
     m_lastTriggeredLabel->setAlignment(Qt::AlignCenter);
     m_lastTriggeredLabel->setStyleSheet("color: #888; font-size: 10pt;");
     mainLayout->addWidget(m_lastTriggeredLabel);
     
-    // Path info (smaller, at bottom)
+    
     m_pathLabel = new QLabel(this);
     m_pathLabel->setAlignment(Qt::AlignCenter);
     m_pathLabel->setStyleSheet("color: #AAA; font-size: 9pt; padding-top: 10px;");
@@ -97,7 +97,7 @@ void TriggerWidget::setParameterInfo(const QString &identifier, const QString &p
     m_identifierLabel->setText(identifier);
     m_pathLabel->setText(QString("Path: %1").arg(path));
     
-    // Enable only if writable (access == 2 WriteOnly or 3 ReadWrite)
+    
     bool canWrite = (access == 2 || access == 3);
     setTriggerEnabled(canWrite);
     
@@ -110,7 +110,7 @@ void TriggerWidget::setParameterInfo(const QString &identifier, const QString &p
 void TriggerWidget::setTriggerEnabled(bool enabled)
 {
     m_triggerButton->setEnabled(enabled);
-    if (!enabled && m_access != 1) {  // Don't override read-only message
+    if (!enabled && m_access != 1) {  
         m_statusLabel->setText("Trigger disabled");
         m_statusLabel->setStyleSheet("color: #999; font-size: 11pt;");
     }
@@ -118,7 +118,7 @@ void TriggerWidget::setTriggerEnabled(bool enabled)
 
 void TriggerWidget::onTriggerButtonClicked()
 {
-    // Always show confirmation dialog
+    
     QMessageBox confirmBox(this);
     confirmBox.setWindowTitle("Confirm Trigger");
     confirmBox.setText(QString("Trigger parameter '%1'?").arg(m_identifier));
@@ -130,10 +130,10 @@ void TriggerWidget::onTriggerButtonClicked()
     int result = confirmBox.exec();
     
     if (result == QMessageBox::Yes) {
-        // Emit trigger signal
+        
         emit triggerActivated(m_parameterPath, "1");
         
-        // Update state
+        
         m_lastTriggerTime = QDateTime::currentDateTime();
         m_triggerCount++;
         
@@ -157,11 +157,11 @@ void TriggerWidget::updateLastTriggeredDisplay()
 
 void TriggerWidget::showTriggerFeedback()
 {
-    // Visual feedback - change status temporarily
+    
     m_statusLabel->setText("✓ Triggered!");
     m_statusLabel->setStyleSheet("color: #4CAF50; font-size: 11pt; font-weight: bold;");
     
-    // Flash the button
+    
     m_triggerButton->setStyleSheet(
         "QPushButton {"
         "    background-color: #4CAF50;"
@@ -172,7 +172,7 @@ void TriggerWidget::showTriggerFeedback()
         "}"
     );
     
-    // Reset after 1 second
+    
     QTimer::singleShot(1000, this, [this]() {
         m_statusLabel->setText("Ready to trigger");
         m_statusLabel->setStyleSheet("color: #666; font-size: 11pt;");

@@ -43,7 +43,7 @@ void MatrixManager::onMatrixReceived(const QString &path, int , const QString &i
     bool dimensionsChanged = false;
     
     if (!widget) {
-        // Always use virtualized widget for all matrices (efficient for any size)
+        
         int totalCrosspoints = targetCount * sourceCount;
         qInfo().noquote() << QString("Creating VIRTUALIZED matrix widget: %1 (%2×%3 = %4 crosspoints)")
             .arg(identifier).arg(sourceCount).arg(targetCount).arg(totalCrosspoints);
@@ -53,7 +53,7 @@ void MatrixManager::onMatrixReceived(const QString &path, int , const QString &i
         isNew = true;
     }
     
-    // Get old dimensions for change detection
+    
     int oldTargetCount = widget->getTargetNumbers().size();
     int oldSourceCount = widget->getSourceNumbers().size();
     
@@ -63,7 +63,7 @@ void MatrixManager::onMatrixReceived(const QString &path, int , const QString &i
             .arg(identifier).arg(oldSourceCount).arg(oldTargetCount).arg(sourceCount).arg(targetCount);
     }
     
-    // Set matrix info
+    
     widget->setMatrixPath(path);
     widget->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
     

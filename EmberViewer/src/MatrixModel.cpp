@@ -1,13 +1,11 @@
-/*
-    MatrixModel.cpp - Implementation of pure data model for matrix state
-*/
+
 
 #include "MatrixModel.h"
 #include <QDebug>
 
 MatrixModel::MatrixModel(QObject *parent)
     : QObject(parent)
-    , m_matrixType(2)  // Default to N:N
+    , m_matrixType(2)  
     , m_targetCount(0)
     , m_sourceCount(0)
 {
@@ -31,7 +29,7 @@ void MatrixModel::setMatrixInfo(const QString &identifier, const QString &descri
     m_targetCount = targetCount;
     m_sourceCount = sourceCount;
     
-    // Auto-generate target/source lists if dimensions changed from empty to populated
+    
     if (dimensionsChanged && wasEmpty && nowPopulated) {
         if (m_targetNumbers.isEmpty() && targetCount > 0) {
             qDebug().noquote() << QString("MatrixModel: AUTO-GENERATING placeholder labels for %1 targets (matrix: %2)")
@@ -82,8 +80,8 @@ void MatrixModel::setSourceNumbers(const QList<int> &numbers)
 
 void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
 {
-    // Only set label if not already set, or if current is a placeholder
-    // This prevents later label layers from overwriting good labels with "N/A"
+    
+    
     QString currentLabel = m_targetLabels.value(targetNumber);
     bool isPlaceholder = currentLabel.isEmpty() || currentLabel.startsWith("Target ");
     
@@ -93,7 +91,7 @@ void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
         
         m_targetLabels[targetNumber] = label;
         
-        // Add to numbers list if not present
+        
         if (!m_targetNumbers.contains(targetNumber)) {
             m_targetNumbers.append(targetNumber);
             std::sort(m_targetNumbers.begin(), m_targetNumbers.end());
@@ -108,8 +106,8 @@ void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
 
 void MatrixModel::setSourceLabel(int sourceNumber, const QString &label)
 {
-    // Only set label if not already set, or if current is a placeholder
-    // This prevents later label layers from overwriting good labels with "N/A"
+    
+    
     QString currentLabel = m_sourceLabels.value(sourceNumber);
     bool isPlaceholder = currentLabel.isEmpty() || currentLabel.startsWith("Source ");
     
@@ -119,7 +117,7 @@ void MatrixModel::setSourceLabel(int sourceNumber, const QString &label)
         
         m_sourceLabels[sourceNumber] = label;
         
-        // Add to numbers list if not present
+        
         if (!m_sourceNumbers.contains(sourceNumber)) {
             m_sourceNumbers.append(sourceNumber);
             std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());

@@ -1,7 +1,4 @@
-/*
-    VirtualizedMatrixWidget.h - High-performance virtualized matrix grid
-    Renders only visible crosspoints for efficient handling of huge matrices
-*/
+
 
 #ifndef VIRTUALIZEDMATRIXWIDGET_H
 #define VIRTUALIZEDMATRIXWIDGET_H
@@ -24,11 +21,11 @@ public:
     explicit VirtualizedMatrixWidget(QWidget *parent = nullptr);
     ~VirtualizedMatrixWidget();
 
-    // Model management
+    
     void setModel(MatrixModel *model);
     MatrixModel* model() const { return m_model; }
 
-    // MatrixWidget API compatibility methods
+    
     void setMatrixInfo(const QString &identifier, const QString &description,
                        int type, int targetCount, int sourceCount);
     void setMatrixPath(const QString &path);
@@ -47,48 +44,48 @@ public:
     void setCrosspointsEnabled(bool enabled);
     void updateCornerButton(bool enabled, int timeRemaining);
 
-    // Cell sizing
+    
     void setCellSize(const QSize &size);
     QSize cellSize() const { return m_cellSize; }
 
-    // Header/Sidebar dimensions
+    
     void setHeaderHeight(int height);
     void setSidebarWidth(int width);
     int headerHeight() const { return m_headerHeight; }
     int sidebarWidth() const { return m_sidebarWidth; }
     
-    // Global preferred dimensions (shared across all matrix widgets)
+    
     static void setPreferredHeaderHeight(int height);
     static void setPreferredSidebarWidth(int width);
     static int preferredHeaderHeight();
     static int preferredSidebarWidth();
 
-    // Coordinate conversion
+    
     QPoint cellAt(const QPoint &pos) const;
     QRect cellRect(int row, int col) const;
 
-    // Selection state
+    
     void setSelectedCell(int targetIndex, int sourceIndex);
     void clearSelection();
     QPoint selectedCell() const { return m_selectedCell; }
 
-    // Hover state
+    
     QPoint hoveredCell() const { return m_hoveredCell; }
 
-    // Force full repaint (e.g., after connection changes)
+    
     void refresh();
 
 signals:
     void crosspointClicked(int targetNumber, int sourceNumber);
     void crosspointHovered(int targetNumber, int sourceNumber);
     void selectionChanged(int targetNumber, int sourceNumber);
-    // Overload with matrixPath for better routing
+    
     void crosspointClicked(const QString &matrixPath, int targetNumber, int sourceNumber);
     void enableCrosspointsRequested(bool enable);
     void crosspointToggleRequested();
 
 protected:
-    // QAbstractScrollArea overrides
+    
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -115,25 +112,25 @@ private:
 
     MatrixModel *m_model;
 
-    // Layout parameters
-    QSize m_cellSize;           // Size of each crosspoint cell
-    int m_headerHeight;         // Height of target label header
-    int m_sidebarWidth;         // Width of source label sidebar
     
-    // Interaction state
-    QPoint m_selectedCell;      // (row, col) in visible grid coordinates
-    QPoint m_hoveredCell;       // (row, col) in visible grid coordinates
+    QSize m_cellSize;           
+    int m_headerHeight;         
+    int m_sidebarWidth;         
+    
+    
+    QPoint m_selectedCell;      
+    QPoint m_hoveredCell;       
     bool m_isDragging;
     bool m_crosspointsEnabled;
 
-    // Child views
+    
     VirtualizedHeaderView *m_headerView;
     VirtualizedSidebarView *m_sidebarView;
     QPushButton *m_cornerWidget;
     
-    // Path for signal compatibility
+    
     QString m_matrixPath;
 };
 
-#endif // VIRTUALIZEDMATRIXWIDGET_H
+#endif 
 

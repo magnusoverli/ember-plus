@@ -18,10 +18,10 @@ public:
     explicit TriggerWidget(QWidget *parent = nullptr);
     ~TriggerWidget();
 
-    // Configure the trigger parameter
+    
     void setParameterInfo(const QString &identifier, const QString &path, int access);
     
-    // Enable/disable based on access rights or connection state
+    
     void setTriggerEnabled(bool enabled);
 
 signals:
@@ -48,4 +48,4 @@ private:
     void showTriggerFeedback();
 };
 
-#endif // TRIGGERWIDGET_H
+#endif 

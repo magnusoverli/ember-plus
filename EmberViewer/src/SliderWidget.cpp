@@ -9,7 +9,7 @@ SliderWidget::SliderWidget(QWidget *parent)
     : QWidget(parent)
     , m_minValue(0.0)
     , m_maxValue(100.0)
-    , m_paramType(2)  // Default to Real
+    , m_paramType(2)  
     , m_access(0)
     , m_updatingFromCode(false)
 {
@@ -17,7 +17,7 @@ SliderWidget::SliderWidget(QWidget *parent)
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(15);
     
-    // Identifier label at top
+    
     m_identifierLabel = new QLabel(this);
     QFont identFont = m_identifierLabel->font();
     identFont.setPointSize(14);
@@ -28,7 +28,7 @@ SliderWidget::SliderWidget(QWidget *parent)
     
     mainLayout->addSpacing(10);
     
-    // Large current value display
+    
     m_currentValueLabel = new QLabel("0", this);
     QFont valueFont = m_currentValueLabel->font();
     valueFont.setPointSize(28);
@@ -40,7 +40,7 @@ SliderWidget::SliderWidget(QWidget *parent)
     
     mainLayout->addSpacing(5);
     
-    // Min/Max labels and slider in horizontal layout
+    
     QHBoxLayout *sliderLayout = new QHBoxLayout();
     
     m_minLabel = new QLabel("0", this);
@@ -49,9 +49,9 @@ SliderWidget::SliderWidget(QWidget *parent)
     m_minLabel->setMinimumWidth(60);
     sliderLayout->addWidget(m_minLabel);
     
-    // Horizontal slider
+    
     m_slider = new QSlider(Qt::Horizontal, this);
-    m_slider->setRange(0, 1000);  // Use fixed range, map to actual values
+    m_slider->setRange(0, 1000);  
     m_slider->setValue(0);
     m_slider->setMinimumWidth(300);
     m_slider->setStyleSheet(
@@ -86,7 +86,7 @@ SliderWidget::SliderWidget(QWidget *parent)
     
     mainLayout->addSpacing(10);
     
-    // Fine control spinbox
+    
     QHBoxLayout *spinBoxLayout = new QHBoxLayout();
     QLabel *fineLabel = new QLabel("Fine control:", this);
     fineLabel->setStyleSheet("font-size: 10pt; color: #666;");
@@ -105,7 +105,7 @@ SliderWidget::SliderWidget(QWidget *parent)
     
     mainLayout->addLayout(spinBoxLayout);
     
-    // Path info at bottom
+    
     m_pathLabel = new QLabel(this);
     m_pathLabel->setAlignment(Qt::AlignCenter);
     m_pathLabel->setStyleSheet("color: #AAA; font-size: 9pt; padding-top: 10px;");
@@ -138,25 +138,25 @@ void SliderWidget::setParameterInfo(const QString &identifier, const QString &pa
                         .arg(minValue)
                         .arg(maxValue));
     
-    // Update labels
+    
     m_minLabel->setText(formatDisplayValue(minValue));
     m_maxLabel->setText(formatDisplayValue(maxValue));
     
-    // Configure spinbox
+    
     m_updatingFromCode = true;
     m_spinBox->setRange(minValue, maxValue);
-    if (paramType == 1) {  // Integer
+    if (paramType == 1) {  
         m_spinBox->setDecimals(0);
         m_spinBox->setSingleStep(1.0);
-    } else {  // Real
+    } else {  
         m_spinBox->setDecimals(3);
         double step = (maxValue - minValue) / 100.0;
         m_spinBox->setSingleStep(step);
     }
     m_updatingFromCode = false;
     
-    // Enable/disable based on access
-    bool canWrite = (access == 2 || access == 3);  // WriteOnly or ReadWrite
+    
+    bool canWrite = (access == 2 || access == 3);  
     setEditEnabled(canWrite);
 }
 
@@ -164,17 +164,17 @@ void SliderWidget::setValue(double value)
 {
     m_updatingFromCode = true;
     
-    // Clamp value
+    
     value = qBound(m_minValue, value, m_maxValue);
     
-    // Update display
+    
     m_currentValueLabel->setText(formatDisplayValue(value));
     
-    // Update slider
+    
     int sliderPos = doubleToSliderPosition(value);
     m_slider->setValue(sliderPos);
     
-    // Update spinbox
+    
     m_spinBox->setValue(value);
     
     m_updatingFromCode = false;
@@ -198,18 +198,18 @@ void SliderWidget::onSliderValueChanged(int value)
     
     double doubleValue = sliderPositionToDouble(value);
     
-    // Round to integer if needed
+    
     if (m_paramType == 1) {
         doubleValue = std::round(doubleValue);
     }
     
-    // Update display and spinbox
+    
     m_updatingFromCode = true;
     m_currentValueLabel->setText(formatDisplayValue(doubleValue));
     m_spinBox->setValue(doubleValue);
     m_updatingFromCode = false;
     
-    // Emit value change
+    
     QString valueStr;
     if (m_paramType == 1) {
         valueStr = QString::number(static_cast<int>(doubleValue));
@@ -223,14 +223,14 @@ void SliderWidget::onSpinBoxValueChanged(double value)
 {
     if (m_updatingFromCode) return;
     
-    // Update slider and display
+    
     m_updatingFromCode = true;
     m_currentValueLabel->setText(formatDisplayValue(value));
     int sliderPos = doubleToSliderPosition(value);
     m_slider->setValue(sliderPos);
     m_updatingFromCode = false;
     
-    // Emit value change
+    
     QString valueStr;
     if (m_paramType == 1) {
         valueStr = QString::number(static_cast<int>(value));
@@ -242,9 +242,9 @@ void SliderWidget::onSpinBoxValueChanged(double value)
 
 QString SliderWidget::formatDisplayValue(double value) const
 {
-    // Use formula/format if available
+    
     if (!m_format.isEmpty()) {
-        // Simple formatting - just append units if present
+        
         if (m_paramType == 1) {
             return QString::number(static_cast<int>(value)) + " " + m_format;
         } else {
@@ -252,7 +252,7 @@ QString SliderWidget::formatDisplayValue(double value) const
         }
     }
     
-    // Default formatting
+    
     if (m_paramType == 1) {
         return QString::number(static_cast<int>(value));
     } else {
@@ -262,7 +262,7 @@ QString SliderWidget::formatDisplayValue(double value) const
 
 int SliderWidget::doubleToSliderPosition(double value) const
 {
-    // Map [minValue, maxValue] to [0, 1000]
+    
     if (m_maxValue == m_minValue) return 0;
     
     double normalized = (value - m_minValue) / (m_maxValue - m_minValue);
@@ -271,7 +271,7 @@ int SliderWidget::doubleToSliderPosition(double value) const
 
 double SliderWidget::sliderPositionToDouble(int position) const
 {
-    // Map [0, 1000] to [minValue, maxValue]
+    
     double normalized = position / 1000.0;
     return m_minValue + normalized * (m_maxValue - m_minValue);
 }

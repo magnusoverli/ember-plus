@@ -143,11 +143,11 @@ private:
     
     
     MeterWidget *m_activeMeter;
-    QString m_activeMeterPath;  // Track subscribed meter parameter path for cleanup
+    QString m_activeMeterPath;  
     
-    // Active parameter widgets
-    QWidget *m_activeParameterWidget;  // Generic pointer to currently active widget
-    QString m_activeParameterPath;     // Track active parameter path for cleanup
+    
+    QWidget *m_activeParameterWidget;  
+    QString m_activeParameterPath;     
     
     
     QMap<int, QString> m_streamIdToPath;

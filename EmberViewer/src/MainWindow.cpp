@@ -165,7 +165,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_matrixManager, &MatrixManager::matrixDimensionsUpdated, this, &MainWindow::onMatrixDimensionsUpdated);
     connect(m_matrixManager, &MatrixManager::matrixWidgetCreated, this, &MainWindow::onMatrixWidgetCreated);
     
-    // Connect activity tracker timer updates to update matrix corner buttons
+    
     connect(m_activityTracker, &CrosspointActivityTracker::timeRemainingChanged, 
             this, [this](int seconds) {
         VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(m_propertyPanel);
@@ -238,7 +238,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
-    // Handle port spin Enter key
+    
     if (watched == m_portSpin && event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
@@ -250,7 +250,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     
-    // Handle update status label click
+    
     if (watched == m_updateStatusLabel && event->type() == QEvent::MouseButtonPress) {
         if (m_updateDialog) {
             m_updateDialog->show();
@@ -492,7 +492,7 @@ void MainWindow::setupMenu()
             "<p><b>Copyright:</b><br>"
             "© 2012-2019 Lawo GmbH (libember)<br>"
             "© 2025 Magnus Overli (EmberViewer)</p>"
-            "<p><a href='https://github.com/magnusoverli/ember-plus'>github.com/magnusoverli/ember-plus</a></p>");
+            "<p><a href='https:
     });
 }
 
@@ -670,7 +670,7 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
                                     const QString &format, const QString &referenceLevel, const QString &formula, int factor)
 {
-    // Log ALL parameters that contain "matrix" in the path (case-insensitive)
+    
     if (path.contains("matrix", Qt::CaseInsensitive) || path.contains("label", Qt::CaseInsensitive)) {
         qDebug().noquote() << QString("PARAM_TRACE: Path='%1', Identifier='%2', Value='%3'")
             .arg(path).arg(identifier).arg(value);
@@ -704,9 +704,9 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
             m_matrixManager->onMatrixSourceReceived(matrixPath, labelNumber, value);
         }
         
-        return; // Don't process label parameters as regular parameters
+        return; 
     } else if (path.contains("label", Qt::CaseInsensitive)) {
-        // Log when path contains "label" but doesn't match the expected pattern
+        
         qDebug().noquote() << QString("LABEL_NO_MATCH: Path contains 'label' but doesn't match pattern. Path='%1', Parts=%2, Marker='%3'")
             .arg(path).arg(pathParts.size()).arg(MATRIX_LABEL_PATH_MARKER);
     }
@@ -755,15 +755,15 @@ void MainWindow::onMatrixWidgetCreated(const QString &path, QWidget *widget)
 {
     qInfo().noquote() << QString("onMatrixWidgetCreated called for path: %1").arg(path);
     
-    // Connect the crosspoint clicked signal to enable toggling
+    
     VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(widget);
     if (matrixWidget) {
-        // Use the overload with matrixPath parameter (explicitly cast to resolve overload)
+        
         connect(matrixWidget, 
                 static_cast<void(VirtualizedMatrixWidget::*)(const QString&, int, int)>(&VirtualizedMatrixWidget::crosspointClicked),
                 this, &MainWindow::onCrosspointClicked);
         
-        // Connect corner button to enable/disable crosspoints
+        
         connect(matrixWidget, &VirtualizedMatrixWidget::enableCrosspointsRequested,
                 this, [this](bool enable) {
             m_enableCrosspointsAction->setChecked(enable);
@@ -791,7 +791,7 @@ void MainWindow::onMatrixDimensionsUpdated(const QString &path, QWidget *widget)
             qInfo().noquote() << QString("Matrix dimensions updated for currently selected matrix: %1, refreshing display").arg(path);
             
             
-            // Rebuild the virtualized matrix widget
+            
             VirtualizedMatrixWidget *virtualizedWidget = qobject_cast<VirtualizedMatrixWidget*>(widget);
             if (virtualizedWidget) {
                 virtualizedWidget->rebuild();
@@ -838,8 +838,8 @@ void MainWindow::onTreeSelectionChanged()
     QString oidPath = item->data(0, Qt::UserRole).toString();
     QString type = item->text(1);
     
-    // ALWAYS clean up previous property panel content on selection change
-    // This ensures consistent UX - properties area always reflects current selection
+    
+    
     cleanupActiveParameterWidget();
     if (m_activityTracker && m_activityTracker->isEnabled()) {
         m_enableCrosspointsAction->setChecked(false);
@@ -886,19 +886,19 @@ void MainWindow::onTreeSelectionChanged()
                 m_connection->sendGetDirectoryForPath(oidPath);
             }
         } else {
-            // Matrix has dimensions - check if widget already exists
+            
             QWidget *existingWidget = m_matrixManager->getMatrix(oidPath);
             if (existingWidget) {
                 qInfo().noquote() << QString("Displaying existing matrix widget for: %1").arg(oidPath);
                 
-                // Display the existing matrix widget in properties panel
+                
                 QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
                 propLayout->addWidget(existingWidget);
                 propLayout->setContentsMargins(5, 5, 5, 5);
-                existingWidget->show();  // Make visible again after hide in cleanup
+                existingWidget->show();  
                 m_propertyPanel = existingWidget;
                 
-                // Update corner button state
+                
                 VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(existingWidget);
                 if (matrixWidget && m_activityTracker) {
                     matrixWidget->updateCornerButton(m_activityTracker->isEnabled(), 
@@ -920,7 +920,7 @@ void MainWindow::onTreeSelectionChanged()
         
         if (isAudioMeter) {
             
-            // Unsubscribe from previous meter if exists
+            
             if (!m_activeMeterPath.isEmpty()) {
                 m_connection->unsubscribeFromParameter(m_activeMeterPath);
                 qDebug().noquote() << QString("Unsubscribed from previous meter: %1")
@@ -938,9 +938,9 @@ void MainWindow::onTreeSelectionChanged()
                 m_enableCrosspointsAction->setChecked(false);
             }
             
-            // Layout already cleaned up at start of selection handler
             
-            // Reset property panel pointer
+            
+            
             m_propertyPanel = nullptr;
             
             
@@ -955,19 +955,19 @@ void MainWindow::onTreeSelectionChanged()
             double maxValue = maxVar.isValid() ? maxVar.toDouble() : 100.0;
             
             
-            // Read format, referenceLevel, formula, and factor
+            
             QString format = item->data(0, Qt::UserRole + 10).toString();
             QString referenceLevel = item->data(0, Qt::UserRole + 11).toString();
             QString formula = item->data(0, Qt::UserRole + 12).toString();
             int factor = item->data(0, Qt::UserRole + 13).toInt();
-            if (factor == 0) factor = 1;  // Default to 1 if not set
+            if (factor == 0) factor = 1;  
             qDebug() << "[MainWindow] Read from tree item - format:" << format << "referenceLevel:" << referenceLevel 
                      << "formula:" << formula << "factor:" << factor << "for path:" << oidPath;
             m_activeMeter->setParameterInfo(identifier, oidPath, minValue, maxValue, format, referenceLevel, factor);
             m_activeMeter->setStreamIdentifier(streamIdentifier);
             
             
-            // Subscribe to receive stream updates
+            
             if (!oidPath.isEmpty() && m_isConnected) {
                 m_connection->subscribeToParameter(oidPath, true);
                 m_activeMeterPath = oidPath;
@@ -984,22 +984,22 @@ void MainWindow::onTreeSelectionChanged()
             }
             
             
-            // Create container widget for meter and info
+            
             QWidget *meterContainer = new QWidget();
             QVBoxLayout *containerLayout = new QVBoxLayout(meterContainer);
             containerLayout->setContentsMargins(0, 0, 0, 0);
             
-            // Add meter widget
+            
             containerLayout->addWidget(m_activeMeter);
             
-            // Add info label below meter (outside meter's internal layout)
-            // Note: MeterWidget may override the range if it detects non-negative range with dB reference
+            
+            
             QString rangeInfo;
             bool likelyMismatch = (minValue >= 0.0 && !referenceLevel.isEmpty() && 
                                    referenceLevel.contains("dB", Qt::CaseInsensitive));
             
             if (likelyMismatch) {
-                // Show the auto-corrected range based on reference level
+                
                 if (referenceLevel.contains("dBFS", Qt::CaseInsensitive) || 
                     referenceLevel.contains("dBTP", Qt::CaseInsensitive)) {
                     rangeInfo = QString("Min: -60.0 dBFS (auto)\nMax: 0.0 dBFS (auto)");
@@ -1010,7 +1010,7 @@ void MainWindow::onTreeSelectionChanged()
                 } else if (referenceLevel.contains("LUFS", Qt::CaseInsensitive)) {
                     rangeInfo = QString("Min: -40.0 LUFS (auto)\nMax: 0.0 LUFS (auto)");
                 } else if (factor > 1) {
-                    // Calculate range from factor
+                    
                     double rangeInDb = 2560.0 / factor;
                     double minCalc = -rangeInDb;
                     double maxCalc = rangeInDb / 4.0;
@@ -1029,7 +1029,7 @@ void MainWindow::onTreeSelectionChanged()
             infoLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
             containerLayout->addWidget(infoLabel);
             
-            // Use scroll area to prevent overlap
+            
             QScrollArea *scrollArea = new QScrollArea();
             scrollArea->setWidget(meterContainer);
             scrollArea->setWidgetResizable(true);
@@ -1040,24 +1040,24 @@ void MainWindow::onTreeSelectionChanged()
             propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = m_activeMeter;
         }
-        // Check for Trigger parameter (Type 5)
+        
         else if (paramType == 5) {
-            // Trigger parameter
+            
             int access = item->data(0, Qt::UserRole + 2).toInt();
             QString identifier = item->text(0);
             
-            // Clean up old widgets
+            
             cleanupActiveParameterWidget();
             
-            // Create TriggerWidget
+            
             TriggerWidget *triggerWidget = new TriggerWidget();
             triggerWidget->setParameterInfo(identifier, oidPath, access);
             connect(triggerWidget, &TriggerWidget::triggerActivated,
                     this, [this](QString path, QString value) {
-                        m_connection->sendParameterValue(path, value, 1);  // Trigger is Integer type
+                        m_connection->sendParameterValue(path, value, 1);  
                     });
             
-            // Add to properties area
+            
             QLayout *oldLayout = m_propertyGroup->layout();
             if (oldLayout) {
                 QLayoutItem *item;
@@ -1075,7 +1075,7 @@ void MainWindow::onTreeSelectionChanged()
             m_activeParameterWidget = triggerWidget;
             m_activeParameterPath = oidPath;
         }
-        // Check for Slider-worthy parameters (ranged Integer/Real)
+        
         else if (paramType == 1 || paramType == 2) {
             QVariant minVar = item->data(0, Qt::UserRole + 3);
             QVariant maxVar = item->data(0, Qt::UserRole + 4);
@@ -1089,17 +1089,17 @@ void MainWindow::onTreeSelectionChanged()
             double maxValue = maxVar.toDouble();
             double range = maxValue - minValue;
             
-            // Use slider if: range > 50 OR formula exists OR (Real type AND range > 10)
+            
             bool useSlider = hasRange && (range > 50.0 || !formula.isEmpty() || (paramType == 2 && range > 10.0));
             
             if (useSlider) {
-                // Widgets already cleaned up at start of selection handler
                 
-                // Create SliderWidget
+                
+                
                 SliderWidget *sliderWidget = new SliderWidget();
                 sliderWidget->setParameterInfo(identifier, oidPath, minValue, maxValue, paramType, access, formula, format);
                 
-                // Set current value
+                
                 QString currentValue = item->text(2);
                 bool ok;
                 double val = currentValue.toDouble(&ok);
@@ -1107,13 +1107,13 @@ void MainWindow::onTreeSelectionChanged()
                     sliderWidget->setValue(val);
                 }
                 
-                // Connect value changes
+                
                 connect(sliderWidget, &SliderWidget::valueChanged,
                         this, [this](QString path, QString newValue, int type) {
                             m_connection->sendParameterValue(path, newValue, type);
                         });
                 
-            // Add to properties area
+            
             cleanupPropertyPanelLayout();
                 
                 QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
@@ -1124,9 +1124,9 @@ void MainWindow::onTreeSelectionChanged()
                 m_activeParameterPath = oidPath;
             }
         }
-        // Check for non-audio streaming parameters (GraphWidget)
+        
         else if (streamIdentifier > 0 && !isAudioMeter) {
-            // Non-audio streaming parameter
+            
             QVariant minVar = item->data(0, Qt::UserRole + 3);
             QVariant maxVar = item->data(0, Qt::UserRole + 4);
             QString identifier = item->text(0);
@@ -1135,14 +1135,14 @@ void MainWindow::onTreeSelectionChanged()
             double minValue = minVar.isValid() ? minVar.toDouble() : 0.0;
             double maxValue = maxVar.isValid() ? maxVar.toDouble() : 100.0;
             
-            // Widgets already cleaned up at start of selection handler
             
-            // Create GraphWidget
+            
+            
             GraphWidget *graphWidget = new GraphWidget();
             graphWidget->setParameterInfo(identifier, oidPath, minValue, maxValue, format);
             graphWidget->setStreamIdentifier(streamIdentifier);
             
-            // Subscribe to stream
+            
             if (!oidPath.isEmpty() && m_isConnected) {
                 m_connection->subscribeToParameter(oidPath, true);
                 m_activeParameterPath = oidPath;
@@ -1150,7 +1150,7 @@ void MainWindow::onTreeSelectionChanged()
                     .arg(oidPath).arg(streamIdentifier);
             }
             
-            // Set initial value
+            
             QString currentValue = item->text(2);
             bool ok;
             double val = currentValue.toDouble(&ok);
@@ -1158,7 +1158,7 @@ void MainWindow::onTreeSelectionChanged()
                 graphWidget->addDataPoint(val);
             }
             
-            // Add to properties area
+            
             cleanupPropertyPanelLayout();
             
             QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
@@ -1167,10 +1167,10 @@ void MainWindow::onTreeSelectionChanged()
             m_propertyPanel = graphWidget;
             m_activeParameterWidget = graphWidget;
         } else {
-            // Generic parameter without special widget
+            
             qDebug().noquote() << QString("Generic parameter selected (no special widget): %1").arg(oidPath);
             
-            // Widgets and layout already cleaned up at start of selection handler
+            
             
             m_propertyPanel = new QWidget();
             QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
@@ -1188,7 +1188,7 @@ void MainWindow::onTreeSelectionChanged()
     }
     else if (type == "Matrix") {
         
-        // Unsubscribe from meter if we're switching away from it
+        
         if (!m_activeMeterPath.isEmpty()) {
             m_connection->unsubscribeFromParameter(m_activeMeterPath);
             qDebug().noquote() << QString("Unsubscribed from meter (switching to Matrix): %1")
@@ -1198,23 +1198,23 @@ void MainWindow::onTreeSelectionChanged()
         
         qInfo().noquote() << QString("Matrix selected: %1").arg(oidPath);
         
-        // Subscribe to matrix to receive connection updates
+        
         m_connection->subscribeToMatrix(oidPath, false);
         
         VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(m_matrixManager->getMatrix(oidPath));
         qInfo().noquote() << QString("Matrix widget pointer: %1").arg(matrixWidget ? "EXISTS" : "NULL");
         if (matrixWidget) {
             
-            // Rebuild the virtualized matrix widget
+            
             matrixWidget->rebuild();
             
             
             QWidget *oldWidget = m_propertyPanel;
             if (oldWidget) {
-                // Don't delete VirtualizedMatrixWidget instances, they're managed by MatrixManager
+                
                 VirtualizedMatrixWidget *oldMatrix = qobject_cast<VirtualizedMatrixWidget*>(oldWidget);
                 if (!oldMatrix) {
-                    // Only delete non-matrix widgets
+                    
                     oldWidget->deleteLater();
                 }
             }
@@ -1235,7 +1235,7 @@ void MainWindow::onTreeSelectionChanged()
             propLayout->setContentsMargins(5, 5, 5, 5);
             m_propertyPanel = matrixWidget;
             
-            // Update property group title with matrix info
+            
             int matrixType = matrixWidget->getMatrixType();
             QString matrixTypeStr;
             switch (matrixType) {
@@ -1254,11 +1254,11 @@ void MainWindow::onTreeSelectionChanged()
             
         }
     } else {
-        // Handle all unhandled types (Node, Function, etc.)
+        
         qDebug().noquote() << QString("Selected type: '%1' - showing basic info").arg(type);
         
-        // Layout already cleaned up at start of selection handler
-        // Show basic information about the selected item
+        
+        
         m_propertyPanel = new QWidget();
         QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
         
@@ -1287,7 +1287,7 @@ void MainWindow::onTreeSelectionChanged()
 
 void MainWindow::cleanupActiveParameterWidget()
 {
-    // Unsubscribe from active parameter if exists
+    
     if (!m_activeParameterPath.isEmpty()) {
         m_connection->unsubscribeFromParameter(m_activeParameterPath);
         qDebug().noquote() << QString("Unsubscribed from parameter: %1")
@@ -1295,13 +1295,13 @@ void MainWindow::cleanupActiveParameterWidget()
         m_activeParameterPath.clear();
     }
     
-    // Clear active widget pointer (widget will be deleted by layout cleanup)
+    
     m_activeParameterWidget = nullptr;
 }
 
 void MainWindow::cleanupPropertyPanelLayout()
 {
-    // Clean up old layout and widgets
+    
     QLayout *oldLayout = m_propertyGroup->layout();
     if (oldLayout) {
         QLayoutItem *item;
@@ -1309,16 +1309,16 @@ void MainWindow::cleanupPropertyPanelLayout()
             if (item->widget()) {
                 QWidget *widget = item->widget();
                 
-                // Check if it's a VirtualizedMatrixWidget (managed by MatrixManager)
+                
                 VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(widget);
                 if (matrixWidget) {
-                    // Don't delete matrix widgets - they're owned by MatrixManager
-                    // Just hide them so they're not visible
+                    
+                    
                     matrixWidget->hide();
-                    matrixWidget->setParent(nullptr);  // Remove from widget hierarchy
+                    matrixWidget->setParent(nullptr);  
                     qDebug().noquote() << "Hidden matrix widget (not deleted - managed by MatrixManager)";
                 } else {
-                    // Safe to delete other widgets
+                    
                     widget->deleteLater();
                 }
             }
@@ -1402,7 +1402,7 @@ void MainWindow::onEnableCrosspointsToggled(bool enabled)
         logMessage("Crosspoint editing DISABLED");
     }
     
-    // Update all matrix widgets (both current and cached ones)
+    
     VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(m_propertyPanel);
     if (matrixWidget) {
         matrixWidget->setCrosspointsEnabled(enabled);
@@ -1428,9 +1428,9 @@ void MainWindow::onCrosspointClicked(const QString &matrixPath, int targetNumber
         return;
     }
     
-    // Get connection info from virtualized matrix widget
+    
     bool currentlyConnected = false;
-    int matrixType = 2; // Default to N:N
+    int matrixType = 2; 
     
     VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(widget);
     if (matrixWidget) {
@@ -1488,10 +1488,10 @@ void MainWindow::onStreamValueReceived(int streamIdentifier, double value)
     if (m_activeMeter && m_activeMeter->streamIdentifier() == streamIdentifier) {
         m_activeMeter->updateValue(value);
         
-        // Don't update tree value for audio meter parameters
-        // The meter widget displays the value instead
+        
+        
     }
-    // Check if it's a GraphWidget
+    
     else if (m_activeParameterWidget) {
         GraphWidget *graphWidget = qobject_cast<GraphWidget*>(m_activeParameterWidget);
         if (graphWidget && graphWidget->streamIdentifier() == streamIdentifier) {

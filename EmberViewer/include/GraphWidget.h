@@ -19,17 +19,10 @@ public:
     explicit GraphWidget(QWidget *parent = nullptr);
     ~GraphWidget();
 
-    // Configure the graph parameter
     void setParameterInfo(const QString &identifier, const QString &path,
                          double minValue, double maxValue, const QString &format);
-    
-    // Add new data point
     void addDataPoint(double value);
-    
-    // Set time window in seconds
     void setTimeWindow(int seconds);
-    
-    // Stream identifier
     void setStreamIdentifier(int id) { m_streamIdentifier = id; }
     int streamIdentifier() const { return m_streamIdentifier; }
 
@@ -42,7 +35,7 @@ private slots:
 
 private:
     struct DataPoint {
-        qint64 timestamp;  // milliseconds since epoch
+        qint64 timestamp;
         double value;
     };
 
@@ -70,4 +63,4 @@ private:
     void updateStats();
 };
 
-#endif // GRAPHWIDGET_H
+#endif

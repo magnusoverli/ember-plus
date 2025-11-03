@@ -19,15 +19,15 @@ public:
     explicit SliderWidget(QWidget *parent = nullptr);
     ~SliderWidget();
 
-    // Configure the slider parameter
+    
     void setParameterInfo(const QString &identifier, const QString &path,
                          double minValue, double maxValue, int paramType,
                          int access, const QString &formula, const QString &format);
     
-    // Set current value
+    
     void setValue(double value);
     
-    // Enable/disable based on access rights
+    
     void setEditEnabled(bool enabled);
 
 signals:
@@ -44,7 +44,7 @@ private:
     QString m_format;
     double m_minValue;
     double m_maxValue;
-    int m_paramType;  // 1=Integer, 2=Real
+    int m_paramType;  
     int m_access;
     
     QLabel *m_identifierLabel;
@@ -55,11 +55,11 @@ private:
     QLabel *m_maxLabel;
     QLabel *m_pathLabel;
     
-    bool m_updatingFromCode;  // Prevent feedback loops
+    bool m_updatingFromCode;  
     
     QString formatDisplayValue(double value) const;
     int doubleToSliderPosition(double value) const;
     double sliderPositionToDouble(int position) const;
 };
 
-#endif // SLIDERWIDGET_H
+#endif 

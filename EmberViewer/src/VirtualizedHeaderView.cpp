@@ -1,7 +1,4 @@
-/*
-    VirtualizedHeaderView.cpp - Implementation of virtualized horizontal header
-    Displays TARGET labels (outputs) horizontally at the top (columns per Ember+ spec)
-*/
+
 
 #include "VirtualizedHeaderView.h"
 #include "MatrixModel.h"
@@ -22,7 +19,7 @@ VirtualizedHeaderView::VirtualizedHeaderView(int cellWidth, QWidget *parent)
 {
     setMinimumHeight(MIN_HEADER_HEIGHT);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setMouseTracking(true);  // Enable mouse tracking for cursor changes
+    setMouseTracking(true);  
 }
 
 VirtualizedHeaderView::~VirtualizedHeaderView()
@@ -77,7 +74,7 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
     
-    // Use red background when crosspoints enabled, otherwise default button color
+    
     QColor bgColor = m_crosspointsEnabled ? QColor("#890000") : palette().button().color();
     painter.fillRect(rect(), bgColor);
 
@@ -86,12 +83,12 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
     const QList<int> &targets = m_model->targetNumbers();
     if (targets.isEmpty()) return;
 
-    // Calculate visible range
+    
     int firstCol = m_scrollOffset / m_cellWidth;
     int lastCol = (m_scrollOffset + width() - 1) / m_cellWidth;
     lastCol = qMin(lastCol, targets.size() - 1);
 
-    // Draw labels
+    
     painter.setPen(palette().buttonText().color());
     QFont font = painter.font();
     font.setPointSize(8);
@@ -104,22 +101,22 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
         int x = col * m_cellWidth - m_scrollOffset;
         QRect cellRect(x, 0, m_cellWidth, height());
 
-        // Highlight if this is the hovered column
+        
         if (col == m_highlightedCol) {
             QColor highlightColor = palette().highlight().color();
             highlightColor.setAlpha(50);
             painter.fillRect(cellRect, highlightColor);
         }
 
-        // Draw separator
+        
         painter.setPen(palette().mid().color());
         painter.drawLine(cellRect.topRight(), cellRect.bottomRight());
 
-        // Draw text (rotated 90 degrees for space efficiency)
+        
         painter.save();
         painter.setPen(palette().buttonText().color());
         
-        // Rotate text
+        
         painter.translate(cellRect.center());
         painter.rotate(-90);
         
@@ -132,7 +129,7 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
         painter.restore();
     }
 
-    // Draw bottom border
+    
     painter.setPen(palette().dark().color());
     painter.drawLine(0, height() - 1, width(), height() - 1);
 }
@@ -169,15 +166,15 @@ void VirtualizedHeaderView::mouseMoveEvent(QMouseEvent *event)
         int deltaY = event->globalPosition().toPoint().y() - m_resizeStartY;
         int newHeight = m_resizeStartHeight + deltaY;
         
-        // Clamp to min/max bounds
+        
         newHeight = qMax(MIN_HEADER_HEIGHT, qMin(MAX_HEADER_HEIGHT, newHeight));
         
-        // Emit signal to notify parent widget
+        
         emit headerHeightChanged(newHeight);
         
         event->accept();
     } else {
-        // Update cursor when hovering
+        
         updateCursor(event->pos().y());
         QWidget::mouseMoveEvent(event);
     }

@@ -70,7 +70,7 @@ void GlowParser::processRoot(libember::dom::Node* root)
             qDebug() << "[GlowParser] Root is GlowRootElementCollection with" << glowRoot->size() << "elements";
             processElementCollection(glowRoot, "");
         } else {
-            // Check if it's a standalone StreamCollection (for subscribed parameters)
+            
             auto streamColl = dynamic_cast<libember::glow::GlowStreamCollection*>(root);
             if (streamColl) {
                 qDebug() << "[GlowParser] Root is standalone GlowStreamCollection";
@@ -248,10 +248,10 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.number = path.back();
     
-    // Check if this parameter is part of a matrix label collection
-    // Path structure: matrix.labels.basePath.signalNumber
     
-    // Debug for first few parameters only to avoid spam
+    
+    
+    
     static int debugCount = 0;
     if (debugCount < 5 && (info.path.contains(".1.0.1.") || info.path.contains(".1.1.1."))) {
         qDebug().noquote() << QString("DEBUG: Parameter path=%1, m_matrixLabelPaths.size=%2")
@@ -263,20 +263,20 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
         const QString& matrixPath = it.key();
         const MatrixLabelPaths& labelPaths = it.value();
         
-        // Check if this parameter's path starts with any of the label basePaths
+        
         for (auto labelIt = labelPaths.labelBasePaths.begin(); labelIt != labelPaths.labelBasePaths.end(); ++labelIt) {
             const QString& basePath = labelIt.key();
             
             if (info.path.startsWith(basePath + ".")) {
                 qDebug().noquote() << QString("MATCHED label path! basePath=%1, fullPath=%2")
                     .arg(basePath).arg(info.path);
-                // This is a label parameter! Extract signal number and value
-                // Path structure: basePath.nodeNumber.signalNumber (e.g., basePath.1.0)
-                // where nodeNumber 1 = targets, 2 = sources
+                
+                
+                
                 QString remaining = info.path.mid(basePath.length() + 1);
                 QStringList parts = remaining.split('.');
                 
-                // Need at least 2 parts: nodeNumber and signalNumber
+                
                 if (parts.size() >= 2) {
                     int nodeNumber = parts[0].toInt();
                     int signalNumber = parts[1].toInt();
@@ -286,11 +286,11 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
                         if (value.type().value() == libember::glow::ParameterType::String) {
                             QString labelValue = QString::fromStdString(value.toString());
                             
-                            // nodeNumber 1 = targets, 2 = sources (common Ember+ convention)
+                            
                             bool isTargetLabel = (nodeNumber == 1);
                             
                             if (isTargetLabel) {
-                                // This is a target label
+                                
                                 EmberData::MatrixTargetInfo targetInfo;
                                 targetInfo.matrixPath = matrixPath;
                                 targetInfo.targetNumber = signalNumber;
@@ -301,7 +301,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
                                 
                                 emit matrixTargetReceived(targetInfo);
                             } else {
-                                // This is a source label
+                                
                                 EmberData::MatrixSourceInfo sourceInfo;
                                 sourceInfo.matrixPath = matrixPath;
                                 sourceInfo.sourceNumber = signalNumber;
@@ -316,7 +316,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
                     }
                 }
                 
-                // Don't process this as a regular parameter
+                
                 return;
             }
         }
@@ -390,27 +390,27 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     info.streamIdentifier = param->streamIdentifier();
     
-    // Parse format string if available
+    
     if (param->contains(libember::glow::ParameterProperty::Format)) {
         info.format = QString::fromStdString(param->format());
         info.referenceLevel = detectReferenceLevel(info.format);
     }
     
-    // Parse formula if available
+    
     if (param->contains(libember::glow::ParameterProperty::Formula)) {
         auto formula = param->formula();
-        // We want the providerToConsumer formula (device value -> display value)
+        
         info.formula = QString::fromStdString(formula.providerToConsumer());
     }
     
-    // Parse factor if available
+    
     if (param->contains(libember::glow::ParameterProperty::Factor)) {
         info.factor = param->factor();
     } else {
-        info.factor = 1;  // Default factor
+        info.factor = 1;  
     }
     
-    // Store factor for stream value conversion
+    
     if (info.streamIdentifier > 0 && info.factor > 0) {
         m_streamFactors[info.streamIdentifier] = info.factor;
         qDebug() << "[GlowParser] Stored factor" << info.factor << "for stream ID" << info.streamIdentifier;
@@ -433,7 +433,7 @@ void GlowParser::processQualifiedParameter(libember::glow::GlowQualifiedParamete
     
     emit parameterReceived(info);
     
-    // Process children (e.g., StreamCollection for subscribed parameters)
+    
     if (param->children()) {
         processElementCollection(param->children(), info.path);
     }
@@ -448,7 +448,7 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
         ? QString::number(info.number) 
         : QString("%1.%2").arg(parentPath).arg(info.number);
     
-    // Check if this parameter is part of a matrix label collection (non-qualified path)
+    
     for (auto it = m_matrixLabelPaths.begin(); it != m_matrixLabelPaths.end(); ++it) {
         const QString& matrixPath = it.key();
         const MatrixLabelPaths& labelPaths = it.value();
@@ -576,27 +576,27 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     
     info.streamIdentifier = param->streamIdentifier();
     
-    // Parse format string if available
+    
     if (param->contains(libember::glow::ParameterProperty::Format)) {
         info.format = QString::fromStdString(param->format());
         info.referenceLevel = detectReferenceLevel(info.format);
     }
     
-    // Parse formula if available
+    
     if (param->contains(libember::glow::ParameterProperty::Formula)) {
         auto formula = param->formula();
-        // We want the providerToConsumer formula (device value -> display value)
+        
         info.formula = QString::fromStdString(formula.providerToConsumer());
     }
     
-    // Parse factor if available
+    
     if (param->contains(libember::glow::ParameterProperty::Factor)) {
         info.factor = param->factor();
     } else {
-        info.factor = 1;  // Default factor
+        info.factor = 1;  
     }
     
-    // Store factor for stream value conversion
+    
     if (info.streamIdentifier > 0 && info.factor > 0) {
         m_streamFactors[info.streamIdentifier] = info.factor;
         qDebug() << "[GlowParser] Stored factor" << info.factor << "for stream ID" << info.streamIdentifier;
@@ -619,7 +619,7 @@ void GlowParser::processParameter(libember::glow::GlowParameter* param, const QS
     
     emit parameterReceived(info);
     
-    // Process children (e.g., StreamCollection for subscribed parameters)
+    
     if (param->children()) {
         processElementCollection(param->children(), info.path);
     }
@@ -672,45 +672,45 @@ void GlowParser::processQualifiedMatrix(libember::glow::GlowQualifiedMatrix* mat
         emit matrixReceived(info);
     }
     
-    // Read labels collection per Ember+ spec
+    
     if (matrix->labels()) {
         MatrixLabelPaths labelPaths;
         labelPaths.matrixPath = pathStr;
         
-        // Iterate through all GlowLabel objects
+        
         std::vector<libember::glow::GlowLabel const*> labels;
         matrix->typedLabels(std::back_inserter(labels));
         
         for (auto label : labels) {
-            // Get basePath (where label parameters live)
+            
             auto basePath = label->basePath();
             QString basePathStr;
             for (auto num : basePath) {
                 basePathStr += QString::number(num) + ".";
             }
-            basePathStr.chop(1);  // Remove trailing dot
+            basePathStr.chop(1);  
             
-            // Get description (layer name like "Primary", "Internal")
+            
             QString description = QString::fromStdString(label->description());
             
-            // Store the mapping and maintain order
+            
             labelPaths.labelBasePaths[basePathStr] = description;
             labelPaths.labelOrder.append(basePathStr);
             
-            // Per Ember+ convention: first label = targets, second = sources
+            
             QString labelType = (labelPaths.labelOrder.size() == 1) ? "targets" : "sources";
             qDebug().noquote() << QString("Matrix %1: Found label layer '%2' (%3) at basePath %4")
                 .arg(pathStr).arg(description).arg(labelType).arg(basePathStr);
         }
         
-        // Store label paths for this matrix
+        
         if (!labelPaths.labelBasePaths.isEmpty()) {
             m_matrixLabelPaths[pathStr] = labelPaths;
             
             qDebug().noquote() << QString("STORED %1 label basePaths for matrix %2 (total matrices: %3)")
                 .arg(labelPaths.labelBasePaths.size()).arg(pathStr).arg(m_matrixLabelPaths.size());
             
-            // Emit signal to request label parameter values
+            
             qDebug().noquote() << QString("Emitting signal to request label parameters for matrix %1").arg(pathStr);
             emit matrixLabelPathsDiscovered(pathStr, labelPaths.labelOrder);
         }
@@ -1044,14 +1044,14 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
                     break;
             }
             
-            // Look up factor for this stream, default to 1 if not found
+            
             int factor = m_streamFactors.value(info.streamIdentifier, 1);
             
-            // Convert raw value using factor: dB = rawValue / factor
+            
             if (factor > 0) {
                 info.value = rawValue / static_cast<double>(factor);
             } else {
-                info.value = rawValue;  // No conversion if factor is invalid
+                info.value = rawValue;  
             }
             
             qDebug() << "[GlowParser] StreamEntry: streamId=" << info.streamIdentifier 
@@ -1068,37 +1068,37 @@ QString GlowParser::detectReferenceLevel(const QString& formatString) const
         return QString();
     }
     
-    // Check for common reference level indicators in the format string
+    
     QString upper = formatString.toUpper();
     
     if (upper.contains("DBFS")) {
-        return "dBFS";  // Digital Full Scale
+        return "dBFS";  
     }
     else if (upper.contains("DBTP") || upper.contains("DB TP")) {
-        return "dBTP";  // True Peak
+        return "dBTP";  
     }
     else if (upper.contains("DBR")) {
-        return "dBr";   // DIN PPM reference
+        return "dBr";   
     }
     else if (upper.contains("DBU")) {
-        return "dBu";   // Professional line level
+        return "dBu";   
     }
     else if (upper.contains("DBV")) {
-        return "dBV";   // Voltage reference
+        return "dBV";   
     }
     else if (upper.contains("VU")) {
-        return "VU";    // VU meter
+        return "VU";    
     }
     else if (upper.contains("PPM")) {
-        return "PPM";   // Generic PPM (could be DIN or BBC)
+        return "PPM";   
     }
     else if (upper.contains("LUFS") || upper.contains("LU")) {
-        return "LUFS";  // Loudness Units relative to Full Scale
+        return "LUFS";  
     }
     
     else if (upper.contains("DB")) {
-        return "dB";    // Generic dB (no specific reference)
+        return "dB";    
     }
-    // No reference level detected
+    
     return QString();
 }

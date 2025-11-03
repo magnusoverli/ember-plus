@@ -45,7 +45,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
     QString category = context.category ? QString(context.category) : QString("default");
     bool isQtInternal = category.startsWith("qt.");
     
-    // Filter out specific unwanted Qt platform plugin messages
+    
     bool isUnwantedPluginMessage = msg.contains("This plugin supports grabbing the mouse only for popup windows");
     
     
@@ -59,7 +59,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
     }
     
     
-    // Show Info, Warning, Critical, and Fatal messages in the in-app console (but not Debug)
+    
     if (globalMainWindow && type >= QtWarningMsg && !isQtInternal && !isUnwantedPluginMessage) {
         QString guiMessage = QString("[%1] %2").arg(QDateTime::currentDateTime().toString("hh:mm:ss.zzz")).arg(msg);
         QMetaObject::invokeMethod(globalMainWindow, "appendToConsole", Qt::DirectConnection, Q_ARG(QString, guiMessage));

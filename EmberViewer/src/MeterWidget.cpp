@@ -30,12 +30,12 @@ MeterWidget::MeterWidget(QWidget *parent)
     , m_displayValue(0.0)
     , m_peakValue(0.0)
     , m_lastRenderTime(QDateTime::currentMSecsSinceEpoch())
-    , m_lastLabelUpdateTime(0)  // Initialize to 0 to force first update
+    , m_lastLabelUpdateTime(0)  
     , m_meterType(MeterType::VU_METER)
     , m_customGreenThreshold(-20.0)
     , m_customYellowThreshold(-6.0)
     , m_useCustomThresholds(false)
-    , m_useLogarithmicScale(true)  // Default to logarithmic for dB scales
+    , m_useLogarithmicScale(true)  
 {
     
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -44,13 +44,13 @@ MeterWidget::MeterWidget(QWidget *parent)
     
     QVBoxLayout *valuesLayout = new QVBoxLayout();
     
-    // Current value label
+    
     m_valueLabel = new QLabel("-- dB", this);
     m_valueLabel->setAlignment(Qt::AlignCenter);
     m_valueLabel->setStyleSheet("font-size: 14pt; font-weight: bold;");
     valuesLayout->addWidget(m_valueLabel);
     
-    // Peak hold label
+    
     m_peakLabel = new QLabel("Peak: -- dB", this);
     m_peakLabel->setAlignment(Qt::AlignCenter);
     m_peakLabel->setStyleSheet("font-size: 10pt; color: #ff6666;");
@@ -58,22 +58,22 @@ MeterWidget::MeterWidget(QWidget *parent)
     
     mainLayout->addLayout(valuesLayout);
     
-    // Add stretch to push meter bar to center and dropdown to bottom
+    
     mainLayout->addStretch();
     
-    // Add spacing before dropdown to prevent overlap
+    
     mainLayout->addSpacing(10);
     
-    // Meter type selector at the bottom
+    
     QHBoxLayout *typeLayout = new QHBoxLayout();
     QLabel *typeLabel = new QLabel("Meter Type:", this);
     typeLabel->setStyleSheet("font-size: 9pt;");
     m_meterTypeCombo = new QComboBox(this);
-    m_meterTypeCombo->addItem("VU Meter (300ms)");       // Index 0 = VU_METER
-    m_meterTypeCombo->addItem("Digital Peak (Instant)"); // Index 1 = DIGITAL_PEAK
-    m_meterTypeCombo->addItem("DIN PPM (10ms/1.5s)");    // Index 2 = DIN_PPM
-    m_meterTypeCombo->addItem("BBC PPM (4ms/2.8s)");     // Index 3 = BBC_PPM
-    m_meterTypeCombo->setCurrentIndex(0);  // Start with VU Meter
+    m_meterTypeCombo->addItem("VU Meter (300ms)");       
+    m_meterTypeCombo->addItem("Digital Peak (Instant)"); 
+    m_meterTypeCombo->addItem("DIN PPM (10ms/1.5s)");    
+    m_meterTypeCombo->addItem("BBC PPM (4ms/2.8s)");     
+    m_meterTypeCombo->setCurrentIndex(0);  
     m_meterTypeCombo->setStyleSheet("font-size: 9pt;");
     m_meterTypeCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     connect(m_meterTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -93,7 +93,7 @@ MeterWidget::MeterWidget(QWidget *parent)
     
     setMinimumSize(METER_WIDTH + METER_MARGIN * 2, 200);
     
-    // Load saved threshold settings
+    
     QSettings settings("EmberViewer", "EmberViewer");
     m_useCustomThresholds = settings.value("meter/useCustomThresholds", false).toBool();
     m_customGreenThreshold = settings.value("meter/customGreenThreshold", -20.0).toDouble();
@@ -115,9 +115,9 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
     m_format = format;
     m_referenceLevel = referenceLevel;
     
-    // Detect likely mismatch: parameter range doesn't include negative values but reference is dB
-    // Most audio dB scales use negative values (dBFS: -60 to 0, dBr: -50 to +5, etc.)
-    // If min >= 0 and we have a dB reference, likely the range is wrong
+    
+    
+    
     bool likelyMismatch = (minValue >= 0.0 && !referenceLevel.isEmpty() && 
                            referenceLevel.contains("dB", Qt::CaseInsensitive));
     
@@ -127,39 +127,39 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
         qDebug() << "[MeterWidget] Reference level:" << referenceLevel;
         qDebug() << "[MeterWidget] Factor:" << factor;
         
-        // Use standard audio meter range based on reference level
+        
         if (referenceLevel.contains("dBFS", Qt::CaseInsensitive) || 
             referenceLevel.contains("dBTP", Qt::CaseInsensitive)) {
-            // Digital Full Scale: -60 to 0 dBFS
+            
             m_minValue = -60.0;
             m_maxValue = 0.0;
         } else if (referenceLevel.contains("dBr", Qt::CaseInsensitive)) {
-            // DIN PPM: -50 to +5 dBr
+            
             m_minValue = -50.0;
             m_maxValue = 5.0;
         } else if (referenceLevel.contains("dBu", Qt::CaseInsensitive)) {
-            // Professional line level: -20 to +20 dBu
+            
             m_minValue = -20.0;
             m_maxValue = 20.0;
         } else if (referenceLevel.contains("LUFS", Qt::CaseInsensitive)) {
-            // Loudness: -40 to 0 LUFS
+            
             m_minValue = -40.0;
             m_maxValue = 0.0;
         } else {
-            // Generic dB: use factor to calculate appropriate range if available
+            
             if (factor > 1) {
-                // Factor tells us the conversion: dB = rawValue / factor
-                // Typical audio meters use ranges like -80 to +20 dB
-                // With factor=32, common raw ranges are -2560 (80dB) to +640 (+20dB)
-                // Use a symmetrical range based on factor with reasonable headroom
-                double rangeInDb = 2560.0 / factor;  // ±80 dB at factor=32
+                
+                
+                
+                
+                double rangeInDb = 2560.0 / factor;  
                 m_minValue = -rangeInDb;
-                m_maxValue = rangeInDb / 4.0;  // Less headroom on top (typically don't need +80dB)
+                m_maxValue = rangeInDb / 4.0;  
                 
                 qDebug() << "[MeterWidget] Calculated range from factor" << factor 
                          << ":" << m_minValue << "to" << m_maxValue << "dB";
             } else {
-                // No factor info: use a balanced range around 0 dB
+                
                 m_minValue = -10.0;
                 m_maxValue = 10.0;
                 qDebug() << "[MeterWidget] Using default balanced range";
@@ -174,7 +174,7 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
     
     qDebug() << "[MeterWidget] setParameterInfo called - format:" << format << "referenceLevel:" << referenceLevel << "min:" << m_minValue << "max:" << m_maxValue;
     
-    // Set tooltip showing cleaned format string
+    
     if (!format.isEmpty()) {
         QString cleanFormat = format;
         cleanFormat = cleanFormat.replace("\\n", " ").replace("\n", " ").replace("°", "").simplified();
@@ -185,65 +185,65 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
                    .arg(referenceLevel.isEmpty() ? "dB" : referenceLevel));
     }
     
-    // Auto-detect meter type based on multiple heuristics
+    
     bool autoDetected = false;
     
-    // First priority: Specific reference level strings
+    
     if (!referenceLevel.isEmpty()) {
         qDebug() << "[MeterWidget] Auto-detecting meter type from reference level:" << referenceLevel;
         
         if (referenceLevel == "dBFS" || referenceLevel == "dBTP") {
-            setMeterTypeByIndex(1);  // Digital Peak
+            setMeterTypeByIndex(1);  
             qDebug() << "[MeterWidget] Auto-selected Digital Peak meter for" << referenceLevel;
             autoDetected = true;
         }
         else if (referenceLevel == "dBr") {
-            setMeterTypeByIndex(2);  // DIN PPM
+            setMeterTypeByIndex(2);  
             qDebug() << "[MeterWidget] Auto-selected DIN PPM meter for dBr";
             autoDetected = true;
         }
         else if (referenceLevel == "dBu" || referenceLevel == "dBV") {
-            setMeterTypeByIndex(0);  // VU Meter (analog levels)
+            setMeterTypeByIndex(0);  
             qDebug() << "[MeterWidget] Auto-selected VU meter for" << referenceLevel;
             autoDetected = true;
         }
         else if (referenceLevel == "LUFS" || referenceLevel == "LU") {
-            setMeterTypeByIndex(1);  // Digital Peak (loudness)
+            setMeterTypeByIndex(1);  
             qDebug() << "[MeterWidget] Auto-selected Digital Peak meter for loudness:" << referenceLevel;
             autoDetected = true;
         }
         else if (referenceLevel == "VU") {
-            setMeterTypeByIndex(0);  // VU Meter
+            setMeterTypeByIndex(0);  
             qDebug() << "[MeterWidget] Auto-selected VU meter";
             autoDetected = true;
         }
         else if (referenceLevel.contains("PPM")) {
-            setMeterTypeByIndex(2);  // DIN PPM
+            setMeterTypeByIndex(2);  
             qDebug() << "[MeterWidget] Auto-selected DIN PPM meter for" << referenceLevel;
             autoDetected = true;
         }
     }
     
-    // Second priority: Heuristics based on format string and range
+    
     if (!autoDetected && !referenceLevel.isEmpty() && referenceLevel.contains("dB", Qt::CaseInsensitive)) {
         qDebug() << "[MeterWidget] Using heuristics for generic dB meter - format:" << format 
                  << "range:" << m_minValue << "to" << m_maxValue << "factor:" << factor;
         
-        // Check format string for hints
-        bool formatHintsPPM = format.contains("°");  // European PPM meters often use degree symbol
         
-        // Range-based heuristics
+        bool formatHintsPPM = format.contains("°");  
+        
+        
         double range = m_maxValue - m_minValue;
-        bool wideRange = (range > 50.0);  // Wide range (e.g., -80 to +20 = 100 dB) suggests PPM
-        bool hasPositiveHeadroom = (m_maxValue > 5.0);  // Significant positive headroom suggests PPM
-        bool narrowRange = (range < 30.0);  // Narrow range suggests VU meter
+        bool wideRange = (range > 50.0);  
+        bool hasPositiveHeadroom = (m_maxValue > 5.0);  
+        bool narrowRange = (range < 30.0);  
         
-        // Factor-based heuristics
-        bool professionalFactor = (factor == 32 || factor == 64);  // Common in pro audio PPM meters
+        
+        bool professionalFactor = (factor == 32 || factor == 64);  
         
         if (formatHintsPPM || (professionalFactor && wideRange)) {
-            // Likely a PPM meter - prefer DIN PPM (more common in Europe)
-            setMeterTypeByIndex(2);  // DIN PPM
+            
+            setMeterTypeByIndex(2);  
             qDebug() << "[MeterWidget] Auto-selected DIN PPM based on heuristics:"
                      << "formatHint=" << formatHintsPPM 
                      << "wideRange=" << wideRange
@@ -251,14 +251,14 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
             autoDetected = true;
         }
         else if (wideRange && hasPositiveHeadroom) {
-            // Wide range with positive headroom - likely digital peak meter
-            setMeterTypeByIndex(1);  // Digital Peak
+            
+            setMeterTypeByIndex(1);  
             qDebug() << "[MeterWidget] Auto-selected Digital Peak based on range:" << range << "dB";
             autoDetected = true;
         }
         else if (narrowRange) {
-            // Narrow range - likely VU meter
-            setMeterTypeByIndex(0);  // VU Meter
+            
+            setMeterTypeByIndex(0);  
             qDebug() << "[MeterWidget] Auto-selected VU meter based on narrow range:" << range << "dB";
             autoDetected = true;
         }
@@ -278,20 +278,20 @@ void MeterWidget::setParameterInfo(const QString &identifier, const QString &pat
 
 void MeterWidget::updateValue(double value)
 {
-    // Store target value - no processing, ballistics handled in onUpdateTimer()
+    
     m_targetValue = value;
     
-    // Rate-limit text label updates for better readability (10 Hz vs 25 Hz stream rate)
-    // Professional meters typically update numerical displays at 5-10 Hz for human readability
+    
+    
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - m_lastLabelUpdateTime >= LABEL_UPDATE_INTERVAL_MS) {
         m_valueLabel->setText(formatValue(value));
         m_lastLabelUpdateTime = now;
     }
     
-    // Update peak hold if this is a new peak
-    // Use the maximum of incoming value and current display value to avoid 
-    // peak appearing below meter bar during ballistic decay
+    
+    
+    
     double effectiveValue = std::max(value, m_displayValue);
     if (effectiveValue > m_peakValue) {
         m_peakValue = effectiveValue;
@@ -302,58 +302,58 @@ void MeterWidget::updateValue(double value)
 
 void MeterWidget::onUpdateTimer()
 {
-    // Calculate time elapsed since last render
+    
     qint64 now = QDateTime::currentMSecsSinceEpoch();
-    double dt = (now - m_lastRenderTime) / 1000.0;  // Convert to seconds
+    double dt = (now - m_lastRenderTime) / 1000.0;  
     m_lastRenderTime = now;
     
-    // Guard against extreme dt values
-    if (dt < 0.001) dt = 0.001;  // Minimum 1ms
-    if (dt > 1.0) dt = 1.0;      // Maximum 1 second (app pause/suspend)
     
-    // Get time constants for current meter type
+    if (dt < 0.001) dt = 0.001;  
+    if (dt > 1.0) dt = 1.0;      
+    
+    
     double riseTime, fallTime;
     getMeterConstants(m_meterType, riseTime, fallTime);
     
-    // Time-domain exponential approach to target
+    
     double tau;
     if (m_targetValue > m_displayValue) {
-        // Rising: Fast response for peaks
+        
         tau = riseTime;
     } else {
-        // Falling: Decay time
+        
         tau = fallTime;
     }
     
-    // Calculate alpha based on actual elapsed time
+    
     double alpha = 1.0 - std::exp(-dt / tau);
     
-    // Exponential approach to target
+    
     m_displayValue += alpha * (m_targetValue - m_displayValue);
     
     
-    // Check if peak hold has expired
+    
     if (m_peakTime.isValid() && m_peakTime.msecsTo(QDateTime::currentDateTime()) > PEAK_HOLD_MS) {
-        m_peakLabel->setStyleSheet("font-size: 10pt; color: #888888;");  // Gray out expired peak
-        // Reset peak value so next value becomes new peak (peak refresh behavior)
+        m_peakLabel->setStyleSheet("font-size: 10pt; color: #888888;");  
+        
         m_peakValue = m_minValue;
-        m_peakTime = QDateTime();  // Invalidate timer
+        m_peakTime = QDateTime();  
     } else if (m_peakValue > m_minValue) {
-        m_peakLabel->setStyleSheet("font-size: 10pt; color: #ff6666;");  // Red for active peak
+        m_peakLabel->setStyleSheet("font-size: 10pt; color: #ff6666;");  
     }
 
-    // Always trigger repaint
+    
     update();
 }
 
 void MeterWidget::setMeterTypeByIndex(int comboIndex)
 {
-    // Set both combo box and enum value
+    
     m_meterTypeCombo->blockSignals(true);
     m_meterTypeCombo->setCurrentIndex(comboIndex);
     m_meterTypeCombo->blockSignals(false);
     
-    // Map combo box index to MeterType enum
+    
     switch (comboIndex) {
         case 0: m_meterType = MeterType::VU_METER; break;
         case 1: m_meterType = MeterType::DIGITAL_PEAK; break;
@@ -365,7 +365,7 @@ void MeterWidget::setMeterTypeByIndex(int comboIndex)
 
 void MeterWidget::onMeterTypeChanged(int index)
 {
-    // Map combo box index to MeterType enum
+    
     switch (index) {
         case 0: m_meterType = MeterType::VU_METER; break;
         case 1: m_meterType = MeterType::DIGITAL_PEAK; break;
@@ -379,27 +379,27 @@ void MeterWidget::getMeterConstants(MeterType type, double &riseTime, double &fa
 {
     switch (type) {
         case MeterType::DIN_PPM:
-            // DIN 45406 - Fast attack, slow decay
-            riseTime = 0.010;   // 10ms
-            fallTime = 1.500;   // 1.5s
+            
+            riseTime = 0.010;   
+            fallTime = 1.500;   
             break;
             
         case MeterType::BBC_PPM:
-            // IEC 60268-10 Type IIa - Very fast attack, slower decay
-            riseTime = 0.004;   // 4ms
-            fallTime = 2.800;   // 2.8s
+            
+            riseTime = 0.004;   
+            fallTime = 2.800;   
             break;
             
         case MeterType::VU_METER:
-            // ANSI C16.5-1942 - Slow symmetric response
-            riseTime = 0.300;   // 300ms
-            fallTime = 0.300;   // 300ms
+            
+            riseTime = 0.300;   
+            fallTime = 0.300;   
             break;
             
         case MeterType::DIGITAL_PEAK:
-            // Modern digital - Instant attack, moderate decay
-            riseTime = 0.001;   // ~instant (1ms)
-            fallTime = 0.500;   // 500ms
+            
+            riseTime = 0.001;   
+            fallTime = 0.500;   
             break;
             
         default:
@@ -411,7 +411,7 @@ void MeterWidget::getMeterConstants(MeterType type, double &riseTime, double &fa
 
 void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &yellowThreshold) const
 {
-    // Use custom thresholds if enabled
+    
     if (m_useCustomThresholds) {
         greenThreshold = dBToNormalized(m_customGreenThreshold);
         yellowThreshold = dBToNormalized(m_customYellowThreshold);
@@ -421,11 +421,11 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
         return;
     }
     
-    // If we have a dB scale with known reference level, use absolute dB thresholds
+    
     if (isDatabaseScale()) {
         if (m_referenceLevel == "dBFS" || m_referenceLevel == "dBTP") {
-            // Digital Full Scale: Industry standard thresholds
-            // Green: below -20 dBFS, Yellow: -20 to -6 dBFS, Red: above -6 dBFS
+            
+            
             greenThreshold = dBToNormalized(-20.0);
             yellowThreshold = dBToNormalized(-6.0);
             qDebug() << "[MeterWidget] Using dBFS thresholds: green=" << greenThreshold 
@@ -433,8 +433,8 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
             return;
         }
         else if (m_referenceLevel == "dBr") {
-            // DIN PPM reference level
-            // Green: below -9 dBr, Yellow: -9 to 0 dBr, Red: 0 to +5 dBr
+            
+            
             greenThreshold = dBToNormalized(-9.0);
             yellowThreshold = dBToNormalized(0.0);
             qDebug() << "[MeterWidget] Using dBr thresholds: green=" << greenThreshold 
@@ -442,9 +442,9 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
             return;
         }
         else if (m_referenceLevel == "dBu") {
-            // Professional line level (0 dBu = +4 dBu nominal, +20 dBu max)
-            // Typical range: -20 to +20 dBu
-            // Green: below +4 dBu, Yellow: +4 to +12 dBu, Red: above +12 dBu
+            
+            
+            
             greenThreshold = dBToNormalized(4.0);
             yellowThreshold = dBToNormalized(12.0);
             qDebug() << "[MeterWidget] Using dBu thresholds: green=" << greenThreshold 
@@ -452,9 +452,9 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
             return;
         }
         else if (m_referenceLevel == "dBV") {
-            // Consumer line level (0 dBV = -10 dBV nominal)
-            // Typical range: -30 to +10 dBV
-            // Green: below -10 dBV, Yellow: -10 to 0 dBV, Red: above 0 dBV
+            
+            
+            
             greenThreshold = dBToNormalized(-10.0);
             yellowThreshold = dBToNormalized(0.0);
             qDebug() << "[MeterWidget] Using dBV thresholds: green=" << greenThreshold 
@@ -462,9 +462,9 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
             return;
         }
         else if (m_referenceLevel == "LUFS" || m_referenceLevel == "LU") {
-            // Loudness Units relative to Full Scale
-            // EBU R128 targets: -23 LUFS (broadcast), max -1 LUFS True Peak
-            // Green: below -23 LUFS, Yellow: -23 to -16 LUFS, Red: above -16 LUFS
+            
+            
+            
             greenThreshold = dBToNormalized(-23.0);
             yellowThreshold = dBToNormalized(-16.0);
             qDebug() << "[MeterWidget] Using LUFS thresholds: green=" << greenThreshold 
@@ -472,10 +472,10 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
             return;
         }
         else if (m_referenceLevel == "dB") {
-            // Generic dB scale - use sensible defaults based on range
-            // For professional audio (typically -80 to +20 dB or similar):
-            // Green: below -9 dB, Yellow: -9 to +3 dB, Red: above +3 dB
-            // This provides good headroom while flagging potentially hot signals
+            
+            
+            
+            
             greenThreshold = dBToNormalized(-9.0);
             yellowThreshold = dBToNormalized(3.0);
             qDebug() << "[MeterWidget] Using generic dB thresholds: green=" << greenThreshold 
@@ -484,31 +484,31 @@ void MeterWidget::getColorZones(MeterType type, double &greenThreshold, double &
         }
     }
     
-    // Fallback to percentage-based thresholds (for non-dB scales)
+    
     switch (type) {
         case MeterType::VU_METER:
-            // VU Meter: Green below 0 VU (50%), Red above 0 VU
-            // No yellow zone - just green and red
-            greenThreshold = 0.50;   // 0 VU is at middle
-            yellowThreshold = 1.00;  // No yellow, goes straight to red
+            
+            
+            greenThreshold = 0.50;   
+            yellowThreshold = 1.00;  
             break;
             
         case MeterType::DIN_PPM:
-            // DIN PPM: Green (-50 to -20 dBr), Yellow (-20 to 0 dBr), Red (0 to +5 dBr)
-            greenThreshold = 0.40;   // -20 dBr
-            yellowThreshold = 0.90;  // 0 dBr (reference level)
+            
+            greenThreshold = 0.40;   
+            yellowThreshold = 0.90;  
             break;
             
         case MeterType::BBC_PPM:
-            // BBC PPM: Green (PPM 1-4), Yellow (PPM 5-6), Red (PPM 7)
-            greenThreshold = 0.67;   // PPM 4 (reference level)
-            yellowThreshold = 0.92;  // PPM 6 (permitted peak)
+            
+            greenThreshold = 0.67;   
+            yellowThreshold = 0.92;  
             break;
             
         case MeterType::DIGITAL_PEAK:
-            // Digital Peak: Green (-∞ to -18 dBFS), Yellow (-18 to -6 dBFS), Red (-6 to 0 dBFS)
-            greenThreshold = 0.70;   // -18 dBFS
-            yellowThreshold = 0.90;  // -6 dBFS
+            
+            greenThreshold = 0.70;   
+            yellowThreshold = 0.90;  
             break;
             
         default:
@@ -524,63 +524,63 @@ double MeterWidget::normalizeValue(double value) const
         return 0.0;
     }
     
-    // Use logarithmic scaling for dB scales if enabled
+    
     if (m_useLogarithmicScale && isDatabaseScale()) {
-        // Convert to linear domain, normalize, then convert back
-        // This provides perceptually accurate dB meter scaling
         
-        // Define the dynamic range for logarithmic scaling (in dB)
+        
+        
+        
         const double dynamicRange = m_maxValue - m_minValue;
         
-        // For very small ranges, use linear scaling
+        
         if (dynamicRange < 10.0) {
             double normalized = (value - m_minValue) / dynamicRange;
             return qBound(0.0, normalized, 1.0);
         }
         
-        // Convert dB to linear (0 dB = 1.0)
+        
         double valueLinear = std::pow(10.0, value / 20.0);
         double minLinear = std::pow(10.0, m_minValue / 20.0);
         double maxLinear = std::pow(10.0, m_maxValue / 20.0);
         
-        // Normalize in linear domain
+        
         double normalized = (valueLinear - minLinear) / (maxLinear - minLinear);
         
-        // Apply logarithmic compression for better visual representation
-        // This makes lower levels more visible
+        
+        
         if (normalized > 0.0) {
-            // Use a gentle logarithmic curve
+            
             normalized = std::log10(1.0 + 9.0 * normalized);
         }
         
         return qBound(0.0, normalized, 1.0);
     }
     
-    // Linear scaling (default)
+    
     double normalized = (value - m_minValue) / (m_maxValue - m_minValue);
     return qBound(0.0, normalized, 1.0);
 }
 
 QColor MeterWidget::getColorForLevel(double normalizedLevel) const
 {
-    // Get meter-specific color zone thresholds
+    
     double greenThreshold, yellowThreshold;
     getColorZones(m_meterType, greenThreshold, yellowThreshold);
     
     if (normalizedLevel >= yellowThreshold) {
-        return QColor(255, 0, 0);  // Red
+        return QColor(255, 0, 0);  
     } else if (normalizedLevel >= greenThreshold) {
-        return QColor(255, 200, 0);  // Yellow
+        return QColor(255, 200, 0);  
     } else {
-        return QColor(0, 200, 0);  // Green
+        return QColor(0, 200, 0);  
     }
 }
 
 QString MeterWidget::formatValue(double value) const
 {
-    // Use format string and reference level if available
+    
     if (!m_referenceLevel.isEmpty()) {
-        int precision = 1;  // default
+        int precision = 1;  
         
         if (!m_format.isEmpty()) {
             precision = extractPrecision(m_format);
@@ -589,13 +589,13 @@ QString MeterWidget::formatValue(double value) const
         return QString("%1 %2").arg(value, 0, 'f', precision).arg(m_referenceLevel);
     }
     
-    // Fallback to generic dB display
+    
     return QString("%1 dB").arg(value, 0, 'f', 1);
 }
 
 int MeterWidget::extractPrecision(const QString &formatString) const
 {
-    // Extract precision from format string like "%.1f" -> 1
+    
     QRegularExpression re(R"(%\.(\d+)[fdeEgG])");
     QRegularExpressionMatch match = re.match(formatString);
     
@@ -603,13 +603,13 @@ int MeterWidget::extractPrecision(const QString &formatString) const
         return match.captured(1).toInt();
     }
     
-    // Default precision
+    
     return 1;
 }
 
 bool MeterWidget::isDatabaseScale() const
 {
-    // Check if we're using a dB-based scale
+    
     return !m_referenceLevel.isEmpty() && (
         m_referenceLevel.contains("dB") || 
         m_referenceLevel == "VU" || 
@@ -621,7 +621,7 @@ bool MeterWidget::isDatabaseScale() const
 
 double MeterWidget::dBToNormalized(double dBValue) const
 {
-    // Convert a dB value to a normalized 0.0-1.0 position in the meter range
+    
     if (m_maxValue <= m_minValue) {
         return 0.0;
     }
@@ -642,9 +642,9 @@ void MeterWidget::paintEvent(QPaintEvent *event)
 
 void MeterWidget::drawMeter(QPainter &painter)
 {
-    // Calculate available space for meter, accounting for labels at top and dropdown at bottom
-    // Top labels: ~80px (value + peak + spacing)
-    // Bottom dropdown: ~60px (label + combo + margins)
+    
+    
+    
     int meterHeight = height() - 140;  
     int meterX = (width() - METER_WIDTH) / 2;
     int meterY = 80;
@@ -660,7 +660,7 @@ void MeterWidget::drawMeter(QPainter &painter)
     double normalizedValue = normalizeValue(m_displayValue);
     int fillHeight = static_cast<int>(normalizedValue * meterHeight);
     
-    // Get meter-specific color zone thresholds
+    
     double greenThreshold, yellowThreshold;
     getColorZones(m_meterType, greenThreshold, yellowThreshold);
     
@@ -719,12 +719,12 @@ void MeterWidget::drawMeter(QPainter &painter)
     painter.drawLine(meterX, greenLine, meterX + METER_WIDTH, greenLine);
     painter.drawLine(meterX, yellowLine, meterX + METER_WIDTH, yellowLine);
     
-    // Draw scale markings for PPM meters
+    
     drawScaleMarkings(painter, meterRect);
 }
 void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
 {
-    // Only draw scale markings for dB-based meters
+    
     if (!isDatabaseScale() && m_meterType != MeterType::VU_METER) {
         return;
     }
@@ -740,32 +740,32 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
     painter.setFont(font);
     
     if (m_meterType == MeterType::BBC_PPM) {
-        // BBC PPM scale: PPM 1-7 (4 dB steps per PPM number)
-        // PPM 4 is typically the reference level
-        // We need to distribute PPM markings across the actual parameter range
+        
+        
+        
         
         double range = m_maxValue - m_minValue;
         QVector<double> markings;
         
-        // Intelligent marking based on range
+        
         if (range <= 15) {
-            // Fine scale: every 2 dB with PPM equivalents
+            
             for (double dB = std::ceil(m_minValue / 2.0) * 2.0; dB <= m_maxValue; dB += 2.0) {
                 markings.append(dB);
             }
         } else if (range <= 30) {
-            // Medium scale: every 4 dB (matches BBC PPM spacing)
+            
             for (double dB = std::ceil(m_minValue / 4.0) * 4.0; dB <= m_maxValue; dB += 4.0) {
                 markings.append(dB);
             }
         } else {
-            // Wide scale: every 6 dB
+            
             for (double dB = std::ceil(m_minValue / 6.0) * 6.0; dB <= m_maxValue; dB += 6.0) {
                 markings.append(dB);
             }
         }
         
-        // Always include 0 dB if in range (typical BBC PPM 4 reference)
+        
         if (0.0 >= m_minValue && 0.0 <= m_maxValue && !markings.contains(0.0)) {
             markings.append(0.0);
             std::sort(markings.begin(), markings.end());
@@ -779,45 +779,45 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
                 continue;
             }
             
-            // Longer tick for 0 dB (reference level)
+            
             int tickLength = (std::abs(dBValue) < 0.1) ? 10 : 6;
             painter.drawLine(meterRect.right() + 2, y, meterRect.right() + 2 + tickLength, y);
             
-            // Draw dB value
+            
             QString label = QString::number(static_cast<int>(dBValue));
             QRect textRect(meterRect.right() + 14, y - 8, 35, 16);
             painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, label);
         }
     }
     else if (m_meterType == MeterType::DIN_PPM) {
-        // DIN PPM (IEC 60268-10 Type I): 0 dBr reference, typical range -50 to +5 dBr
-        // Major marks every 10 dB, minor marks every 5 dB in mid-range
+        
+        
         QVector<double> majorMarkings;
         QVector<double> minorMarkings;
         
         double range = m_maxValue - m_minValue;
         
-        // Always mark 0 dBr (reference level)
+        
         if (0.0 >= m_minValue && 0.0 <= m_maxValue) {
             majorMarkings.append(0.0);
         }
         
-        // Add major markings (multiples of 10)
+        
         for (double dB = std::ceil(m_minValue / 10.0) * 10.0; dB <= m_maxValue; dB += 10.0) {
-            if (dB != 0.0) {  // Already added
+            if (dB != 0.0) {  
                 majorMarkings.append(dB);
             }
         }
         
-        // Add minor markings (multiples of 5, but not 10) in the working range (-30 to +5)
+        
         for (double dB = -30.0; dB <= 5.0; dB += 5.0) {
             if (dB >= m_minValue && dB <= m_maxValue && 
-                static_cast<int>(dB) % 10 != 0) {  // Not already a major marking
+                static_cast<int>(dB) % 10 != 0) {  
                 minorMarkings.append(dB);
             }
         }
         
-        // Draw major markings
+        
         for (double dBValue : majorMarkings) {
             double normalized = normalizeValue(dBValue);
             int y = meterRect.bottom() - static_cast<int>(normalized * meterRect.height());
@@ -826,19 +826,19 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
                 continue;
             }
             
-            // Longer tick for reference level (0 dBr)
+            
             int tickLength = (dBValue == 0.0) ? 10 : 8;
             painter.drawLine(meterRect.right() + 2, y, meterRect.right() + 2 + tickLength, y);
             
-            // Draw label
+            
             QString label = QString::number(static_cast<int>(dBValue));
             QRect textRect(meterRect.right() + 14, y - 8, 35, 16);
             painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, label);
         }
         
-        // Draw minor markings (shorter ticks, no labels)
+        
         painter.save();
-        painter.setPen(QColor(140, 140, 140));  // Dimmer for minor ticks
+        painter.setPen(QColor(140, 140, 140));  
         for (double dBValue : minorMarkings) {
             double normalized = normalizeValue(dBValue);
             int y = meterRect.bottom() - static_cast<int>(normalized * meterRect.height());
@@ -852,16 +852,16 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
         painter.restore();
     }
     else if (m_meterType == MeterType::DIGITAL_PEAK) {
-        // Digital Peak Meter: dBFS scale, 0 dBFS = digital full scale
-        // Common markings: 0, -3, -6, -9, -12, -18, -24, -30, -40, -50, -60
+        
+        
         QVector<double> markings;
         
-        // Always include 0 dBFS (full scale) if in range
+        
         if (0.0 >= m_minValue && 0.0 <= m_maxValue) {
             markings.append(0.0);
         }
         
-        // Critical levels for digital audio
+        
         double criticalLevels[] = {-3.0, -6.0, -9.0, -12.0, -18.0, -24.0, -30.0, -40.0, -50.0, -60.0};
         for (double level : criticalLevels) {
             if (level >= m_minValue && level <= m_maxValue) {
@@ -869,7 +869,7 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
             }
         }
         
-        // Sort markings
+        
         std::sort(markings.begin(), markings.end());
         
         for (double dBValue : markings) {
@@ -880,41 +880,41 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
                 continue;
             }
             
-            // Longer tick for 0 dBFS and -18 dBFS (reference levels)
+            
             int tickLength = (dBValue == 0.0 || dBValue == -18.0) ? 10 : 6;
             painter.drawLine(meterRect.right() + 2, y, meterRect.right() + 2 + tickLength, y);
             
-            // Draw label
+            
             QString label = QString::number(static_cast<int>(dBValue));
             QRect textRect(meterRect.right() + 14, y - 8, 35, 16);
             painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, label);
         }
     }
     else if (m_meterType == MeterType::VU_METER) {
-        // VU Meter: Distributed scale across the actual range
-        // We'll show dB markings distributed evenly across the available range
+        
+        
         
         QVector<double> markings;
         double range = m_maxValue - m_minValue;
         
-        // Intelligent marking based on range size
+        
         double step;
         if (range <= 12) {
-            step = 2.0;  // Fine: every 2 dB
+            step = 2.0;  
         } else if (range <= 30) {
-            step = 3.0;  // Medium: every 3 dB (traditional VU spacing)
+            step = 3.0;  
         } else if (range <= 60) {
-            step = 5.0;  // Coarse: every 5 dB
+            step = 5.0;  
         } else {
-            step = 10.0; // Very coarse: every 10 dB
+            step = 10.0; 
         }
         
-        // Generate markings from min to max
+        
         for (double dB = std::ceil(m_minValue / step) * step; dB <= m_maxValue; dB += step) {
             markings.append(dB);
         }
         
-        // Always include 0 dB if in range (common reference)
+        
         if (0.0 >= m_minValue && 0.0 <= m_maxValue && !markings.contains(0.0)) {
             markings.append(0.0);
             std::sort(markings.begin(), markings.end());
@@ -928,11 +928,11 @@ void MeterWidget::drawScaleMarkings(QPainter &painter, const QRect &meterRect)
                 continue;
             }
             
-            // Longer tick for 0 dB (reference level)
+            
             int tickLength = (std::abs(dBValue) < 0.1) ? 10 : 6;
             painter.drawLine(meterRect.right() + 2, y, meterRect.right() + 2 + tickLength, y);
             
-            // Draw dB value
+            
             QString label = QString::number(static_cast<int>(dBValue));
             QRect textRect(meterRect.right() + 14, y - 8, 35, 16);
             painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, label);
@@ -948,7 +948,7 @@ void MeterWidget::setCustomThresholds(double greenThreshold, double yellowThresh
     m_customYellowThreshold = yellowThreshold;
     m_useCustomThresholds = true;
     
-    // Save to settings
+    
     QSettings settings("EmberViewer", "EmberViewer");
     settings.setValue("meter/customGreenThreshold", greenThreshold);
     settings.setValue("meter/customYellowThreshold", yellowThreshold);
@@ -962,7 +962,7 @@ void MeterWidget::resetToDefaultThresholds()
 {
     m_useCustomThresholds = false;
     
-    // Save to settings
+    
     QSettings settings("EmberViewer", "EmberViewer");
     settings.setValue("meter/useCustomThresholds", false);
     
@@ -978,7 +978,7 @@ void MeterWidget::showThresholdConfigDialog()
     
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
     
-    // Info label
+    
     QString infoText = QString("Configure color zone thresholds for %1\n"
                                "Current range: %2 to %3 %4")
                        .arg(m_identifier)
@@ -988,7 +988,7 @@ void MeterWidget::showThresholdConfigDialog()
     QLabel *infoLabel = new QLabel(infoText, &dialog);
     layout->addWidget(infoLabel);
     
-    // Green threshold input
+    
     QHBoxLayout *greenLayout = new QHBoxLayout();
     greenLayout->addWidget(new QLabel("Green threshold (dB):", &dialog));
     QDoubleSpinBox *greenSpin = new QDoubleSpinBox(&dialog);
@@ -998,7 +998,7 @@ void MeterWidget::showThresholdConfigDialog()
     greenLayout->addWidget(greenSpin);
     layout->addLayout(greenLayout);
     
-    // Yellow threshold input
+    
     QHBoxLayout *yellowLayout = new QHBoxLayout();
     yellowLayout->addWidget(new QLabel("Yellow threshold (dB):", &dialog));
     QDoubleSpinBox *yellowSpin = new QDoubleSpinBox(&dialog);
@@ -1008,12 +1008,12 @@ void MeterWidget::showThresholdConfigDialog()
     yellowLayout->addWidget(yellowSpin);
     layout->addLayout(yellowLayout);
     
-    // Use custom checkbox
+    
     QCheckBox *useCustomCheck = new QCheckBox("Use custom thresholds", &dialog);
     useCustomCheck->setChecked(m_useCustomThresholds);
     layout->addWidget(useCustomCheck);
     
-    // Help text
+    
     QLabel *helpLabel = new QLabel(
         "Green zone: min to green threshold\n"
         "Yellow zone: green to yellow threshold\n"
@@ -1021,7 +1021,7 @@ void MeterWidget::showThresholdConfigDialog()
     helpLabel->setStyleSheet("color: gray; font-size: 9pt;");
     layout->addWidget(helpLabel);
     
-    // Buttons
+    
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     QPushButton *okButton = new QPushButton("OK", &dialog);
     QPushButton *cancelButton = new QPushButton("Cancel", &dialog);
@@ -1059,7 +1059,7 @@ void MeterWidget::contextMenuEvent(QContextMenuEvent *event)
     
     menu.addSeparator();
     
-    // Add logarithmic scale toggle
+    
     QAction *logScaleAction = menu.addAction("Use Logarithmic Scale");
     logScaleAction->setCheckable(true);
     logScaleAction->setChecked(m_useLogarithmicScale);

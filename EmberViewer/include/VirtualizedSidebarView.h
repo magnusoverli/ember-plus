@@ -1,6 +1,4 @@
-/*
-    VirtualizedSidebarView.h - Virtualized vertical sidebar for source labels (inputs/rows)
-*/
+
 
 #ifndef VIRTUALIZEDSIDEBARVIEW_H
 #define VIRTUALIZEDSIDEBARVIEW_H
@@ -21,7 +19,7 @@ public:
     void setModel(MatrixModel *model);
     void setCellHeight(int height);
     void setScrollOffset(int offset);
-    void setHighlightedRow(int row);  // For crosshair effect
+    void setHighlightedRow(int row);  
     void setCrosspointsEnabled(bool enabled);
     
     int cellHeight() const { return m_cellHeight; }
@@ -46,17 +44,17 @@ private:
     MatrixModel *m_model;
     int m_cellHeight;
     int m_scrollOffset;
-    int m_highlightedRow;  // -1 means no highlight
+    int m_highlightedRow;  
     bool m_crosspointsEnabled;
     
-    // Resize handling
+    
     bool m_isResizing;
     int m_resizeStartX;
     int m_resizeStartWidth;
-    static constexpr int RESIZE_HANDLE_WIDTH = 10;  // Width of draggable zone at right edge
+    static constexpr int RESIZE_HANDLE_WIDTH = 10;  
     static constexpr int MIN_SIDEBAR_WIDTH = 80;
     static constexpr int MAX_SIDEBAR_WIDTH = 300;
 };
 
-#endif // VIRTUALIZEDSIDEBARVIEW_H
+#endif 
 

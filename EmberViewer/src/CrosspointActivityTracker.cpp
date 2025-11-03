@@ -76,7 +76,7 @@ void CrosspointActivityTracker::onActivityTimerTick()
 
 bool CrosspointActivityTracker::eventFilter(QObject *watched, QEvent *event)
 {
-    // Reset timer on any user activity when enabled
+    
     if (m_enabled) {
         QEvent::Type type = event->type();
         if (type == QEvent::MouseButtonPress || 
@@ -90,7 +90,7 @@ bool CrosspointActivityTracker::eventFilter(QObject *watched, QEvent *event)
         }
     }
     
-    // Always pass events through
+    
     return QObject::eventFilter(watched, event);
 }
 

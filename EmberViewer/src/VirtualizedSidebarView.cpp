@@ -1,7 +1,4 @@
-/*
-    VirtualizedSidebarView.cpp - Implementation of virtualized vertical sidebar
-    Displays SOURCE labels (inputs) vertically on the left (rows per Ember+ spec)
-*/
+
 
 #include "VirtualizedSidebarView.h"
 #include "MatrixModel.h"
@@ -22,7 +19,7 @@ VirtualizedSidebarView::VirtualizedSidebarView(int cellHeight, QWidget *parent)
 {
     setMinimumWidth(MIN_SIDEBAR_WIDTH);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    setMouseTracking(true);  // Enable mouse tracking for cursor changes
+    setMouseTracking(true);  
 }
 
 VirtualizedSidebarView::~VirtualizedSidebarView()
@@ -77,7 +74,7 @@ void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
     
-    // Use red background when crosspoints enabled, otherwise default button color
+    
     QColor bgColor = m_crosspointsEnabled ? QColor("#890000") : palette().button().color();
     painter.fillRect(rect(), bgColor);
 
@@ -86,12 +83,12 @@ void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
     const QList<int> &sources = m_model->sourceNumbers();
     if (sources.isEmpty()) return;
 
-    // Calculate visible range
+    
     int firstRow = m_scrollOffset / m_cellHeight;
     int lastRow = (m_scrollOffset + height() - 1) / m_cellHeight;
     lastRow = qMin(lastRow, sources.size() - 1);
 
-    // Draw labels
+    
     painter.setPen(palette().buttonText().color());
     QFont font = painter.font();
     font.setPointSize(8);
@@ -104,18 +101,18 @@ void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
         int y = row * m_cellHeight - m_scrollOffset;
         QRect cellRect(0, y, width(), m_cellHeight);
 
-        // Highlight if this is the hovered row
+        
         if (row == m_highlightedRow) {
             QColor highlightColor = palette().highlight().color();
             highlightColor.setAlpha(50);
             painter.fillRect(cellRect, highlightColor);
         }
 
-        // Draw separator
+        
         painter.setPen(palette().mid().color());
         painter.drawLine(cellRect.bottomLeft(), cellRect.bottomRight());
 
-        // Draw text (elided if too long)
+        
         painter.setPen(palette().buttonText().color());
         
         QFontMetrics fm(painter.font());
@@ -124,7 +121,7 @@ void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
         painter.drawText(cellRect.adjusted(4, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft, elidedText);
     }
 
-    // Draw right border
+    
     painter.setPen(palette().dark().color());
     painter.drawLine(width() - 1, 0, width() - 1, height());
 }
@@ -161,15 +158,15 @@ void VirtualizedSidebarView::mouseMoveEvent(QMouseEvent *event)
         int deltaX = event->globalPosition().toPoint().x() - m_resizeStartX;
         int newWidth = m_resizeStartWidth + deltaX;
         
-        // Clamp to min/max bounds
+        
         newWidth = qMax(MIN_SIDEBAR_WIDTH, qMin(MAX_SIDEBAR_WIDTH, newWidth));
         
-        // Emit signal to notify parent widget
+        
         emit sidebarWidthChanged(newWidth);
         
         event->accept();
     } else {
-        // Update cursor when hovering
+        
         updateCursor(event->pos().x());
         QWidget::mouseMoveEvent(event);
     }

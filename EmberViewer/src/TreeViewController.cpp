@@ -163,10 +163,10 @@ void TreeViewController::onParameterReceived(const QString &path, int , const QS
         item->setData(0, Qt::UserRole + 4, maximum);    
         item->setData(0, Qt::UserRole + 5, enumOptions); 
         item->setData(0, Qt::UserRole + 9, streamIdentifier);  
-        item->setData(0, Qt::UserRole + 10, format);  // Format string
-        item->setData(0, Qt::UserRole + 11, referenceLevel);  // Reference level
-        item->setData(0, Qt::UserRole + 12, formula);  // Formula string
-        item->setData(0, Qt::UserRole + 13, factor);  // Factor
+        item->setData(0, Qt::UserRole + 10, format);  
+        item->setData(0, Qt::UserRole + 11, referenceLevel);  
+        item->setData(0, Qt::UserRole + 12, formula);  
+        item->setData(0, Qt::UserRole + 13, factor);  
     qDebug() << "[TreeViewController] Storing format:" << format << "referenceLevel:" << referenceLevel 
              << "formula:" << formula << "factor:" << factor;
         
@@ -203,11 +203,11 @@ void TreeViewController::onParameterReceived(const QString &path, int , const QS
         }
         
         
-        // Don't display value in tree for audio meter parameters
+        
         if (!isAudioMeter) {
             item->setText(2, value);
         } else {
-            item->setText(2, "");  // Clear value column for audio meters
+            item->setText(2, "");  
         }
         
         if (isNew) {
@@ -265,7 +265,7 @@ void TreeViewController::onMatrixReceived(const QString &path, int , const QStri
             emit matrixItemCreated(path, item);
         }
         
-        // Auto-request full details if matrix has no dimensions yet
+        
         if ((targetCount == 0 || sourceCount == 0) && !m_fetchedPaths.contains(path)) {
             qInfo().noquote() << QString("Matrix has no dimensions, auto-requesting details for: %1").arg(path);
             m_fetchedPaths.insert(path);

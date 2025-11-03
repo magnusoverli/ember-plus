@@ -1,6 +1,4 @@
-/*
-    VirtualizedMatrixWidget.cpp - Implementation of virtualized matrix grid
-*/
+
 
 #include "VirtualizedMatrixWidget.h"
 #include "VirtualizedHeaderView.h"
@@ -15,7 +13,7 @@
 #include <QHBoxLayout>
 #include <QDebug>
 
-// Static members for global preferred dimensions
+
 static int s_preferredHeaderHeight = 80;
 static int s_preferredSidebarWidth = 80;
 
@@ -30,35 +28,35 @@ VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
     , m_isDragging(false)
     , m_crosspointsEnabled(true)
 {
-    // Enable mouse tracking for hover effects
+    
     setMouseTracking(true);
     viewport()->setMouseTracking(true);
 
-    // Set focus policy for keyboard navigation
+    
     setFocusPolicy(Qt::StrongFocus);
     
-    // Enable tooltips
+    
     viewport()->setToolTip("");
 
-    // Configure viewport
+    
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     viewport()->setBackgroundRole(QPalette::Base);
     
-    // Reserve space for header and sidebar
+    
     setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
 
-    // Create header view
+    
     m_headerView = new VirtualizedHeaderView(m_cellSize.width(), this);
 
-    // Create sidebar view
+    
     m_sidebarView = new VirtualizedSidebarView(m_cellSize.height(), this);
 
-    // Create corner widget as button for enabling/disabling crosspoints
+    
     m_cornerWidget = new QPushButton(this);
     m_cornerWidget->setCheckable(true);
     m_cornerWidget->setChecked(false);
     
-    // Use lock icons from resources
+    
     QIcon lockIcon;
     lockIcon.addFile(":/resources/lock-closed.png", QSize(), QIcon::Normal, QIcon::Off);
     lockIcon.addFile(":/resources/lock-open.png", QSize(), QIcon::Normal, QIcon::On);
@@ -73,10 +71,10 @@ VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
         "}"
     );
     
-    // Connect button click to emit enable/disable signal
+    
     connect(m_cornerWidget, &QPushButton::toggled, this, &VirtualizedMatrixWidget::enableCrosspointsRequested);
     
-    // Connect scrollbar changes to update header/sidebar
+    
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, 
             this, [this](int value) {
         m_headerView->setScrollOffset(value);
@@ -87,19 +85,19 @@ VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
         m_sidebarView->setScrollOffset(value);
     });
     
-    // Connect header resize signal for drag-to-resize functionality
+    
     connect(m_headerView, &VirtualizedHeaderView::headerHeightChanged,
             this, [this](int newHeight) {
         setHeaderHeight(newHeight);
     });
     
-    // Connect sidebar resize signal for drag-to-resize functionality
+    
     connect(m_sidebarView, &VirtualizedSidebarView::sidebarWidthChanged,
             this, [this](int newWidth) {
         setSidebarWidth(newWidth);
     });
 
-    // Initial layout
+    
     updateViewportSize();
 }
 
@@ -121,7 +119,7 @@ void VirtualizedMatrixWidget::setModel(MatrixModel *model)
         connect(m_model, &MatrixModel::connectionChanged,
                 this, &VirtualizedMatrixWidget::onModelConnectionChanged);
         
-        // Update corner widget with matrix info
+        
         QString matrixTypeStr;
         switch (m_model->matrixType()) {
             case 0: matrixTypeStr = "1:N"; break;
@@ -130,15 +128,15 @@ void VirtualizedMatrixWidget::setModel(MatrixModel *model)
             default: matrixTypeStr = "Unknown"; break;
         }
         
-        // Corner widget is now a button for enabling/disabling crosspoints
-        // Dimension info moved to Properties panel title
+        
+        
     }
 
-    // Update child views
+    
     m_headerView->setModel(model);
     m_sidebarView->setModel(model);
     
-    // Connect header resize signal
+    
     connect(m_headerView, &VirtualizedHeaderView::headerHeightChanged,
             this, [this](int newHeight) {
         setHeaderHeight(newHeight);
@@ -160,7 +158,7 @@ void VirtualizedMatrixWidget::setCellSize(const QSize &size)
 void VirtualizedMatrixWidget::setHeaderHeight(int height)
 {
     m_headerHeight = height;
-    s_preferredHeaderHeight = height;  // Update global preference
+    s_preferredHeaderHeight = height;  
     setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     updateViewportSize();
 }
@@ -168,7 +166,7 @@ void VirtualizedMatrixWidget::setHeaderHeight(int height)
 void VirtualizedMatrixWidget::setSidebarWidth(int width)
 {
     m_sidebarWidth = width;
-    s_preferredSidebarWidth = width;  // Update global preference
+    s_preferredSidebarWidth = width;  
     setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     updateViewportSize();
 }
@@ -180,7 +178,7 @@ void VirtualizedMatrixWidget::setSelectedCell(int targetIndex, int sourceIndex)
     const QList<int> &targets = m_model->targetNumbers();
     const QList<int> &sources = m_model->sourceNumbers();
 
-    // Ember+ spec: columns=targets, rows=sources
+    
     int col = targets.indexOf(targetIndex);
     int row = sources.indexOf(sourceIndex);
 
@@ -201,9 +199,9 @@ void VirtualizedMatrixWidget::refresh()
     viewport()->update();
 }
 
-// ============================================================================
-// MatrixWidget API Compatibility Methods
-// ============================================================================
+
+
+
 
 void VirtualizedMatrixWidget::setMatrixInfo(const QString &identifier, const QString &description,
                                              int type, int targetCount, int sourceCount)
@@ -221,7 +219,7 @@ void VirtualizedMatrixWidget::setMatrixInfo(const QString &identifier, const QSt
     
     m_model->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
     
-    // Update corner widget
+    
     QString matrixTypeStr;
     switch (type) {
         case 0: matrixTypeStr = "1:N"; break;
@@ -230,8 +228,8 @@ void VirtualizedMatrixWidget::setMatrixInfo(const QString &identifier, const QSt
         default: matrixTypeStr = "Unknown"; break;
     }
     
-    // Corner widget is now a button for enabling/disabling crosspoints
-    // Dimension info moved to Properties panel title
+    
+    
     
     updateScrollBars();
     viewport()->update();
@@ -282,7 +280,7 @@ void VirtualizedMatrixWidget::clearTargetConnections(int targetNumber)
 
 void VirtualizedMatrixWidget::rebuild()
 {
-    // For virtualized widget, rebuild just means refresh
+    
     updateScrollBars();
     viewport()->update();
     m_headerView->update();
@@ -324,7 +322,7 @@ void VirtualizedMatrixWidget::setCrosspointsEnabled(bool enabled)
     m_crosspointsEnabled = enabled;
     m_cornerWidget->setChecked(enabled);
     
-    // Update header and sidebar background colors
+    
     m_headerView->setCrosspointsEnabled(enabled);
     m_sidebarView->setCrosspointsEnabled(enabled);
 }
@@ -353,8 +351,8 @@ QPoint VirtualizedMatrixWidget::cellAt(const QPoint &pos) const
     int col = (vpPos.x() + scrollX) / m_cellSize.width();
     int row = (vpPos.y() + scrollY) / m_cellSize.height();
 
-    // Ember+ spec: columns=targets, rows=sources
-    // Clamp to valid range
+    
+    
     if (col < 0 || col >= m_model->targetNumbers().size() ||
         row < 0 || row >= m_model->sourceNumbers().size()) {
         return QPoint(-1, -1);
@@ -367,7 +365,7 @@ QRect VirtualizedMatrixWidget::cellRect(int row, int col) const
 {
     if (!m_model) return QRect();
 
-    // Account for scroll position
+    
     int scrollX = horizontalScrollBar()->value();
     int scrollY = verticalScrollBar()->value();
 
@@ -388,7 +386,7 @@ void VirtualizedMatrixWidget::paintEvent(QPaintEvent *event)
         return;
     }
     
-    // Handle edge cases: 0×0, 1×N, N×1 matrices
+    
     if (m_model->targetCount() == 0 || m_model->sourceCount() == 0) {
         QPainter painter(viewport());
         painter.fillRect(viewport()->rect(), palette().base());
@@ -401,19 +399,19 @@ void VirtualizedMatrixWidget::paintEvent(QPaintEvent *event)
     }
 
     QPainter painter(viewport());
-    painter.setRenderHint(QPainter::Antialiasing, false); // Faster for grids
+    painter.setRenderHint(QPainter::Antialiasing, false); 
     
-    // Use the update region from the event for minimal repaints
+    
     QRect updateRect = event->rect();
     painter.setClipRect(updateRect);
 
-    // Fill background
+    
     painter.fillRect(updateRect, palette().base());
 
-    // Get visible cell range (intersect with update region for optimization)
+    
     QRect visibleCells = visibleCellsRect();
 
-    // Draw in layers
+    
     drawConnections(painter, visibleCells);
     drawGrid(painter, visibleCells);
     drawHover(painter);
@@ -435,15 +433,15 @@ void VirtualizedMatrixWidget::mousePressEvent(QMouseEvent *event)
         if (cell.x() >= 0 && cell.y() >= 0) {
             m_selectedCell = cell;
             
-            // Get actual target/source numbers
-            // Ember+ spec: columns=targets, rows=sources
+            
+            
             const QList<int> &targets = m_model->targetNumbers();
             const QList<int> &sources = m_model->sourceNumbers();
             
             int targetNumber = targets[cell.x()];
             int sourceNumber = sources[cell.y()];
             
-            // Emit both new and old API signals
+            
             emit crosspointClicked(targetNumber, sourceNumber);
             emit crosspointClicked(m_matrixPath, targetNumber, sourceNumber);
             viewport()->update();
@@ -461,19 +459,19 @@ void VirtualizedMatrixWidget::mouseMoveEvent(QMouseEvent *event)
     if (cell != m_hoveredCell) {
         m_hoveredCell = cell;
         
-        // Update header and sidebar crosshair
+        
         m_headerView->setHighlightedColumn(cell.x());
         m_sidebarView->setHighlightedRow(cell.y());
         
         if (cell.x() >= 0 && cell.y() >= 0) {
-            // Ember+ spec: columns=targets, rows=sources
+            
             const QList<int> &targets = m_model->targetNumbers();
             const QList<int> &sources = m_model->sourceNumbers();
             
             int targetNumber = targets[cell.x()];
             int sourceNumber = sources[cell.y()];
             
-            // Set tooltip
+            
             QString targetLabel = m_model->targetLabel(targetNumber);
             QString sourceLabel = m_model->sourceLabel(sourceNumber);
             bool connected = m_model->isConnected(targetNumber, sourceNumber);
@@ -512,7 +510,7 @@ void VirtualizedMatrixWidget::leaveEvent(QEvent *event)
 
 void VirtualizedMatrixWidget::wheelEvent(QWheelEvent *event)
 {
-    // Let the scroll area handle wheel events naturally
+    
     QAbstractScrollArea::wheelEvent(event);
 }
 
@@ -562,10 +560,10 @@ void VirtualizedMatrixWidget::keyPressEvent(QKeyEvent *event)
     if (newCell != m_selectedCell) {
         m_selectedCell = newCell;
         
-        // Ensure the cell is visible
+        
         QRect cellRect = this->cellRect(newCell.y(), newCell.x());
         
-        // Scroll if needed
+        
         int scrollX = horizontalScrollBar()->value();
         int scrollY = verticalScrollBar()->value();
         
@@ -586,7 +584,7 @@ void VirtualizedMatrixWidget::keyPressEvent(QKeyEvent *event)
         
         viewport()->update();
         
-        // Emit signal
+        
         const QList<int> &targets = m_model->targetNumbers();
         const QList<int> &sources = m_model->sourceNumbers();
         emit crosspointClicked(targets[newCell.y()], sources[newCell.x()]);
@@ -603,7 +601,7 @@ void VirtualizedMatrixWidget::onModelConnectionChanged(int targetNumber, int sou
 {
     Q_UNUSED(connected);
     
-    // Only repaint the specific cell that changed
+    
     invalidateCell(targetNumber, sourceNumber);
 }
 
@@ -632,20 +630,20 @@ void VirtualizedMatrixWidget::updateScrollBars()
 
 void VirtualizedMatrixWidget::updateViewportSize()
 {
-    // Update viewport margins to reserve space for header and sidebar
+    
     setViewportMargins(m_sidebarWidth, m_headerHeight, 0, 0);
     
     QRect vp = viewport()->geometry();
     
-    // Position header at top (in the top margin area)
+    
     m_headerView->setGeometry(m_sidebarWidth, 0, 
                               vp.width(), m_headerHeight);
     
-    // Position sidebar at left (in the left margin area)
+    
     m_sidebarView->setGeometry(0, m_headerHeight,
                                m_sidebarWidth, vp.height());
     
-    // Position corner widget
+    
     m_cornerWidget->setGeometry(0, 0, m_sidebarWidth, m_headerHeight);
     
     updateScrollBars();
@@ -664,7 +662,7 @@ QRect VirtualizedMatrixWidget::visibleCellsRect() const
     int lastCol = (scrollX + viewport()->width() - 1) / m_cellSize.width();
     int lastRow = (scrollY + viewport()->height() - 1) / m_cellSize.height();
 
-    // Clamp to actual matrix bounds
+    
     lastCol = qMin(lastCol, m_model->sourceNumbers().size() - 1);
     lastRow = qMin(lastRow, m_model->targetNumbers().size() - 1);
 
@@ -675,13 +673,13 @@ void VirtualizedMatrixWidget::drawGrid(QPainter &painter, const QRect &visibleCe
 {
     painter.setPen(QPen(palette().mid().color(), 1));
 
-    // Draw vertical lines (target separators) - columns per Ember+ spec
+    
     for (int col = visibleCells.left(); col <= visibleCells.right() + 1; ++col) {
         int x = col * m_cellSize.width() - horizontalScrollBar()->value();
         painter.drawLine(x, 0, x, viewport()->height());
     }
 
-    // Draw horizontal lines (source separators) - rows per Ember+ spec
+    
     for (int row = visibleCells.top(); row <= visibleCells.bottom() + 1; ++row) {
         int y = row * m_cellSize.height() - verticalScrollBar()->value();
         painter.drawLine(0, y, viewport()->width(), y);
@@ -692,13 +690,13 @@ void VirtualizedMatrixWidget::drawConnections(QPainter &painter, const QRect &vi
 {
     if (!m_model) return;
 
-    // Ember+ spec: columns=targets, rows=sources
+    
     const QList<int> &targets = m_model->targetNumbers();
     const QList<int> &sources = m_model->sourceNumbers();
 
-    // Fill connected cells
+    
     painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(100, 200, 100, 100)); // Light green for connected
+    painter.setBrush(QColor(100, 200, 100, 100)); 
 
     for (int row = visibleCells.top(); row <= visibleCells.bottom(); ++row) {
         for (int col = visibleCells.left(); col <= visibleCells.right(); ++col) {
@@ -744,7 +742,7 @@ void VirtualizedMatrixWidget::invalidateCellRegion(int row, int col)
     
     QRect cellGeometry = cellRect(row, col);
     
-    // Only update if cell is visible
+    
     if (cellGeometry.intersects(viewport()->rect())) {
         viewport()->update(cellGeometry);
     }
@@ -754,7 +752,7 @@ void VirtualizedMatrixWidget::invalidateCell(int targetNumber, int sourceNumber)
 {
     if (!m_model) return;
 
-    // Ember+ spec: columns=targets, rows=sources
+    
     const QList<int> &targets = m_model->targetNumbers();
     const QList<int> &sources = m_model->sourceNumbers();
 
@@ -766,7 +764,7 @@ void VirtualizedMatrixWidget::invalidateCell(int targetNumber, int sourceNumber)
     }
 }
 
-// Static methods for global preferred dimensions
+
 void VirtualizedMatrixWidget::setPreferredHeaderHeight(int height)
 {
     s_preferredHeaderHeight = height;
