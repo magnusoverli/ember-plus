@@ -3,6 +3,7 @@
 #include "SliderWidget.h"
 #include <QFont>
 #include <QFrame>
+#include <QRegularExpression>
 #include <cmath>
 
 SliderWidget::SliderWidget(QWidget *parent)
@@ -11,6 +12,8 @@ SliderWidget::SliderWidget(QWidget *parent)
     , m_maxValue(100.0)
     , m_paramType(2)  
     , m_access(0)
+    , m_factor(1)
+    , m_useLogarithmicScale(true)
     , m_updatingFromCode(false)
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -121,36 +124,47 @@ SliderWidget::~SliderWidget()
 
 void SliderWidget::setParameterInfo(const QString &identifier, const QString &path,
                                     double minValue, double maxValue, int paramType,
-                                    int access, const QString &formula, const QString &format)
+                                    int access, const QString &formula, const QString &format,
+                                    const QString &referenceLevel, int factor)
 {
     m_identifier = identifier;
     m_parameterPath = path;
-    m_minValue = minValue;
-    m_maxValue = maxValue;
     m_paramType = paramType;
     m_access = access;
     m_formula = formula;
     m_format = format;
+    m_referenceLevel = referenceLevel;
+    m_factor = factor;
+    
+    
+    if (factor > 1) {
+        double rangeInDb = 2560.0 / factor;
+        m_minValue = -rangeInDb;
+        m_maxValue = rangeInDb / 4.0;
+    } else {
+        m_minValue = minValue;
+        m_maxValue = maxValue;
+    }
     
     m_identifierLabel->setText(identifier);
     m_pathLabel->setText(QString("Path: %1 | Range: %2 to %3")
                         .arg(path)
-                        .arg(minValue)
-                        .arg(maxValue));
+                        .arg(m_minValue)
+                        .arg(m_maxValue));
     
     
-    m_minLabel->setText(formatDisplayValue(minValue));
-    m_maxLabel->setText(formatDisplayValue(maxValue));
+    m_minLabel->setText(formatDisplayValue(m_minValue));
+    m_maxLabel->setText(formatDisplayValue(m_maxValue));
     
     
     m_updatingFromCode = true;
-    m_spinBox->setRange(minValue, maxValue);
+    m_spinBox->setRange(m_minValue, m_maxValue);
     if (paramType == 1) {  
         m_spinBox->setDecimals(0);
         m_spinBox->setSingleStep(1.0);
     } else {  
         m_spinBox->setDecimals(3);
-        double step = (maxValue - minValue) / 100.0;
+        double step = (m_maxValue - m_minValue) / 100.0;
         m_spinBox->setSingleStep(step);
     }
     m_updatingFromCode = false;
@@ -242,21 +256,32 @@ void SliderWidget::onSpinBoxValueChanged(double value)
 
 QString SliderWidget::formatDisplayValue(double value) const
 {
+    int precision = 2;  // default
+    QString unit;
+    
     
     if (!m_format.isEmpty()) {
-        
-        if (m_paramType == 1) {
-            return QString::number(static_cast<int>(value)) + " " + m_format;
-        } else {
-            return QString::number(value, 'f', 2) + " " + m_format;
-        }
+        precision = extractPrecision(m_format);
+    }
+    
+    
+    if (!m_referenceLevel.isEmpty()) {
+        unit = m_referenceLevel;  // Use clean reference level (e.g., "dB", "dBFS")
+    } else if (!m_format.isEmpty()) {
+        unit = extractUnit(m_format);  // Fallback to extracting from format string
     }
     
     
     if (m_paramType == 1) {
+        if (!unit.isEmpty()) {
+            return QString("%1 %2").arg(static_cast<int>(value)).arg(unit);
+        }
         return QString::number(static_cast<int>(value));
     } else {
-        return QString::number(value, 'f', 2);
+        if (!unit.isEmpty()) {
+            return QString("%1 %2").arg(value, 0, 'f', precision).arg(unit);
+        }
+        return QString::number(value, 'f', precision);
     }
 }
 
@@ -265,13 +290,58 @@ int SliderWidget::doubleToSliderPosition(double value) const
     
     if (m_maxValue == m_minValue) return 0;
     
+    
     double normalized = (value - m_minValue) / (m_maxValue - m_minValue);
-    return static_cast<int>(normalized * 1000.0);
+    
+    return static_cast<int>(qBound(0.0, normalized, 1.0) * 1000.0);
 }
 
 double SliderWidget::sliderPositionToDouble(int position) const
 {
     
     double normalized = position / 1000.0;
+    
+    
     return m_minValue + normalized * (m_maxValue - m_minValue);
+}
+
+int SliderWidget::extractPrecision(const QString &formatString) const
+{
+    
+    QRegularExpression re(R"(%\.(\d+)[fdeEgG])");
+    QRegularExpressionMatch match = re.match(formatString);
+    
+    if (match.hasMatch()) {
+        return match.captured(1).toInt();
+    }
+    
+    
+    return 2;
+}
+
+QString SliderWidget::extractUnit(const QString &formatString) const
+{
+    
+    QRegularExpression re(R"(%[-+]?[0-9]*\.?[0-9]*[fdeEgGdiouxX])");
+    QRegularExpressionMatch match = re.match(formatString);
+    
+    if (match.hasMatch()) {
+        
+        int endPos = match.capturedEnd();
+        if (endPos < formatString.length()) {
+            return formatString.mid(endPos).trimmed();
+        }
+    }
+    
+    
+    return QString();
+}
+
+bool SliderWidget::isDatabaseScale() const
+{
+    
+    return !m_referenceLevel.isEmpty() && (
+        m_referenceLevel.contains("dB") || 
+        m_referenceLevel == "VU" || 
+        m_referenceLevel.contains("PPM"));
 }
