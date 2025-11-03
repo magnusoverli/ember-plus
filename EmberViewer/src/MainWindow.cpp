@@ -491,8 +491,7 @@ void MainWindow::setupMenu()
             "See LICENSE_1_0.txt for details</p>"
             "<p><b>Copyright:</b><br>"
             "© 2012-2019 Lawo GmbH (libember)<br>"
-            "© 2025 Magnus Overli (EmberViewer)</p>"
-            "<p><a href='https:
+            "© 2025 Magnus Overli (EmberViewer)</p>");
     });
 }
 
