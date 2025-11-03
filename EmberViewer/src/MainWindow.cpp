@@ -1083,6 +1083,13 @@ void MainWindow::onTreeSelectionChanged()
             triggerWidget->setParameterInfo(identifier, oidPath, access);
             connect(triggerWidget, &TriggerWidget::triggerActivated,
                     this, [this](QString path, QString value) {
+                        // Update tree view immediately (optimistic update)
+                        QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
+                        if (item) {
+                            item->setText(2, value);
+                        }
+                        
+                        // Send to provider (which will echo back to confirm)
                         m_connection->sendParameterValue(path, value, 1);  
                     });
             
@@ -1112,6 +1119,8 @@ void MainWindow::onTreeSelectionChanged()
             int access = item->data(0, Qt::UserRole + 2).toInt();
             QString identifier = item->text(0);
             QString format = item->data(0, Qt::UserRole + 10).toString();
+            QString referenceLevel = item->data(0, Qt::UserRole + 11).toString();
+            int factor = item->data(0, Qt::UserRole + 13).toInt();
             
             bool hasRange = minVar.isValid() && maxVar.isValid();
             double minValue = minVar.toDouble();
@@ -1126,7 +1135,7 @@ void MainWindow::onTreeSelectionChanged()
                 
                 
                 SliderWidget *sliderWidget = new SliderWidget();
-                sliderWidget->setParameterInfo(identifier, oidPath, minValue, maxValue, paramType, access, formula, format);
+                sliderWidget->setParameterInfo(identifier, oidPath, minValue, maxValue, paramType, access, formula, format, referenceLevel, factor);
                 
                 
                 QString currentValue = item->text(2);
@@ -1139,6 +1148,13 @@ void MainWindow::onTreeSelectionChanged()
                 
                 connect(sliderWidget, &SliderWidget::valueChanged,
                         this, [this](QString path, QString newValue, int type) {
+                            // Update tree view immediately (optimistic update)
+                            QTreeWidgetItem *item = m_treeViewController->findTreeItem(path);
+                            if (item) {
+                                item->setText(2, newValue);
+                            }
+                            
+                            // Send to provider (which will echo back to confirm)
                             m_connection->sendParameterValue(path, newValue, type);
                         });
                 
