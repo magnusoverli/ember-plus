@@ -28,7 +28,18 @@ VirtualizedSidebarView::~VirtualizedSidebarView()
 
 void VirtualizedSidebarView::setModel(MatrixModel *model)
 {
+    if (m_model) {
+        disconnect(m_model, nullptr, this, nullptr);
+    }
+    
     m_model = model;
+    
+    if (m_model) {
+        connect(m_model, &MatrixModel::dataChanged, this, [this]() {
+            update();
+        });
+    }
+    
     update();
 }
 
