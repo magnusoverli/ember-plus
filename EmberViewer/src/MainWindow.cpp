@@ -694,7 +694,7 @@ void MainWindow::onNodeReceived(const QString &path, const QString &identifier, 
     m_treeViewController->onNodeReceived(path, identifier, description, isOnline);
 }
 
-void MainWindow::onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
+void MainWindow::onParameterReceived(const QString &path, int number, const QString &identifier, const QString &description, const QString &value, 
                                     int access, int type, const QVariant &minimum, const QVariant &maximum,
                                     const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
                                     const QString &format, const QString &referenceLevel, const QString &formula, int factor)
@@ -741,7 +741,7 @@ void MainWindow::onParameterReceived(const QString &path, int number, const QStr
     }
     
     
-    m_treeViewController->onParameterReceived(path, number, identifier, value, access, type, 
+    m_treeViewController->onParameterReceived(path, number, identifier, description, value, access, type, 
                                              minimum, maximum, enumOptions, enumValues, isOnline, streamIdentifier, format, referenceLevel, formula, factor);
 }
 

@@ -46,7 +46,7 @@ signals:
 public slots:
     
     void onNodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
-    void onParameterReceived(const QString &path, int number, const QString &identifier, const QString &value, 
+    void onParameterReceived(const QString &path, int number, const QString &identifier, const QString &description, const QString &value, 
                             int access, int type, const QVariant &minimum, const QVariant &maximum,
                             const QStringList &enumOptions, const QList<int> &enumValues, bool isOnline, int streamIdentifier,
                                 const QString &format, const QString &referenceLevel, const QString &formula, int factor);

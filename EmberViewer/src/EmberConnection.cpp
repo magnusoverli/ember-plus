@@ -610,7 +610,7 @@ void EmberConnection::onParserParameterReceived(const EmberData::ParameterInfo& 
     
     qDebug() << "[EmberConnection] Emitting parameterReceived - format:" << param.format << "referenceLevel:" << param.referenceLevel 
              << "formula:" << param.formula << "factor:" << param.factor;
-    emit parameterReceived(param.path, param.number, param.identifier, param.value, param.access, param.type, 
+    emit parameterReceived(param.path, param.number, param.identifier, param.description, param.value, param.access, param.type, 
                           param.minimum, param.maximum, param.enumOptions, param.enumValues, param.isOnline, param.streamIdentifier,
                           param.format, param.referenceLevel, param.formula, param.factor);
 }

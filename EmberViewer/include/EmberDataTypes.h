@@ -31,6 +31,7 @@ struct ParameterInfo {
     QString path;
     int number;
     QString identifier;
+    QString description;         // Human-readable label for UI display
     QString value;
     int access;
     int type;
