@@ -60,6 +60,9 @@ signals:
     void connected();
     void disconnected();
     void treePopulated();
+    void treeLoadingPhaseComplete();
+    void matrixLabelProgress(const QString &matrixIdentifier, int fetchedCount, int totalCount, const QString &labelType);
+    void labelFetchingComplete();
     void nodeReceived(const QString &path, const QString &identifier, const QString &description, bool isOnline);
     void parameterReceived(const QString &path, int number, const QString &identifier, const QString &description, const QString &value, 
                           int access, int type, const QVariant &minimum, const QVariant &maximum,
@@ -87,6 +90,8 @@ private slots:
     void onDataReceived();
     void onConnectionTimeout();
     void onProtocolTimeout();
+    void processBatchedAutoExpansion();
+    void processBatchedLabelFetch();
 
 private:
     struct ParameterCache {
@@ -117,14 +122,26 @@ private:
     QSet<QString> m_labelBasePaths;
     QSet<QString> m_labelFetchPaths;  // Tracks paths actively being fetched for labels
     QMap<QString, QString> m_labelPathToMatrix;  // labelBasePath -> matrixPath
+    
+    // Batched auto-expansion for initial connection
+    QTimer *m_batchTimer;
+    QStringList m_pendingAutoExpansion;
+    bool m_initialConnectionPhase;
+    
+    // Batched label fetching
+    QTimer *m_labelBatchTimer;
+    QStringList m_pendingLabelPaths;
     struct MatrixLabelFetchState {
+        QString identifier;
         int targetCount;
         int sourceCount;
         QSet<int> fetchedTargets;
         QSet<int> fetchedSources;
         QStringList labelBasePaths;  // 0=targets, 1=sources
+        qint64 lastProgressEmitTime;  // milliseconds since epoch
     };
     QMap<QString, MatrixLabelFetchState> m_matrixLabelStates;  // matrixPath -> fetch state
+    bool m_labelFetchingCompleted;  // Flag to prevent duplicate labelFetchingComplete emissions
     int m_nextInvocationId;
     QMap<int, QString> m_pendingInvocations;
     struct SubscriptionState {

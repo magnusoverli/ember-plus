@@ -57,6 +57,10 @@ EmberConnection::EmberConnection(QObject *parent)
     , m_emberDataReceived(false)
     , m_connectionTimer(nullptr)
     , m_protocolTimer(nullptr)
+    , m_batchTimer(nullptr)
+    , m_initialConnectionPhase(false)
+    , m_labelBatchTimer(nullptr)
+    , m_labelFetchingCompleted(false)
     , m_nextInvocationId(1)
 {
     
@@ -91,7 +95,40 @@ EmberConnection::EmberConnection(QObject *parent)
             [this](const EmberData::MatrixTargetInfo& target) {
                 // Track that we've fetched this target label
                 if (m_matrixLabelStates.contains(target.matrixPath)) {
-                    m_matrixLabelStates[target.matrixPath].fetchedTargets.insert(target.targetNumber);
+                    auto& state = m_matrixLabelStates[target.matrixPath];
+                    state.fetchedTargets.insert(target.targetNumber);
+                    
+                    // Emit progress for this matrix (throttle: time-based AND count-based)
+                    int fetchedCount = state.fetchedTargets.size() + state.fetchedSources.size();
+                    int totalCount = state.targetCount + state.sourceCount;
+                    qint64 now = QDateTime::currentMSecsSinceEpoch();
+                    qint64 timeSinceLastEmit = now - state.lastProgressEmitTime;
+                    
+                    // Emit if: 100ms has passed OR we're complete OR every 100 labels (for very fast updates)
+                    if (timeSinceLastEmit >= 100 || fetchedCount == totalCount || (fetchedCount % 100 == 0)) {
+                        // Determine label type based on what we're fetching
+                        QString labelType = state.fetchedTargets.size() < state.targetCount ? "targets" : "sources";
+                        emit matrixLabelProgress(state.identifier, fetchedCount, totalCount, labelType);
+                        state.lastProgressEmitTime = now;
+                    }
+                    
+                    // Check if this was the last matrix completing - emit labelFetchingComplete (only once)
+                    if (fetchedCount == totalCount && !m_labelFetchingCompleted) {
+                        bool allComplete = true;
+                        for (const auto& otherState : m_matrixLabelStates) {
+                            int otherFetched = otherState.fetchedTargets.size() + otherState.fetchedSources.size();
+                            int otherTotal = otherState.targetCount + otherState.sourceCount;
+                            if (otherTotal > 0 && otherFetched < otherTotal) {
+                                allComplete = false;
+                                break;
+                            }
+                        }
+                        if (allComplete) {
+                            qDebug() << "All matrix labels fetched - emitting labelFetchingComplete";
+                            m_labelFetchingCompleted = true;  // Set flag to prevent duplicate emissions
+                            emit labelFetchingComplete();
+                        }
+                    }
                 }
                 emit matrixTargetReceived(target.matrixPath, target.targetNumber, target.label);
             });
@@ -99,7 +136,40 @@ EmberConnection::EmberConnection(QObject *parent)
             [this](const EmberData::MatrixSourceInfo& source) {
                 // Track that we've fetched this source label
                 if (m_matrixLabelStates.contains(source.matrixPath)) {
-                    m_matrixLabelStates[source.matrixPath].fetchedSources.insert(source.sourceNumber);
+                    auto& state = m_matrixLabelStates[source.matrixPath];
+                    state.fetchedSources.insert(source.sourceNumber);
+                    
+                    // Emit progress for this matrix (throttle: time-based AND count-based)
+                    int fetchedCount = state.fetchedTargets.size() + state.fetchedSources.size();
+                    int totalCount = state.targetCount + state.sourceCount;
+                    qint64 now = QDateTime::currentMSecsSinceEpoch();
+                    qint64 timeSinceLastEmit = now - state.lastProgressEmitTime;
+                    
+                    // Emit if: 100ms has passed OR we're complete OR every 100 labels (for very fast updates)
+                    if (timeSinceLastEmit >= 100 || fetchedCount == totalCount || (fetchedCount % 100 == 0)) {
+                        // Determine label type based on what we're fetching
+                        QString labelType = state.fetchedSources.size() < state.sourceCount ? "sources" : "sources";
+                        emit matrixLabelProgress(state.identifier, fetchedCount, totalCount, labelType);
+                        state.lastProgressEmitTime = now;
+                    }
+                    
+                    // Check if this was the last matrix completing - emit labelFetchingComplete (only once)
+                    if (fetchedCount == totalCount && !m_labelFetchingCompleted) {
+                        bool allComplete = true;
+                        for (const auto& otherState : m_matrixLabelStates) {
+                            int otherFetched = otherState.fetchedTargets.size() + otherState.fetchedSources.size();
+                            int otherTotal = otherState.targetCount + otherState.sourceCount;
+                            if (otherTotal > 0 && otherFetched < otherTotal) {
+                                allComplete = false;
+                                break;
+                            }
+                        }
+                        if (allComplete) {
+                            qDebug() << "All matrix labels fetched - emitting labelFetchingComplete";
+                            m_labelFetchingCompleted = true;  // Set flag to prevent duplicate emissions
+                            emit labelFetchingComplete();
+                        }
+                    }
                 }
                 emit matrixSourceReceived(source.matrixPath, source.sourceNumber, source.label);
             });
@@ -134,21 +204,46 @@ EmberConnection::EmberConnection(QObject *parent)
     
     connect(m_glowParser, &GlowParser::matrixLabelPathsDiscovered, this,
             [this](const QString& matrixPath, const QStringList& basePaths) {
+                // Update the matrix fetch state with label base paths
+                if (!m_matrixLabelStates.contains(matrixPath)) {
+                    return;
+                }
+                
+                auto& state = m_matrixLabelStates[matrixPath];
+                state.labelBasePaths = basePaths;
+                
+                int totalCount = state.targetCount + state.sourceCount;
+                
+                // Skip 0x0 matrices - no labels to fetch
+                if (totalCount == 0) {
+                    qInfo().noquote() << QString("Matrix %1: Skipping label fetch (0×0 dimensions)")
+                        .arg(matrixPath);
+                    return;
+                }
+                
                 qInfo().noquote() << QString("Matrix %1: Prefetching ALL labels for %2 label layers")
                     .arg(matrixPath).arg(basePaths.size());
                 
-                // Update the matrix fetch state with label base paths
-                if (m_matrixLabelStates.contains(matrixPath)) {
-                    m_matrixLabelStates[matrixPath].labelBasePaths = basePaths;
-                }
+                // Emit initial progress (0/total) to show which matrix we're starting to fetch
+                state.lastProgressEmitTime = QDateTime::currentMSecsSinceEpoch();
+                emit matrixLabelProgress(state.identifier, 0, totalCount, "targets");
                 
                 for (const QString& basePath : basePaths) {
                     // Track this as a label base path for recursive fetching
                     m_labelBasePaths.insert(basePath);
                     m_labelFetchPaths.insert(basePath);
                     m_labelPathToMatrix[basePath] = matrixPath;
-                    qDebug().noquote() << QString("  - Starting recursive label fetch at basePath: %1").arg(basePath);
-                    sendGetDirectoryForPath(basePath);
+                    qDebug().noquote() << QString("  - Queueing label fetch at basePath: %1").arg(basePath);
+                    
+                    // Add to pending batch instead of sending immediately
+                    if (!m_pendingLabelPaths.contains(basePath)) {
+                        m_pendingLabelPaths.append(basePath);
+                    }
+                    
+                    // Start batch timer if not already running
+                    if (m_labelBatchTimer && !m_labelBatchTimer->isActive()) {
+                        m_labelBatchTimer->start();
+                    }
                 }
             });
     
@@ -163,6 +258,18 @@ EmberConnection::EmberConnection(QObject *parent)
     m_protocolTimer->setSingleShot(true);
     m_protocolTimer->setInterval(PROTOCOL_TIMEOUT_MS);
     connect(m_protocolTimer, &QTimer::timeout, this, &EmberConnection::onProtocolTimeout);
+    
+    // Batch timer for auto-expansion - collects nodes and sends batch request
+    m_batchTimer = new QTimer(this);
+    m_batchTimer->setSingleShot(true);
+    m_batchTimer->setInterval(50);  // 50ms collection window
+    connect(m_batchTimer, &QTimer::timeout, this, &EmberConnection::processBatchedAutoExpansion);
+    
+    // Batch timer for label fetching - collects label paths and sends batch request
+    m_labelBatchTimer = new QTimer(this);
+    m_labelBatchTimer->setSingleShot(true);
+    m_labelBatchTimer->setInterval(10);  // 10ms collection window for responsive label fetching
+    connect(m_labelBatchTimer, &QTimer::timeout, this, &EmberConnection::processBatchedLabelFetch);
 }
 
 EmberConnection::~EmberConnection()
@@ -173,6 +280,12 @@ EmberConnection::~EmberConnection()
     }
     if (m_protocolTimer) {
         m_protocolTimer->stop();
+    }
+    if (m_batchTimer) {
+        m_batchTimer->stop();
+    }
+    if (m_labelBatchTimer) {
+        m_labelBatchTimer->stop();
     }
     
     // Disconnect all signals to prevent crashes during cleanup
@@ -222,6 +335,7 @@ void EmberConnection::connectToHost(const QString &host, int port)
     
     
     m_requestedPaths.clear();
+    m_labelFetchingCompleted = false;  // Reset flag for new connection
     
     
     
@@ -279,6 +393,8 @@ void EmberConnection::onSocketConnected()
     
     m_connected = true;
     m_emberDataReceived = false;
+    m_initialConnectionPhase = true;  // Enable batching mode
+    m_pendingAutoExpansion.clear();
     emit connected();
     qInfo().noquote() << "Connected to provider";
     
@@ -518,6 +634,17 @@ void EmberConnection::onParserNodeReceived(const EmberData::NodeInfo& node)
         shouldAutoRequest = true;
         qDebug().noquote() << QString("Auto-expanding node at depth %1 to discover matrices: %2")
             .arg(pathDepth).arg(node.path);
+        
+        // During initial connection, batch the requests instead of sending immediately
+        if (m_initialConnectionPhase) {
+            m_pendingAutoExpansion.append(node.path);
+            if (m_batchTimer && !m_batchTimer->isActive()) {
+                m_batchTimer->start();
+            }
+            shouldAutoRequest = false;  // Handled by batch timer
+            qDebug().noquote() << QString("  -> Queued for batched request (queue size: %1)")
+                .arg(m_pendingAutoExpansion.size());
+        }
     }
     // Legacy: Also handle specific root node name discovery cases
     else if (pathDepth == 1 && m_cacheManager->hasRootNode(node.path) && m_cacheManager->isRootNodeGeneric(node.path)) {
@@ -620,11 +747,33 @@ void EmberConnection::onParserMatrixReceived(const EmberData::MatrixInfo& matrix
     qDebug().noquote() << QString("Matrix: %1 [%2] - Type:%3, %4×%5")
                     .arg(matrix.identifier).arg(matrix.path).arg(matrix.type).arg(matrix.sourceCount).arg(matrix.targetCount);
     
-    // Initialize label fetch state for this matrix
-    MatrixLabelFetchState fetchState;
-    fetchState.targetCount = matrix.targetCount;
-    fetchState.sourceCount = matrix.sourceCount;
-    m_matrixLabelStates[matrix.path] = fetchState;
+    // Initialize or update label fetch state for this matrix
+    if (!m_matrixLabelStates.contains(matrix.path)) {
+        // First time seeing this matrix - create new state
+        MatrixLabelFetchState fetchState;
+        fetchState.identifier = matrix.identifier;
+        fetchState.targetCount = matrix.targetCount;
+        fetchState.sourceCount = matrix.sourceCount;
+        fetchState.lastProgressEmitTime = 0;  // Will be set when we start fetching
+        m_matrixLabelStates[matrix.path] = fetchState;
+    } else {
+        // Matrix already exists - update dimensions if they changed
+        auto& state = m_matrixLabelStates[matrix.path];
+        int oldTotalCount = state.targetCount + state.sourceCount;
+        int newTotalCount = matrix.targetCount + matrix.sourceCount;
+        
+        state.identifier = matrix.identifier;
+        state.targetCount = matrix.targetCount;
+        state.sourceCount = matrix.sourceCount;
+        
+        // If dimensions changed from 0 to non-zero and we have label paths, emit updated progress
+        if (oldTotalCount == 0 && newTotalCount > 0 && !state.labelBasePaths.isEmpty()) {
+            int fetchedCount = state.fetchedTargets.size() + state.fetchedSources.size();
+            state.lastProgressEmitTime = QDateTime::currentMSecsSinceEpoch();
+            QString labelType = state.fetchedTargets.size() < state.targetCount ? "targets" : "sources";
+            emit matrixLabelProgress(state.identifier, fetchedCount, newTotalCount, labelType);
+        }
+    }
     
     emit matrixReceived(matrix.path, matrix.number, matrix.identifier, matrix.description, 
                        matrix.type, matrix.targetCount, matrix.sourceCount);
@@ -1529,4 +1678,63 @@ void EmberConnection::cancelTreeFetch()
 bool EmberConnection::isTreeFetchActive() const
 {
     return m_treeFetchService->isActive();
+}
+
+void EmberConnection::processBatchedAutoExpansion()
+{
+    if (m_pendingAutoExpansion.isEmpty()) {
+        qDebug().noquote() << "Batch timer fired but no paths pending";
+        return;
+    }
+    
+    int batchSize = m_pendingAutoExpansion.size();
+    qInfo().noquote() << QString("Processing batched auto-expansion: %1 nodes").arg(batchSize);
+    
+    // Send all pending paths as a batch
+    sendBatchGetDirectory(m_pendingAutoExpansion, false);  // Use full field mask for matrix discovery
+    
+    // Clear the pending list
+    m_pendingAutoExpansion.clear();
+    
+    // After sending the first batch, disable batching mode
+    // This allows subsequent nodes (depth 4+) to use normal lazy loading
+    m_initialConnectionPhase = false;
+    qDebug().noquote() << "Initial connection phase complete, switching to lazy loading mode";
+    
+    // Notify that tree loading phase is complete (labels may still be loading)
+    emit treeLoadingPhaseComplete();
+}
+
+void EmberConnection::processBatchedLabelFetch()
+{
+    if (m_pendingLabelPaths.isEmpty()) {
+        qDebug().noquote() << "Label batch timer fired but no paths pending";
+        
+        // Check if all matrices are 0x0 (no labels to fetch)
+        // This can happen when matrixLabelPathsDiscovered fired for 0x0 matrices
+        bool hasMatricesWithLabels = false;
+        for (const auto& state : m_matrixLabelStates) {
+            int totalCount = state.targetCount + state.sourceCount;
+            if (totalCount > 0) {
+                hasMatricesWithLabels = true;
+                break;
+            }
+        }
+        
+        if (!hasMatricesWithLabels && !m_matrixLabelStates.isEmpty() && !m_labelFetchingCompleted) {
+            qDebug() << "No matrices have labels to fetch - emitting labelFetchingComplete";
+            m_labelFetchingCompleted = true;
+            emit labelFetchingComplete();
+        }
+        return;
+    }
+    
+    int batchSize = m_pendingLabelPaths.size();
+    qInfo().noquote() << QString("Processing batched label fetch: %1 label paths").arg(batchSize);
+    
+    // Send all pending label paths as a single batch request
+    sendBatchGetDirectory(m_pendingLabelPaths, false);
+    
+    // Clear the pending list
+    m_pendingLabelPaths.clear();
 }

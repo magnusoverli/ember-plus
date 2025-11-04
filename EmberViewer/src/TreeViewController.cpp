@@ -23,7 +23,13 @@ TreeViewController::TreeViewController(QTreeWidget *treeWidget, EmberConnection 
     , m_treeWidget(treeWidget)
     , m_connection(connection)
     , m_itemsAddedSinceUpdate(0)
+    , m_matrixDetailBatchTimer(nullptr)
 {
+    // Setup batch timer for matrix detail requests
+    m_matrixDetailBatchTimer = new QTimer(this);
+    m_matrixDetailBatchTimer->setSingleShot(true);
+    m_matrixDetailBatchTimer->setInterval(MATRIX_DETAIL_BATCH_DELAY_MS);
+    connect(m_matrixDetailBatchTimer, &QTimer::timeout, this, &TreeViewController::processPendingMatrixDetailRequests);
 }
 
 TreeViewController::~TreeViewController()
@@ -278,11 +284,36 @@ void TreeViewController::onMatrixReceived(const QString &path, int , const QStri
         
         
         if ((targetCount == 0 || sourceCount == 0) && !m_fetchedPaths.contains(path)) {
-            qInfo().noquote() << QString("Matrix has no dimensions, auto-requesting details for: %1").arg(path);
+            qInfo().noquote() << QString("Matrix has no dimensions, batching detail request for: %1").arg(path);
             m_fetchedPaths.insert(path);
-            m_connection->sendGetDirectoryForPath(path);
+            
+            // Add to pending batch instead of sending immediately
+            if (!m_pendingMatrixDetailPaths.contains(path)) {
+                m_pendingMatrixDetailPaths.append(path);
+            }
+            
+            // Start/restart the timer - will fire after 50ms of no new matrices
+            if (m_matrixDetailBatchTimer && !m_matrixDetailBatchTimer->isActive()) {
+                m_matrixDetailBatchTimer->start();
+            }
         }
     }
+}
+
+void TreeViewController::processPendingMatrixDetailRequests()
+{
+    if (m_pendingMatrixDetailPaths.isEmpty()) {
+        return;
+    }
+    
+    int batchSize = m_pendingMatrixDetailPaths.size();
+    qInfo().noquote() << QString("Sending batched matrix detail request for %1 matrices").arg(batchSize);
+    
+    // Send all pending matrix detail requests as a single batch
+    m_connection->sendBatchGetDirectory(m_pendingMatrixDetailPaths, false);
+    
+    // Clear the pending list
+    m_pendingMatrixDetailPaths.clear();
 }
 
 void TreeViewController::onFunctionReceived(const QString &path, const QString &identifier, const QString &description,

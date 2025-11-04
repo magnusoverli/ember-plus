@@ -19,6 +19,7 @@
 #include <QString>
 #include <QVariant>
 #include <QStringList>
+#include <QTimer>
 
 class QTreeWidget;
 class EmberConnection;
@@ -59,6 +60,9 @@ public slots:
     
     void onItemExpanded(QTreeWidgetItem *item);
 
+private slots:
+    void processPendingMatrixDetailRequests();
+
 private:
     QTreeWidgetItem* findOrCreateTreeItem(const QString &path);
     void setItemDisplayName(QTreeWidgetItem *item, const QString &baseName);
@@ -75,8 +79,13 @@ private:
     
     int m_itemsAddedSinceUpdate;
     
+    // Batching for matrix detail requests
+    QStringList m_pendingMatrixDetailPaths;
+    QTimer *m_matrixDetailBatchTimer;
+    
     static constexpr int UPDATE_BATCH_SIZE = 100;
     static constexpr int MATRIX_LABEL_PATH_MARKER = 666999666;
+    static constexpr int MATRIX_DETAIL_BATCH_DELAY_MS = 50;
 };
 
 #endif 
