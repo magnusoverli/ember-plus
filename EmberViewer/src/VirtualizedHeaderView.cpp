@@ -73,12 +73,12 @@ void VirtualizedHeaderView::setCrosspointsEnabled(bool enabled)
 
 QSize VirtualizedHeaderView::sizeHint() const
 {
-    return QSize(width(), 30);
+    return QSize(width(), 10);
 }
 
 QSize VirtualizedHeaderView::minimumSizeHint() const
 {
-    return QSize(0, 30);
+    return QSize(0, 10);
 }
 
 void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
@@ -115,7 +115,7 @@ void VirtualizedHeaderView::paintEvent(QPaintEvent *event)
         
         if (col == m_highlightedCol) {
             QColor highlightColor = palette().highlight().color();
-            highlightColor.setAlpha(50);
+            highlightColor.setAlpha(100);
             painter.fillRect(cellRect, highlightColor);
         }
 

@@ -52,7 +52,7 @@ private:
     int m_resizeStartY;
     int m_resizeStartHeight;
     static constexpr int RESIZE_HANDLE_HEIGHT = 10;  
-    static constexpr int MIN_HEADER_HEIGHT = 30;
+    static constexpr int MIN_HEADER_HEIGHT = 10;
     static constexpr int MAX_HEADER_HEIGHT = 200;
 };
 

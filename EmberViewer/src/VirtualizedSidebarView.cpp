@@ -73,12 +73,12 @@ void VirtualizedSidebarView::setCrosspointsEnabled(bool enabled)
 
 QSize VirtualizedSidebarView::sizeHint() const
 {
-    return QSize(80, height());
+    return QSize(10, height());
 }
 
 QSize VirtualizedSidebarView::minimumSizeHint() const
 {
-    return QSize(80, 0);
+    return QSize(10, 0);
 }
 
 void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
@@ -115,7 +115,7 @@ void VirtualizedSidebarView::paintEvent(QPaintEvent *event)
         
         if (row == m_highlightedRow) {
             QColor highlightColor = palette().highlight().color();
-            highlightColor.setAlpha(50);
+            highlightColor.setAlpha(100);
             painter.fillRect(cellRect, highlightColor);
         }
 

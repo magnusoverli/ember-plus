@@ -52,7 +52,7 @@ private:
     int m_resizeStartX;
     int m_resizeStartWidth;
     static constexpr int RESIZE_HANDLE_WIDTH = 10;  
-    static constexpr int MIN_SIDEBAR_WIDTH = 80;
+    static constexpr int MIN_SIDEBAR_WIDTH = 10;
     static constexpr int MAX_SIDEBAR_WIDTH = 300;
 };
 

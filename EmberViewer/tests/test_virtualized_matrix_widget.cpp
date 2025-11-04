@@ -213,3 +213,4 @@ QTEST_MAIN(TestVirtualizedMatrixWidget)
 #include "test_virtualized_matrix_widget.moc"
 
 
+
