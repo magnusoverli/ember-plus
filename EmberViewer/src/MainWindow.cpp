@@ -31,6 +31,7 @@
 #include "CrosspointActivityTracker.h"
 #include "SnapshotManager.h"
 #include "FunctionInvoker.h"
+#include "BusySpinner.h"
 
 
 #ifdef Q_OS_LINUX
@@ -99,6 +100,11 @@ MainWindow::MainWindow(QWidget *parent)
     , m_isConnected(false)
     , m_showOidPath(false)
     , m_enableQtInternalLogging(false)
+    , m_loadingStatusLabel(nullptr)
+    , m_busySpinner(nullptr)
+    , m_activeOperations(0)
+    , m_lastStatusChangeTime(0)
+    , m_statusDisplayTimer(nullptr)
 {
     
     
@@ -117,9 +123,95 @@ MainWindow::MainWindow(QWidget *parent)
     m_connection = new EmberConnection(this);
     connect(m_connection, &EmberConnection::connected, this, [this]() {
         onConnectionStateChanged(true);
+        onOperationStarted();  // Start spinner during connection/tree loading
     });
     connect(m_connection, &EmberConnection::disconnected, this, [this]() {
         onConnectionStateChanged(false);
+        // Reset on disconnect
+        m_activeOperations = 0;
+        if (m_busySpinner) {
+            m_busySpinner->stop();
+        }
+        if (m_loadingStatusLabel) {
+            m_loadingStatusLabel->setVisible(false);
+        }
+    });
+    connect(m_connection, &EmberConnection::treeLoadingPhaseComplete, this, [this]() {
+        // Update status text from "Loading tree..." to initial label fetching message
+        if (m_loadingStatusLabel && m_activeOperations > 0) {
+            m_loadingStatusLabel->setText("Fetching matrix labels...");
+            qDebug() << "Tree loading complete, now fetching labels";
+        }
+    });
+    connect(m_connection, &EmberConnection::treeFetchProgress, this,
+            [this](int fetchedCount, int totalCount) {
+        if (m_loadingStatusLabel && m_activeOperations > 0) {
+            m_loadingStatusLabel->setText(QString("Loading tree (%1/%2)...").arg(fetchedCount).arg(totalCount));
+        }
+    });
+    connect(m_connection, &EmberConnection::labelFetchingComplete, this, [this]() {
+        qDebug() << "Label fetching complete - stopping spinner";
+        onOperationCompleted();
+    });
+    // Create timer for minimum status display time
+    m_statusDisplayTimer = new QTimer(this);
+    m_statusDisplayTimer->setSingleShot(true);
+    connect(m_statusDisplayTimer, &QTimer::timeout, this, [this]() {
+        // When timer fires, show the pending message if there is one
+        if (!m_pendingStatusText.isEmpty() && m_loadingStatusLabel) {
+            m_loadingStatusLabel->setText(m_pendingStatusText);
+            m_lastStatusChangeTime = QDateTime::currentMSecsSinceEpoch();
+            m_pendingStatusText.clear();
+        }
+    });
+    
+    connect(m_connection, &EmberConnection::matrixLabelProgress, this, 
+            [this](const QString& identifier, int fetchedCount, int totalCount, const QString& labelType) {
+        // Update status with current matrix and progress
+        if (m_loadingStatusLabel && m_activeOperations > 0) {
+            QString statusText;
+            if (totalCount == 0) {
+                // Dimensions not yet known - show that we're working on this matrix
+                statusText = QString("Fetching '%1' %2...").arg(identifier).arg(labelType);
+            } else {
+                // Show progress with counts and label type
+                statusText = QString("Fetching '%1' %2 (%3/%4)...")
+                    .arg(identifier)
+                    .arg(labelType)
+                    .arg(fetchedCount)
+                    .arg(totalCount);
+            }
+            
+            // Implement minimum display time (100ms) before updating status
+            qint64 now = QDateTime::currentMSecsSinceEpoch();
+            qint64 timeSinceLastChange = now - m_lastStatusChangeTime;
+            
+            if (timeSinceLastChange >= 100) {
+                // Enough time has passed, update immediately
+                m_loadingStatusLabel->setText(statusText);
+                m_lastStatusChangeTime = now;
+                m_pendingStatusText.clear();
+                if (m_statusDisplayTimer->isActive()) {
+                    m_statusDisplayTimer->stop();
+                }
+            } else {
+                // Not enough time, queue this update
+                m_pendingStatusText = statusText;
+                if (!m_statusDisplayTimer->isActive()) {
+                    m_statusDisplayTimer->start(100 - timeSinceLastChange);
+                }
+            }
+            
+            // Debug: Log every 100 labels to avoid spam, or when starting (0), or when complete
+            if (fetchedCount == 0 || fetchedCount % 100 == 0 || fetchedCount == totalCount) {
+                if (totalCount == 0) {
+                    qDebug().noquote() << QString("Label progress: %1 %2 (dimensions pending)").arg(identifier).arg(labelType);
+                } else {
+                    qDebug().noquote() << QString("Label progress: %1 %2 (%3/%4)")
+                        .arg(identifier).arg(labelType).arg(fetchedCount).arg(totalCount);
+                }
+            }
+        }
     });
     
     
@@ -535,6 +627,15 @@ void MainWindow::setupStatusBar()
     statusBar()->addPermanentWidget(m_pathLabel, 1);  
     
     
+    m_loadingStatusLabel = new QLabel("");
+    m_loadingStatusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #1976d2; }");
+    m_loadingStatusLabel->setVisible(false);
+    statusBar()->addPermanentWidget(m_loadingStatusLabel);
+    
+    m_busySpinner = new BusySpinner(this);
+    m_busySpinner->setVisible(false);
+    statusBar()->addPermanentWidget(m_busySpinner);
+    
     m_crosspointsStatusLabel = new QLabel("");
     m_crosspointsStatusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #c62828; font-weight: bold; }");
     m_crosspointsStatusLabel->setVisible(false);
@@ -655,36 +756,30 @@ void MainWindow::onConnectionStateChanged(bool connected)
         qInfo().noquote() << "Disconnected";
         
         
-        VirtualizedMatrixWidget *currentMatrix = qobject_cast<VirtualizedMatrixWidget*>(m_propertyPanel);
-        if (currentMatrix) {
-            
-            QLayout *oldLayout = m_propertyGroup->layout();
-            if (oldLayout) {
-                QLayoutItem *item;
-                while ((item = oldLayout->takeAt(0)) != nullptr) {
-                    delete item;
-                }
-                delete oldLayout;
-            }
-            
-            
-            m_propertyPanel = new QWidget();
-            QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
-            propContentLayout->addWidget(new QLabel("Not connected"));
-            propContentLayout->addStretch();
-            
-            QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
-            propLayout->addWidget(m_propertyPanel);
-            propLayout->setContentsMargins(5, 5, 5, 5);
+        cleanupActiveParameterWidget();
+        cleanupPropertyPanelLayout();
+        
+        
+        if (!m_activeMeterPath.isEmpty()) {
+            m_activeMeterPath.clear();
         }
+        m_activeMeter = nullptr;
+        
+        
+        m_propertyPanel = new QWidget();
+        QVBoxLayout *propContentLayout = new QVBoxLayout(m_propertyPanel);
+        propContentLayout->addWidget(new QLabel("Not connected"));
+        propContentLayout->addStretch();
+        
+        QVBoxLayout *propLayout = new QVBoxLayout(m_propertyGroup);
+        propLayout->addWidget(m_propertyPanel);
+        propLayout->setContentsMargins(5, 5, 5, 5);
+        
         
         m_treeWidget->clear();
-        
-        
         m_treeViewController->clear();
         m_subscriptionManager->clear();
         m_matrixManager->clear();
-        m_activeMeterPath.clear();
     }
 }
 
@@ -1002,14 +1097,6 @@ void MainWindow::onTreeSelectionChanged()
                 m_activeMeterPath = oidPath;
                 qDebug().noquote() << QString("Subscribed to meter parameter: %1 (stream ID: %2)")
                     .arg(oidPath).arg(streamIdentifier);
-            }
-            
-            
-            QString currentValue = item->text(2);
-            bool ok;
-            double val = currentValue.toDouble(&ok);
-            if (ok) {
-                m_activeMeter->updateValue(val);
             }
             
             
@@ -1784,5 +1871,36 @@ void MainWindow::onSavedConnectionDoubleClicked(const QString &name, const QStri
     
     qInfo() << "Connecting to saved connection:" << name << "(" << host << ":" << port << ")";
     onConnectClicked();
+}
+
+void MainWindow::onOperationStarted()
+{
+    m_activeOperations++;
+    if (m_activeOperations == 1) {
+        if (m_busySpinner) {
+            m_busySpinner->start();
+        }
+        if (m_loadingStatusLabel) {
+            m_loadingStatusLabel->setText("Loading tree...");
+            m_loadingStatusLabel->setVisible(true);
+        }
+        qDebug() << "Spinner started - operations:" << m_activeOperations;
+    }
+}
+
+void MainWindow::onOperationCompleted()
+{
+    m_activeOperations--;
+    qDebug() << "Operation completed - remaining:" << m_activeOperations;
+    if (m_activeOperations <= 0) {
+        m_activeOperations = 0;
+        if (m_busySpinner) {
+            m_busySpinner->stop();
+        }
+        if (m_loadingStatusLabel) {
+            m_loadingStatusLabel->setVisible(false);
+        }
+        qDebug() << "Spinner stopped - all operations complete";
+    }
 }
 

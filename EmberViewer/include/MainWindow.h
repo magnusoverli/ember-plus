@@ -23,6 +23,7 @@
 #include <QSettings>
 #include <QAction>
 #include <QProgressDialog>
+#include <QPointer>
 
 #include "UpdateManager.h"
 
@@ -44,6 +45,7 @@ class FunctionInvoker;
 class TriggerWidget;
 class SliderWidget;
 class GraphWidget;
+class BusySpinner;
 
 class MainWindow : public QMainWindow
 {
@@ -96,6 +98,9 @@ private slots:
     void onImportConnections();
     void onExportConnections();
     void onSavedConnectionDoubleClicked(const QString &name, const QString &host, int port);
+    
+    void onOperationStarted();
+    void onOperationCompleted();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -115,7 +120,7 @@ private:
     
     
     EmberTreeWidget *m_treeWidget;
-    QWidget *m_propertyPanel;
+    QPointer<QWidget> m_propertyPanel;
     QTextEdit *m_consoleLog;
     QGroupBox *m_consoleGroup;
     QGroupBox *m_propertyGroup;
@@ -129,6 +134,8 @@ private:
     QPushButton *m_disconnectButton;
     QLabel *m_statusLabel;
     QLabel *m_pathLabel;
+    QLabel *m_loadingStatusLabel;
+    BusySpinner *m_busySpinner;
     
     
     EmberConnection *m_connection;
@@ -142,11 +149,11 @@ private:
     FunctionInvoker *m_functionInvoker;
     
     
-    MeterWidget *m_activeMeter;
+    QPointer<MeterWidget> m_activeMeter;
     QString m_activeMeterPath;  
     
     
-    QWidget *m_activeParameterWidget;  
+    QPointer<QWidget> m_activeParameterWidget;  
     QString m_activeParameterPath;     
     
     
@@ -159,6 +166,12 @@ private:
     bool m_isConnected;
     bool m_showOidPath;
     bool m_enableQtInternalLogging;
+    int m_activeOperations;
+    
+    // For minimum display time of status messages
+    QString m_pendingStatusText;
+    qint64 m_lastStatusChangeTime;
+    QTimer *m_statusDisplayTimer;
 
     
     QAction *m_enableCrosspointsAction;
