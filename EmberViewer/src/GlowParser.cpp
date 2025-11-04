@@ -29,8 +29,14 @@
 
 GlowParser::GlowParser(QObject *parent)
     : QObject(parent)
-    , m_domReader(new libember::dom::AsyncDomReader(libember::glow::GlowNodeFactory::getFactory()))
+    , m_domReader(new StreamingDomReader(libember::glow::GlowNodeFactory::getFactory()))
 {
+    // Set up streaming callback to process items as they arrive
+    m_domReader->setItemReadyCallback([this](libember::dom::Node* node) {
+        if (node) {
+            this->onItemReady(node);
+        }
+    });
 }
 
 GlowParser::~GlowParser()
@@ -1095,6 +1101,38 @@ void GlowParser::processStreamCollection(libember::glow::GlowContainer* streamCo
             
             emit streamValueReceived(info);
         }
+    }
+}
+
+void GlowParser::onItemReady(libember::dom::Node* node)
+{
+    // This is called for each item as it's decoded in the stream
+    // Process top-level items immediately without waiting for complete messages
+    
+    if (!node) {
+        return;
+    }
+    
+    try {
+        // Check if this is a qualified parameter (label value)
+        if (auto qparam = dynamic_cast<libember::glow::GlowQualifiedParameter*>(node)) {
+            processQualifiedParameter(qparam);
+        }
+        // Check if this is a qualified node
+        else if (auto qnode = dynamic_cast<libember::glow::GlowQualifiedNode*>(node)) {
+            processQualifiedNode(qnode);
+        }
+        // Check if this is a qualified matrix
+        else if (auto qmatrix = dynamic_cast<libember::glow::GlowQualifiedMatrix*>(node)) {
+            processQualifiedMatrix(qmatrix);
+        }
+        // Check if this is a qualified function
+        else if (auto qfunction = dynamic_cast<libember::glow::GlowQualifiedFunction*>(node)) {
+            processQualifiedFunction(qfunction);
+        }
+        // For other types, we'll still process them in the traditional way when root is ready
+    } catch (const std::exception& e) {
+        qDebug() << "[GlowParser] Error in streaming item processing:" << e.what();
     }
 }
 

@@ -13,7 +13,7 @@
 
 #include <QObject>
 #include "EmberDataTypes.h"
-#include <ember/dom/AsyncDomReader.hpp>
+#include "StreamingDomReader.h"
 
 
 namespace libember {
@@ -71,7 +71,8 @@ private:
     void processInvocationResult(libember::dom::Node* result);
     void processStreamCollection(libember::glow::GlowContainer* streamCollection);
     QString detectReferenceLevel(const QString& formatString) const;
-    libember::dom::AsyncDomReader *m_domReader;
+    void onItemReady(libember::dom::Node* node);
+    StreamingDomReader *m_domReader;
     QMap<QString, bool> m_nodesWithIdentifier;
     QMap<QString, bool> m_parametersWithIdentifier;
     QMap<int, int> m_streamFactors;

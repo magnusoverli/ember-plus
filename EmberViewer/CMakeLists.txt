@@ -142,6 +142,7 @@ add_library(EmberViewerLib STATIC
     src/EmberTreeWidget.cpp
     src/S101Protocol.cpp
     src/GlowParser.cpp
+    src/StreamingDomReader.cpp
     src/TreeViewController.cpp
     src/SubscriptionManager.cpp
     src/MatrixManager.cpp
@@ -150,6 +151,7 @@ add_library(EmberViewerLib STATIC
     src/FunctionInvoker.cpp
     src/TreeFetchService.cpp
     src/CacheManager.cpp
+    src/BusySpinner.cpp
     src/EmberConnection.cpp
     src/EmberProvider.cpp
     ${PLATFORM_UPDATE_SOURCES}
@@ -168,6 +170,7 @@ add_library(EmberViewerLib STATIC
     include/EmberTreeWidget.h
     include/S101Protocol.h
     include/GlowParser.h
+    include/StreamingDomReader.h
     include/EmberDataTypes.h
     include/TreeViewController.h
     include/SubscriptionManager.h
@@ -202,6 +205,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EmberTreeWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/S101Protocol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/GlowParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/StreamingDomReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/TreeViewController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SubscriptionManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MatrixManager.cpp
@@ -230,6 +234,7 @@ list(REMOVE_ITEM SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberTreeWidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/S101Protocol.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/GlowParser.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/StreamingDomReader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/EmberDataTypes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/TreeViewController.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/SubscriptionManager.h
