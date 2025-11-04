@@ -27,6 +27,11 @@ public:
     void setSourceNumbers(const QList<int> &numbers);
     void setTargetLabel(int targetNumber, const QString &label);
     void setSourceLabel(int sourceNumber, const QString &label);
+    
+    // Batch update optimization - defer widget repaints during bulk operations
+    void setUpdatesDeferred(bool deferred);
+    void beginBatchUpdate();
+    void endBatchUpdate();
 
     
     void setConnection(int targetNumber, int sourceNumber, bool connected, int disposition = 0);
@@ -68,6 +73,8 @@ private:
     
     QList<int> m_targetNumbers;
     QList<int> m_sourceNumbers;
+    QSet<int> m_targetNumbersSet;  // Fast O(1) lookups
+    QSet<int> m_sourceNumbersSet;  // Fast O(1) lookups
     QHash<int, QString> m_targetLabels;
     QHash<int, QString> m_sourceLabels;
 
@@ -77,6 +84,12 @@ private:
         int disposition;
     };
     QHash<QPair<int, int>, ConnectionState> m_connections;
+    
+    // Batch update optimization
+    bool m_updatesDeferred;
+    bool m_hasPendingUpdate;
+    
+    void emitDataChangedIfNotDeferred();
 };
 
 
@@ -86,5 +99,6 @@ inline uint qHash(const QPair<int, int> &key, uint seed = 0)
 }
 
 #endif 
+
 
 

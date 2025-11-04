@@ -20,7 +20,7 @@ static int s_preferredSidebarWidth = 80;
 VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
     : QAbstractScrollArea(parent)
     , m_model(nullptr)
-    , m_cellSize(20, 20)
+    , m_cellSize(17, 17)
     , m_headerHeight(s_preferredHeaderHeight)
     , m_sidebarWidth(s_preferredSidebarWidth)
     , m_selectedCell(-1, -1)
@@ -61,7 +61,7 @@ VirtualizedMatrixWidget::VirtualizedMatrixWidget(QWidget *parent)
     lockIcon.addFile(":/resources/lock-closed.png", QSize(), QIcon::Normal, QIcon::Off);
     lockIcon.addFile(":/resources/lock-open.png", QSize(), QIcon::Normal, QIcon::On);
     m_cornerWidget->setIcon(lockIcon);
-    m_cornerWidget->setIconSize(QSize(m_sidebarWidth - 10, m_headerHeight - 10));
+    m_cornerWidget->setIconSize(QSize(m_sidebarWidth - 5, m_headerHeight - 5));
     
     m_cornerWidget->setToolTip("Click to enable crosspoint editing (Ctrl+E)");
     m_cornerWidget->setStyleSheet(
@@ -275,6 +275,20 @@ void VirtualizedMatrixWidget::clearTargetConnections(int targetNumber)
 {
     if (m_model) {
         m_model->clearTargetConnections(targetNumber);
+    }
+}
+
+void VirtualizedMatrixWidget::beginBatchUpdate()
+{
+    if (m_model) {
+        m_model->beginBatchUpdate();
+    }
+}
+
+void VirtualizedMatrixWidget::endBatchUpdate()
+{
+    if (m_model) {
+        m_model->endBatchUpdate();
     }
 }
 
@@ -696,7 +710,7 @@ void VirtualizedMatrixWidget::drawConnections(QPainter &painter, const QRect &vi
 
     
     painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(100, 200, 100, 100)); 
+    painter.setBrush(QColor(120, 255, 120, 130)); 
 
     for (int row = visibleCells.top(); row <= visibleCells.bottom(); ++row) {
         for (int col = visibleCells.left(); col <= visibleCells.right(); ++col) {

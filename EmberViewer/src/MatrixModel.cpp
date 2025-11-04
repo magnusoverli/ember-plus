@@ -8,6 +8,8 @@ MatrixModel::MatrixModel(QObject *parent)
     , m_matrixType(2)  
     , m_targetCount(0)
     , m_sourceCount(0)
+    , m_updatesDeferred(false)
+    , m_hasPendingUpdate(false)
 {
 }
 
@@ -58,7 +60,7 @@ void MatrixModel::setMatrixInfo(const QString &identifier, const QString &descri
         }
     }
 
-    emit dataChanged();
+    emitDataChangedIfNotDeferred();
 }
 
 void MatrixModel::setMatrixPath(const QString &path)
@@ -69,13 +71,13 @@ void MatrixModel::setMatrixPath(const QString &path)
 void MatrixModel::setTargetNumbers(const QList<int> &numbers)
 {
     m_targetNumbers = numbers;
-    emit dataChanged();
+    emitDataChangedIfNotDeferred();
 }
 
 void MatrixModel::setSourceNumbers(const QList<int> &numbers)
 {
     m_sourceNumbers = numbers;
-    emit dataChanged();
+    emitDataChangedIfNotDeferred();
 }
 
 void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
@@ -92,12 +94,17 @@ void MatrixModel::setTargetLabel(int targetNumber, const QString &label)
         m_targetLabels[targetNumber] = label;
         
         
-        if (!m_targetNumbers.contains(targetNumber)) {
-            m_targetNumbers.append(targetNumber);
-            std::sort(m_targetNumbers.begin(), m_targetNumbers.end());
+        // Use QSet for O(1) lookup instead of QList::contains() which is O(n)
+        if (!m_targetNumbersSet.contains(targetNumber)) {
+            m_targetNumbersSet.insert(targetNumber);
+            // Only append, don't sort yet (will be sorted in endBatchUpdate)
+            if (!m_updatesDeferred) {
+                m_targetNumbers.append(targetNumber);
+                std::sort(m_targetNumbers.begin(), m_targetNumbers.end());
+            }
         }
         
-        emit dataChanged();
+        emitDataChangedIfNotDeferred();
     } else {
         qDebug().noquote() << QString("MatrixModel: SKIPPED setTargetLabel - Target: %1 already has label '%2', ignoring '%3'")
             .arg(targetNumber).arg(currentLabel).arg(label);
@@ -118,12 +125,17 @@ void MatrixModel::setSourceLabel(int sourceNumber, const QString &label)
         m_sourceLabels[sourceNumber] = label;
         
         
-        if (!m_sourceNumbers.contains(sourceNumber)) {
-            m_sourceNumbers.append(sourceNumber);
-            std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());
+        // Use QSet for O(1) lookup instead of QList::contains() which is O(n)
+        if (!m_sourceNumbersSet.contains(sourceNumber)) {
+            m_sourceNumbersSet.insert(sourceNumber);
+            // Only append, don't sort yet (will be sorted in endBatchUpdate)
+            if (!m_updatesDeferred) {
+                m_sourceNumbers.append(sourceNumber);
+                std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());
+            }
         }
         
-        emit dataChanged();
+        emitDataChangedIfNotDeferred();
     } else {
         qDebug().noquote() << QString("MatrixModel: SKIPPED setSourceLabel - Source: %1 already has label '%2', ignoring '%3'")
             .arg(sourceNumber).arg(currentLabel).arg(label);
@@ -149,7 +161,7 @@ void MatrixModel::setConnection(int targetNumber, int sourceNumber, bool connect
 void MatrixModel::clearConnections()
 {
     m_connections.clear();
-    emit dataChanged();
+    emitDataChangedIfNotDeferred();
 }
 
 void MatrixModel::clearTargetConnections(int targetNumber)
@@ -166,7 +178,7 @@ void MatrixModel::clearTargetConnections(int targetNumber)
         m_connections.remove(key);
     }
     
-    emit dataChanged();
+    emitDataChangedIfNotDeferred();
 }
 
 QString MatrixModel::targetLabel(int targetNumber) const
@@ -205,5 +217,51 @@ QList<QPair<int, int>> MatrixModel::getAllConnections() const
     }
     
     return result;
+}
+
+void MatrixModel::setUpdatesDeferred(bool deferred)
+{
+    m_updatesDeferred = deferred;
+    
+    // When re-enabling updates, emit pending dataChanged if needed
+    if (!deferred && m_hasPendingUpdate) {
+        m_hasPendingUpdate = false;
+        emit dataChanged();
+    }
+}
+
+void MatrixModel::beginBatchUpdate()
+{
+    m_updatesDeferred = true;
+    m_hasPendingUpdate = false;
+    
+    // Initialize sets with current numbers for fast lookups during batch
+    m_targetNumbersSet = QSet<int>(m_targetNumbers.begin(), m_targetNumbers.end());
+    m_sourceNumbersSet = QSet<int>(m_sourceNumbers.begin(), m_sourceNumbers.end());
+}
+
+void MatrixModel::endBatchUpdate()
+{
+    m_updatesDeferred = false;
+    
+    // Rebuild sorted lists from sets (only contains numbers added during batch)
+    m_targetNumbers = m_targetNumbersSet.values();
+    m_sourceNumbers = m_sourceNumbersSet.values();
+    std::sort(m_targetNumbers.begin(), m_targetNumbers.end());
+    std::sort(m_sourceNumbers.begin(), m_sourceNumbers.end());
+    
+    if (m_hasPendingUpdate) {
+        m_hasPendingUpdate = false;
+        emit dataChanged();
+    }
+}
+
+void MatrixModel::emitDataChangedIfNotDeferred()
+{
+    if (m_updatesDeferred) {
+        m_hasPendingUpdate = true;
+    } else {
+        emit dataChanged();
+    }
 }
 

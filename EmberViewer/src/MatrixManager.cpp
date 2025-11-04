@@ -17,6 +17,15 @@ MatrixManager::MatrixManager(EmberConnection *connection, QObject *parent)
     : QObject(parent)
     , m_connection(connection)
 {
+    // Connect to labelFetchingComplete to end batch updates
+    connect(m_connection, &EmberConnection::labelFetchingComplete, this, [this]() {
+        // End batch updates for all matrix widgets
+        for (auto widget : m_matrixWidgets) {
+            if (VirtualizedMatrixWidget *matrixWidget = qobject_cast<VirtualizedMatrixWidget*>(widget)) {
+                matrixWidget->endBatchUpdate();
+            }
+        }
+    });
 }
 
 MatrixManager::~MatrixManager()
@@ -66,6 +75,12 @@ void MatrixManager::onMatrixReceived(const QString &path, int , const QString &i
     
     widget->setMatrixPath(path);
     widget->setMatrixInfo(identifier, description, type, targetCount, sourceCount);
+    
+    // Start batch updates for newly created matrices or matrices with updated dimensions
+    // This defers widget repaints until all labels are loaded
+    if (isNew || dimensionsChanged) {
+        widget->beginBatchUpdate();
+    }
     
     if (isNew) {
         emit matrixWidgetCreated(path, widget);

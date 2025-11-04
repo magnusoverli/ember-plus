@@ -34,6 +34,10 @@ public:
     void setConnection(int targetNumber, int sourceNumber, bool connected, int disposition = 0);
     void clearConnections();
     void clearTargetConnections(int targetNumber);
+    
+    // Batch update optimization
+    void beginBatchUpdate();
+    void endBatchUpdate();
     void rebuild();
     bool isConnected(int targetNumber, int sourceNumber) const;
     int getMatrixType() const;
